@@ -62,7 +62,7 @@ OpenJDK 21 JNI 研究基線：`jdk-21.0.8-ga`。
 
 ## 入口與 JNI 原則
 
-正式 Ckarta server 入口為 C `main()`；由 C 透過 JNI Invocation API 建立 JVM。
+正式 Ckarta server 入口為 C `main()`；由受控的專用 bootstrap thread（啟動執行緒）透過 JNI Invocation API 建立 JVM，而不是直接在 primordial process thread（原始程序執行緒）上載入 JVM。
 
 JNI request hot path 不採 C struct 逐欄映射為 Java object。初步採：
 

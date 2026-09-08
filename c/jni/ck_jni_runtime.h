@@ -3,6 +3,8 @@
 
 #include <jni.h>
 #include <pthread.h>
+
+#include "ck_request.h"
 #include <stddef.h>
 #include <stdint.h>
 
@@ -23,8 +25,7 @@ struct ck_runtime
 typedef struct ck_runtime ck_runtime_t;
 
 int ck_runtime_init(ck_runtime_t *runtime, const char *class_path);
-int ck_runtime_dispatch_smoke(ck_runtime_t *runtime, uintptr_t request_handle,
-		const unsigned char *body, size_t body_length);
+int ck_runtime_dispatch_smoke(ck_runtime_t *runtime, ck_request_t *request);
 int ck_runtime_shutdown(ck_runtime_t *runtime);
 void ck_runtime_destroy(ck_runtime_t *runtime);
 

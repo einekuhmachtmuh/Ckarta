@@ -93,7 +93,7 @@ JNI bridge → C worker 的 completion queue 同樣必須有界；completion 無
 
 ## 6. Thread affinity 與 JNI
 
-`JNIEnv*` 不得跨 thread 傳遞。
+`JNIEnv*` 不得跨 thread 傳遞。實作上即使兩個 thread 印出的 `JNIEnv*` 位址偶然相同，也不能因此視為可共享的同一執行緒狀態；有效性仍由「目前 thread」規則決定。
 
 推薦保存 `JavaVM*` 作為 process-level handle；需要 JNI 的 bridge thread 透過當前 thread 的 attach／detach 取得自己的 `JNIEnv*`。
 
@@ -123,16 +123,19 @@ stop admission
 
 ## 8. 與 Nginx 的交叉比對
 
-固定 Nginx 1.30.4 的 `ngx_master_process_cycle()` 以明確的 master／worker process ownership 管理 worker 啟動、訊號、重配置與停止；worker 不需要共享同一個 Java VM thread-local interface。Ckarta 可吸收其「owner 明確、lifecycle 明確、停止由控制層協調」的原則，但不直接採用 Nginx 的 process model。
+固定 Nginx 1.30.4 的 `ngx_master_process_cycle()` 以明確的 master／worker process ownership 管理 worker 啟動、訊號、重配置與停止；標準模型的並行單位首先是 process，而不是共享 JVM 的 thread。Ckarta 可吸收其「owner 明確、lifecycle 明確、停止由控制層協調」的原則，但不直接採用 Nginx 的 process model。
 
 來源：
 https://github.com/nginx/nginx/blob/017cf98dcce217946572a896f0992370475e189f/src/os/unix/ngx_process_cycle.c
 
 ## 9. 與 Tomcat 的交叉比對
 
-固定 Tomcat 11.0.25 的 NioEndpoint 將 network endpoint、polling 與 Java executor／Acceptor 等責任分層；Tomcat 本身也以 Java thread／executor model 執行 protocol processing。Ckarta 的差異在於 network data plane 由 C worker ownership 管理，再透過 JNI bridge 接入 Java Servlet executor。
+固定 Tomcat 11.0.25 的 `AbstractEndpoint` 定義了 Acceptor、internal/external executor、最大 worker threads 等抽象；其 `NioEndpoint` 啟動時建立 poller thread、acceptor thread，並建立／使用 executor。這顯示 Tomcat 也不是「所有 socket 工作都由 Servlet thread 直接承擔」，而是把 accept、polling、socket processing 與 application execution 分層。
+
+Ckarta 可吸收這種角色分離：C worker 對應 native data-plane ownership，JNI bridge 對應跨 JVM stage，Java executor 對應 Servlet application execution；但不得因此假設與 Tomcat 具有相同 thread count 或 scheduling semantics（排程語意）。
 
 來源：
+https://tomcat.apache.org/tomcat-11.0-doc/api/org/apache/tomcat/util/net/AbstractEndpoint.html
 https://github.com/apache/tomcat/blob/cbe6e15ee81e2fc6232954292a80cca5d1e84009/java/org/apache/tomcat/util/net/NioEndpoint.java
 
 ## 10. 學術依據
@@ -144,12 +147,20 @@ Nickolai Zeldovich、Alexander Yip、Frank Dabek、Robert T. Morris、David Mazi
 來源：
 https://www.usenix.org/conference/2003-usenix-annual-technical-conference/multiprocessor-support-event-driven-programs
 
-Rob von Behren、Jeremy Condit、Feng Zhou、George C. Necula、Eric Brewer，"Capriccio: Scalable Threads for Internet Services"，Proceedings of the 19th ACM Symposium on Operating Systems Principles (SOSP 2003), pp. 268–281，DOI 10.1145/945469.945471。
+Rob von Behren、Jeremy Condit、Feng Zhou、George C. Necula、Eric Brewer，"Capriccio: Scalable Threads for Internet Services"，Proceedings of the 19th ACM Symposium on Operating Systems Principles (SOSP 2003), pp. 268–281，DOI 10.1145/945445.945471。
 
 用途：提醒 thread-based server（執行緒型伺服器）可以提供較直觀的 programming model（程式設計模型）與高併發擴展性；因此 Ckarta 不應把 event-driven 與 threads 視為互斥信仰，而應依工作負載與 ownership 選擇。
 
 來源：
-https://doi.org/10.1145/945469.945471
+https://doi.org/10.1145/945445.945471
+
+Matt Welsh、David Culler、Eric Brewer，"SEDA: An Architecture for Well-Conditioned, Scalable Internet Services"，Proceedings of the 18th ACM Symposium on Operating Systems Principles (SOSP 2001), pp. 230–243，DOI 10.1145/502034.502057；ACM SIGOPS 對應期刊版文章 DOI 為 10.1145/502059.502057。
+
+用途：支持以 explicit queues、stage boundaries 與 thread-pool/resource control 思考高併發服務；Ckarta 不因此宣稱自己是 SEDA。
+
+來源：
+https://doi.org/10.1145/502034.502057
+https://doi.org/10.1145/502059.502057
 
 ## 11. OpenJDK 21 證據
 

@@ -411,3 +411,68 @@ zero-copy（零拷貝）
 本文件是 Ckarta 工程基線，不代表 Nginx、Tomcat、Jakarta EE 或任何學術來源為 Ckarta 背書。
 
 所有第三方實作只能作為證據與設計參考。
+
+
+## 30. Third-party reference source tree
+
+Nginx 與 Apache Tomcat 的原始碼以 Git submodule（Git 子模組）形式保存於：
+
+third_party/nginx
+third_party/tomcat
+
+禁止直接修改 submodule working tree（子模組工作樹）中的 upstream source（上游原始碼）並將其誤當作 Ckarta 原始碼。
+
+每個 submodule 必須固定到已確認的 upstream commit，而不是 branch（分支）頭。
+
+目前基準：
+
+Nginx stable 1.30.4
+commit 017cf98dcce217946572a896f0992370475e189f
+
+Apache Tomcat 11.0.25
+commit cbe6e15ee81e2fc6232954292a80cca5d1e84009
+
+若需要更新參考版本，必須同時記錄：
+
+- upstream version
+- exact commit
+- 更新日期
+- 更新原因
+- 受影響的 hot path review
+- 安全影響
+- license compatibility（授權相容性）
+
+## 31. Upstream source usage
+
+third_party/nginx 與 third_party/tomcat 是 reference implementation（參考實作），不是 Ckarta runtime dependency（執行期相依套件）。
+
+Ckarta 程式碼不得在沒有架構決策記錄的情況下直接複製 upstream implementation（上游實作）。
+
+若需要移植程式碼，必須單獨檢查：
+
+- license
+- copyright notice（著作權聲明）
+- dependency
+- platform assumptions（平台假設）
+- security implications（安全影響）
+- semantic differences（語意差異）
+
+## 32. Repository working tree
+
+目前核准的工作樹：
+
+/
+├── WORKING_RULES.md
+├── README.md
+├── .gitmodules
+├── docs/
+├── third_party/
+│   ├── nginx/
+│   └── tomcat/
+├── c/
+├── java/
+├── tests/
+├── bench/
+└── tools/
+
+除 WORKING_RULES.md、README.md、CI／repository metadata 外，一般長篇架構與研究文件集中於 docs/。

@@ -2,6 +2,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 static ck_runtime_t runtime;
 
@@ -53,7 +54,6 @@ int main(int argc, char **argv)
 	result = ck_runtime_init(&runtime, class_path);
 	if (check_result("INIT", result) != 0)
 	{
-		ck_runtime_destroy(&runtime);
 		return EXIT_FAILURE;
 	}
 

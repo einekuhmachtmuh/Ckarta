@@ -130,3 +130,9 @@ Tomcat：吸收明確 Java container init/load/start/stop lifecycle 與 classloa
 OpenJDK：採用 Invocation API 對 primordial thread、JNIEnv thread affinity（執行緒親和性）、native thread attachment 與 DestroyJavaVM 的明確生命週期要求。
 
 三者的私有 API、內部資料結構與實作細節不得直接變成 Ckarta ABI。
+
+## 11. 啟動設定載入
+
+C main 在建立 JVM 前先載入並驗證主設定檔。第一版預設 conf/ckarta.conf，可由 -c 指定其他檔案；-t 只做設定驗證，-T 驗證後輸出正規化設定。設定快照生命週期覆蓋整個 JVM／native runtime 使用期間，完成 shutdown 後才釋放。
+
+設定載入不是 Servlet container 設定的替代品；它只負責 native bootstrap 與 C runtime 所需設定。Java Servlet configuration 仍由 Java container 管理。

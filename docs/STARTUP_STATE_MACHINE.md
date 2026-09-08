@@ -6,6 +6,8 @@
 
 START
 → ARGS_READY
+→ CONFIG_FILE_LOADED
+→ NATIVE_CONFIG_VALIDATED
 → NATIVE_CONFIG_READY
 → NATIVE_RUNTIME_READY
 → JVM_BOOTSTRAP_STARTING
@@ -99,3 +101,7 @@ https://docs.oracle.com/en/java/javase/21/docs/specs/jni/invocation.html
 - 所有 JNI-attached native thread 的 attach／detach／join ownership
 
 本文件只描述狀態與責任，不假造尚未實作的 Ckarta API。
+
+## 9. 配置載入閘門
+
+CONFIG_FILE_LOADED 表示已成功讀取主設定檔；NATIVE_CONFIG_VALIDATED 表示語法、指令參數與目前實作可證明的安全條件均通過。只有到 NATIVE_CONFIG_READY 才能把設定快照交給 JVM／native runtime。任何設定錯誤都必須在建立不可逆 runtime state 前 fail closed。

@@ -127,3 +127,9 @@ thread model 的 direct-attach 與 JNI bridge 差異見 docs/THREAD_MODEL.md。
 目前 executable slice 的 dispatch 會先進入 Java ThreadPoolExecutor，再由 executor thread 建立 NativeRequest 並執行 smoke workload；C 端等待結果只是同步驗證方式，不得作為 production event-loop API。
 
 Java executor 必須使用有界容量；飽和時不得 fallback 到 C event-loop thread 執行 Servlet application。
+
+## 16. Nonblocking completion smoke slice
+
+目前 executable slice 使用 Java-owned bounded completion queue（Java 所有的有界完成佇列）。C worker 提交 request 後即可 detach；C 以短 JNI poll 呼叫取得 completion。輸出 DirectByteBuffer 固定 20 bytes：request handle 8 bytes、result 8 bytes、status 4 bytes，並以 native byte order（原生位元組序）寫入。
+
+此設計只驗證非阻塞交接的生命週期，不是最終多 worker completion queue。正式實作前仍需避免每次 poll attach/detach、定義多請求 routing 與 cancellation。

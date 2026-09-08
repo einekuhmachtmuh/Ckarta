@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sched.h>
 
 static ck_runtime_t runtime;
 
@@ -24,6 +25,7 @@ int main(int argc, char **argv)
 	ck_request_descriptor_t descriptor;
 	ck_request_t request;
 	int result;
+	int completion_result;
 
 	(void)argc;
 	(void)argv;
@@ -57,7 +59,25 @@ int main(int argc, char **argv)
 		return EXIT_FAILURE;
 	}
 
-	result = ck_runtime_dispatch_smoke(&runtime, &request);
+	result = ck_runtime_dispatch_async_smoke(&runtime, &request);
+	if (check_result("DISPATCH_SUBMIT", result) != 0)
+	{
+		ck_runtime_shutdown(&runtime);
+		ck_runtime_destroy(&runtime);
+		return EXIT_FAILURE;
+	}
+
+	do
+	{
+		completion_result = ck_runtime_poll_completion(&runtime, &request);
+		if (completion_result == 0)
+		{
+			sched_yield();
+		}
+	} while (completion_result == 0);
+
+	result = completion_result == 1 ? 0 : -1;
+
 	if (check_result("DISPATCH", result) != 0)
 	{
 		if (ck_request_state(&request) == CK_REQUEST_RUNNING)

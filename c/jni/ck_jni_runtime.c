@@ -142,56 +142,6 @@ static void *ck_bootstrap_main(void *arg)
 	return NULL;
 }
 
-static int ck_call_dispatch(JNIEnv *env, const ck_request_descriptor_t *descriptor)
-{
-	jclass runtime_class;
-	jmethodID method;
-	jobject buffer;
-	jlong value;
-	jlong expected;
-
-	runtime_class = (*env)->FindClass(env, "org/ckarta/bootstrap/CkartaRuntime");
-	if (runtime_class == NULL || ck_check_java_exception(env, "FindClass(dispatch)") != 0)
-	{
-		return -1;
-	}
-
-	method = (*env)->GetStaticMethodID(env, runtime_class, "dispatch",
-			"(JLjava/nio/ByteBuffer;)J");
-	if (method == NULL || ck_check_java_exception(env, "GetStaticMethodID(dispatch)") != 0)
-	{
-		(*env)->DeleteLocalRef(env, runtime_class);
-		return -1;
-	}
-
-	buffer = (*env)->NewDirectByteBuffer(env, (void *)descriptor->body,
-			(jlong)descriptor->body_length);
-	if (buffer == NULL || ck_check_java_exception(env, "NewDirectByteBuffer") != 0)
-	{
-		(*env)->DeleteLocalRef(env, runtime_class);
-		return -1;
-	}
-
-	value = (*env)->CallStaticLongMethod(env, runtime_class, method,
-			(jlong)descriptor->request_id, buffer);
-	if (ck_check_java_exception(env, "CallStaticLongMethod(dispatch)") != 0)
-	{
-		(*env)->DeleteLocalRef(env, buffer);
-		(*env)->DeleteLocalRef(env, runtime_class);
-		return -1;
-	}
-
-	expected = (jlong)descriptor->request_id + (jlong)descriptor->body_length;
-	printf("CKARTA_DISPATCH handle=%llu length=%llu result=%lld expected=%lld\n",
-			(unsigned long long)descriptor->request_id,
-			(unsigned long long)descriptor->body_length,
-			(long long)value, (long long)expected);
-
-	(*env)->DeleteLocalRef(env, buffer);
-	(*env)->DeleteLocalRef(env, runtime_class);
-	return value == expected ? 0 : -1;
-}
-
 struct ck_worker_args
 {
 	ck_runtime_t *runtime;
@@ -199,12 +149,57 @@ struct ck_worker_args
 	int result;
 };
 
+static int ck_call_dispatch_async(JNIEnv *env,
+		const ck_request_descriptor_t *descriptor)
+{
+	jclass runtime_class;
+	jmethodID method;
+	jobject buffer;
+
+	runtime_class = (*env)->FindClass(env, "org/ckarta/bootstrap/CkartaRuntime");
+	if (runtime_class == NULL ||
+			ck_check_java_exception(env, "FindClass(dispatchAsync)") != 0)
+	{
+		return -1;
+	}
+
+	method = (*env)->GetStaticMethodID(env, runtime_class, "dispatchAsync",
+			"(JLjava/nio/ByteBuffer;)V");
+	if (method == NULL ||
+			ck_check_java_exception(env, "GetStaticMethodID(dispatchAsync)") != 0)
+	{
+		(*env)->DeleteLocalRef(env, runtime_class);
+		return -1;
+	}
+
+	buffer = (*env)->NewDirectByteBuffer(env, (void *)descriptor->body,
+			(jlong)descriptor->body_length);
+	if (buffer == NULL ||
+			ck_check_java_exception(env, "NewDirectByteBufferAsync") != 0)
+	{
+		(*env)->DeleteLocalRef(env, runtime_class);
+		return -1;
+	}
+
+	(*env)->CallStaticVoidMethod(env, runtime_class, method,
+			(jlong)descriptor->request_id, buffer);
+	if (ck_check_java_exception(env, "CallStaticVoidMethod(dispatchAsync)") != 0)
+	{
+		(*env)->DeleteLocalRef(env, buffer);
+		(*env)->DeleteLocalRef(env, runtime_class);
+		return -1;
+	}
+
+	(*env)->DeleteLocalRef(env, buffer);
+	(*env)->DeleteLocalRef(env, runtime_class);
+	return 0;
+}
+
 static void *ck_worker_main(void *arg)
 {
 	struct ck_worker_args *worker = arg;
 	JNIEnv *env = NULL;
 	jint result;
-	int finish_result;
 
 	if (ck_request_begin(worker->request) != 0)
 	{
@@ -221,28 +216,136 @@ static void *ck_worker_main(void *arg)
 		return NULL;
 	}
 
-	worker->result = ck_call_dispatch(env, &worker->request->descriptor);
-	if (worker->result == 0)
-	{
-		finish_result = ck_request_finish(worker->request, CK_REQUEST_COMPLETED);
-	}
-	else
-	{
-		finish_result = ck_request_finish(worker->request, CK_REQUEST_FAILED);
-	}
+	worker->result = ck_call_dispatch_async(env, &worker->request->descriptor);
 
-	result = (*worker->runtime->vm)->DetachCurrentThread(worker->runtime->vm);
-	if (result != JNI_OK && worker->result == 0)
-	{
-		worker->result = result;
-	}
-
-	if (finish_result != 0 && worker->result == 0)
+	if ((*worker->runtime->vm)->DetachCurrentThread(worker->runtime->vm) != JNI_OK
+			&& worker->result == 0)
 	{
 		worker->result = -1;
 	}
 
 	return NULL;
+}
+
+int ck_runtime_dispatch_async_smoke(ck_runtime_t *runtime,
+		ck_request_t *request)
+{
+	struct ck_worker_args worker;
+	int result;
+
+	if (runtime == NULL || request == NULL)
+	{
+		return -1;
+	}
+
+	memset(&worker, 0, sizeof(worker));
+	worker.runtime = runtime;
+	worker.request = request;
+
+	result = pthread_create(&runtime->worker_thread, NULL, ck_worker_main, &worker);
+	if (result != 0)
+	{
+		return result;
+	}
+
+	return pthread_join(runtime->worker_thread, NULL) == 0 ? 0 : -1;
+}
+
+int ck_runtime_poll_completion(ck_runtime_t *runtime, ck_request_t *request)
+{
+	JNIEnv *env = NULL;
+	jclass runtime_class;
+	jmethodID method;
+	jobject output;
+	unsigned char storage[20];
+	void *native_output;
+	jint poll_result;
+	jlong request_handle;
+	jlong result_value;
+	jint status;
+	jint attach_result;
+	jint detach_result;
+	int finish_result;
+
+	if (runtime == NULL || request == NULL)
+	{
+		return -1;
+	}
+
+	attach_result = (*runtime->vm)->AttachCurrentThread(runtime->vm,
+			(void **)&env, NULL);
+	if (attach_result != JNI_OK)
+	{
+		return -1;
+	}
+
+	runtime_class = (*env)->FindClass(env, "org/ckarta/bootstrap/CkartaRuntime");
+	if (runtime_class == NULL ||
+			ck_check_java_exception(env, "FindClass(pollCompletion)") != 0)
+	{
+		(void)(*runtime->vm)->DetachCurrentThread(runtime->vm);
+		return -1;
+	}
+
+	method = (*env)->GetStaticMethodID(env, runtime_class, "pollCompletion",
+			"(Ljava/nio/ByteBuffer;)I");
+	if (method == NULL ||
+			ck_check_java_exception(env, "GetStaticMethodID(pollCompletion)") != 0)
+	{
+		(*env)->DeleteLocalRef(env, runtime_class);
+		(void)(*runtime->vm)->DetachCurrentThread(runtime->vm);
+		return -1;
+	}
+
+	memset(storage, 0, sizeof(storage));
+	native_output = storage;
+	output = (*env)->NewDirectByteBuffer(env, native_output, sizeof(storage));
+	if (output == NULL ||
+			ck_check_java_exception(env, "NewDirectByteBuffer(pollCompletion)") != 0)
+	{
+		(*env)->DeleteLocalRef(env, runtime_class);
+		(void)(*runtime->vm)->DetachCurrentThread(runtime->vm);
+		return -1;
+	}
+
+	poll_result = (*env)->CallStaticIntMethod(env, runtime_class, method, output);
+	if (ck_check_java_exception(env, "CallStaticIntMethod(pollCompletion)") != 0)
+	{
+		(*env)->DeleteLocalRef(env, output);
+		(*env)->DeleteLocalRef(env, runtime_class);
+		(void)(*runtime->vm)->DetachCurrentThread(runtime->vm);
+		return -1;
+	}
+
+	(*env)->DeleteLocalRef(env, output);
+	(*env)->DeleteLocalRef(env, runtime_class);
+
+	detach_result = (*runtime->vm)->DetachCurrentThread(runtime->vm);
+	if (detach_result != JNI_OK)
+	{
+		return -1;
+	}
+
+	if (poll_result != 1)
+	{
+		return poll_result;
+	}
+
+	memcpy(&request_handle, storage, sizeof(request_handle));
+	memcpy(&result_value, storage + 8, sizeof(result_value));
+	memcpy(&status, storage + 8 + sizeof(result_value), sizeof(status));
+
+	if (request_handle != (jlong)request->descriptor.request_id)
+	{
+		return -1;
+	}
+
+	printf("CKARTA_DISPATCH handle=%lld result=%lld status=%d\\n",
+			(long long)request_handle, (long long)result_value, (int)status);
+
+	finish_result = ck_request_finish(request,
+			status == 0 ? CK_REQUEST_COMPLETED : CK_REQUEST_FAILED);
+	return finish_result == 0 && status == 0 ? 1 : -1;
 }
 
 int ck_runtime_init(ck_runtime_t *runtime, const char *class_path)
@@ -287,29 +390,6 @@ int ck_runtime_init(ck_runtime_t *runtime, const char *class_path)
 	}
 
 	return 0;
-}
-
-int ck_runtime_dispatch_smoke(ck_runtime_t *runtime, ck_request_t *request)
-{
-	struct ck_worker_args worker;
-	int result;
-
-	memset(&worker, 0, sizeof(worker));
-	worker.runtime = runtime;
-	worker.request = request;
-
-	result = pthread_create(&runtime->worker_thread, NULL, ck_worker_main, &worker);
-	if (result != 0)
-	{
-		return result;
-	}
-	result = pthread_join(runtime->worker_thread, NULL);
-	if (result != 0)
-	{
-		return result;
-	}
-
-	return worker.result;
 }
 
 int ck_runtime_shutdown(ck_runtime_t *runtime)

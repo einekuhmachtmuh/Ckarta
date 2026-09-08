@@ -289,7 +289,7 @@ int ck_runtime_poll_completion(ck_request_t *request, ck_completion_t *completio
 		return poll_result;
 	}
 
-	printf("CKARTA_ASYNC_COMPLETION result=%lld status=%d\\n",
+	printf("CKARTA_ASYNC_COMPLETION result=%lld status=%d\n",
 			(long long)result, (int)status);
 
 	finish_result = ck_request_finish(request,

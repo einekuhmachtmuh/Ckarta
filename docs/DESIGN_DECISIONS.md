@@ -121,3 +121,7 @@ TLS library、allocator strategy beyond pool、HTTP/2、HTTP/3、exact JNI ABI�
 Level 1 API、Level 2 semantics、Level 3 timing/concurrency semantics 必須遵守；Level 4 internal implementation 保留自由度，允許 C event loop、native buffers、lazy materialization 與不同 executor topology。
 
 完整研究：docs/SERVLET_6_1_CRITIQUE.md
+
+## 15. CGI／FastCGI gateway
+
+決策：CGI/1.1 可作 optional compatibility gateway；FastCGI 優先作 PHP integration。CGI child process 與 Servlet container 不共用 application semantics，也不得讓 child process execution 形成 C event-loop blocking point。完整證據見 docs/CGI_FASTCGI_RESEARCH.md。

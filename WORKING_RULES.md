@@ -18,6 +18,8 @@
 
 預設後續 Codex 工作可能在不了解工作現況的情況下開始，因此任何新的工作階段都必須以 repository 中已持久化的規則、文件、程式碼、測試、commit 與研究紀錄為主要現況來源；不得假設新工作階段會自動知道上一個對話的未持久化內容。`docs/WORK_STATE.md` 用於保存跨對話的重要工程現況，但不得取代各專題的權威文件。
 
+每次整併、修改 MD 或修改程式碼都可能造成衝突（conflict／競合）或基於過期內容覆蓋較新成果；因此在每次寫入前，必須重新取得目標檔案的最新內容與版本識別，檢查同一路徑及其相關文件是否已被其他變更更新，並在寫入後檢查 diff／commit 結果與相關文件一致性。若發現版本不一致、競合、未知變更或無法確認寫入基礎，不得直接覆蓋，必須重新同步後再整併。對多檔案相關變更亦必須檢查其彼此引用、規則、索引、ABI 與實作描述是否衝突。
+
 修訂後必須交叉檢查 README、架構、hot path（熱路徑）、JNI、測試與安全文件的一致性。精簡的目的只能是去重與提高可掌握性，不得犧牲可追溯性。
 
 ## 2. 專案與規格
@@ -135,10 +137,11 @@ docs/ENTRYPOINT_DESIGN.md
 docs/STARTUP_STATE_MACHINE.md
 docs/HTTP_FRAMING_POLICY.md
 docs/CONCURRENCY_MODEL.md
-docs/THREAD_MODEL.md
 docs/CANCELLATION_MODEL.md
 docs/JNI_ABI.md
 docs/JNI_COST_MODEL.md
+docs/THREAD_MODEL.md
+docs/THREAD_BENCHMARK_PLAN.md
 docs/TCK_INTEGRATION_PLAN.md
 docs/SECURITY_BASELINE.md
 docs/REFERENCE_SOURCES.md

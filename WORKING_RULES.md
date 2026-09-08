@@ -134,6 +134,12 @@ Nginx 與 Apache Tomcat 以 Git submodule（Git 子模組）固定於 third_part
 
 禁止未經架構決策直接複製 upstream code（上游程式碼）。移植前必須檢查 license、dependency、平台假設、安全與語意差異。
 
+## 15. 平台 API 與 system call
+
+平台特定的 documented OS API（文件化作業系統介面）可以直接由 Ckarta 使用，但必須集中在 platform backend（平台後端），不得讓 portable core（可攜式核心）散落平台條件分支。新增或修改平台 API 呼叫時，必須核對該版本官方文件／標頭宣告、引數與回傳契約、錯誤語意、handle／descriptor／OVERLAPPED 等資源的 ownership／lifetime，並檢查上下游狀態機與取消／shutdown 路徑。Linux 優先使用 libc 或正式 system-call wrapper；Windows 優先使用文件化 Win32／Winsock API。不得以 raw syscall number、未文件化 NT Native API 或其他不穩定的內核介面作一般 runtime ABI。
+
+平台最佳化不得改變 portable protocol／request／response／ownership／JNI semantics；若不同平台的 primitive programming model（程式模型）不同，必須在 backend 內映射成共同的 event／completion 語意。任何平台專用實作仍須接受同等的安全、函式、型態轉換、生命週期、測試與效能證據要求。
+
 ## 15. 學術與證據規則
 
 任何學術來源必須確認作者、標題、出版資訊、DOI 或穩定網址與可閱讀位置；無法確認就標記「無法確認」且不得引用。
@@ -152,6 +158,8 @@ docs/STARTUP_STATE_MACHINE.md
 docs/STARTUP_CONFIGURATION_RESEARCH.md
 docs/CORE_CONFIGURATION_CANDIDATES.md
 docs/MODULE_ARCHITECTURE_RESEARCH.md
+docs/WIN32_PORTABILITY_AND_IO_RESEARCH.md
+docs/COMPLETION_NOTIFICATION_RESEARCH.md
 docs/HTTP_FRAMING_POLICY.md
 docs/CONCURRENCY_MODEL.md
 docs/CANCELLATION_MODEL.md

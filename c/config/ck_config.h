@@ -20,6 +20,8 @@ typedef struct ck_config_directive
 } ck_config_directive_t;
 
 int ck_config_init(ck_config_t *config);
+int ck_config_set_class_path(ck_config_t *config, const char *value,
+		char *error, size_t error_size);
 int ck_config_load_file(ck_config_t *config, const char *path,
 		const ck_config_directive_t *directives, size_t directive_count,
 		char *error, size_t error_size);

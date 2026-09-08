@@ -19,6 +19,8 @@ JVM／Java Servlet 容器
 ├── WORKING_RULES.md
 ├── README.md
 ├── .gitmodules
+├── conf/
+│   └── ckarta.conf
 ├── docs/
 ├── third_party/
 │   ├── nginx/        # Git submodule，固定 upstream commit
@@ -41,6 +43,7 @@ Nginx 與 Apache Tomcat 不直接複製進 Ckarta repository，而是以 Git sub
 - docs/CONNECTION_OWNERSHIP.md：C 連線、Request、AsyncContext 與 JNI 所有權基線。
 - docs/DESIGN_DECISIONS.md：架構決策與證據矩陣。
 - docs/ENTRYPOINT_DESIGN.md：C main 入口與 JVM 啟動模型。
+- docs/STARTUP_CONFIGURATION_RESEARCH.md：Apache HTTP Server、Nginx、Tomcat 與 Ckarta 啟動配置／驗證／reload 架構研究。
 - docs/STARTUP_STATE_MACHINE.md：C main、JVM、Java container、network runtime 的啟動／停止狀態機。
 - docs/HTTP_FRAMING_POLICY.md：HTTP/1.1 framing（訊息框架）權威解析政策。
 - docs/CONCURRENCY_MODEL.md：C 事件並行與 Java Servlet 執行模型。
@@ -99,3 +102,6 @@ Java：Jakarta Servlet 6.1、Servlet lifecycle、Filter、Listener、Session、S
 所有「已實作」「已通過」「更快」「更安全」宣稱，都必須有 repository 測試或可重現測量證據。\n\n目前已驗證的非阻塞 JNI smoke slice：C worker submission → Java bounded executor → completion queue → C nonblocking poll；正式多請求 completion queue 與最終 event notification 尚未定案。
 
 CGI/FastCGI 定位：未來可掛接 application gateway module，不屬核心 request execution；PHP 優先透過 FastCGI/PHP-FPM。完整效能與架構分析見 `docs/CGI_FASTCGI_RESEARCH.md`。
+
+
+啟動配置：正式程序先由 C main 讀取 conf/ckarta.conf，再建立已驗證的 native configuration snapshot；JVM 與後續 runtime 不應讀取未驗證的外部設定值。

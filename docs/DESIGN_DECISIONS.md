@@ -131,3 +131,9 @@ Level 1 API、Level 2 semantics、Level 3 timing/concurrency semantics 必須遵
 決策：CGI 與 FastCGI 為未來可掛接模組。核心 Web server 不依賴 CGI、FastCGI 或 PHP；PHP 優先以 FastCGI/PHP-FPM 整合。
 
 效能基線分三層：模組不存在、模組存在但未命中、模組 request 實際執行。只有最後一層包含 gateway execution cost。此決策保留核心 hot path 最小化與 optional functionality（可選功能）的隔離。
+
+## 17. 啟動配置
+
+決策：Ckarta 採單一主設定檔 + C directive registry + 驗證後設定快照。第一版只實作 class_path；未來模組自行註冊設定指令，但不能使核心知道其協定。未採 Tomcat XML 物件樹，亦不複製 Apache 完整 configuration vector。
+
+完整研究見 docs/STARTUP_CONFIGURATION_RESEARCH.md。

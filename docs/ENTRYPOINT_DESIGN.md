@@ -12,13 +12,13 @@ Java main-class 不作為正式 server（伺服器）程序入口。
 
 固定版本：1.30.4，commit 017cf98dcce217946572a896f0992370475e189f。
 
-檔案：src/core/nginx.c；已確認存在 int ngx_cdecl main(int argc, char *const *argv)。其啟動路徑會先建立初始化 cycle，處理設定，再依程序模式進入 ngx_master_process_cycle() 或 ngx_single_process_cycle()。
+檔案：src/core/nginx.c；已確認存在 int ngx_cdecl main(int argc, char *const *argv)。其啟動路徑會先建立初始化 cycle，處理設定，再依程序模式進入 ngx_master_process_cycle() 或 ngx_single_process_cycle()。固定版本原始碼顯示 main() 在設定、OS／module 初始化與 cycle 建立完成後，才進入 single/master process cycle。
 
 ### Apache Tomcat
 
 固定版本：11.0.25，commit cbe6e15ee81e2fc6232954292a80cca5d1e84009。
 
-Bootstrap.java 已確認存在 public static void main(String[] args)，並由 Bootstrap init/load/start/stop 管理 Java container lifecycle（Java 容器生命週期）。
+Bootstrap.java 已確認存在 public static void main(String[] args)。它以 Bootstrap instance 管理 init/load/start/stop 等 Java container lifecycle（Java 容器生命週期）；正式啟動仍由 Java 入口驅動。
 
 ## 3. Ckarta 為何採 C main
 
@@ -42,13 +42,13 @@ START
 → ARGS_READY
 → NATIVE_CONFIG_READY
 → NATIVE_RUNTIME_READY
-→ JVM_STARTING
+→ JVM_BOOTSTRAP_STARTING
 → JVM_READY
 → JAVA_CONTAINER_READY
 → NETWORK_READY
 → RUNNING
 
-完整狀態轉移、rollback（回滾）及停止狀態見 docs/STARTUP_STATE_MACHINE.md。
+`C main()` 是正式程序入口；`JVM_BOOTSTRAP_STARTING` 代表受控的專用 native bootstrap thread（原生啟動執行緒）正在執行 `JNI_CreateJavaVM()`。JNI 規格指出呼叫 `JNI_CreateJavaVM()` 的執行緒會成為 JVM 的 main thread，且建議不要使用 primordial process thread（原始程序執行緒）直接載入 JVM，而應建立專用執行緒。
 
 ## 5. 第一階段禁止
 
@@ -65,22 +65,63 @@ C main
 
 C main 負責 process lifecycle（程序生命週期）、native configuration、native runtime、listener／socket、C worker、JVM bootstrap coordination（JVM 啟動協調）與 shutdown coordination（停止協調）。
 
+C main 本身不應把所有 JVM 工作直接塞進 primordial thread；應建立並管理 bootstrap thread，等待 JVM/container ready，再決定何時開放 network admission（網路准入）。
+
 C main 不直接執行 Servlet application code。
 
 ## 7. Java 責任
 
 Java 負責 Java container initialization、web application deployment、Servlet lifecycle、class loading、Filter、Listener、Session、ServletContext、RequestDispatcher 與 AsyncContext。
 
+Tomcat 的 Bootstrap.java 可作 lifecycle decomposition（生命週期分解）的參考，但其反射、classloader 與 Catalina 私有內部並非 Ckarta ABI。
+
 ## 8. OpenJDK 21 啟動基線
 
 OpenJDK 21 Update 目前以 jdk-21.0.8-ga 作為 JNI／JVM 研究基線。這不改變 Jakarta Servlet 6.1 的規格平台要求。
 
-JNI Invocation API 的使用必須與 C main、JVM bootstrap thread lifecycle（JVM 啟動執行緒生命週期）及 native thread attachment 規則一起設計。
+Invocation API 要點：
 
-## 9. 與 Nginx／Tomcat 的吸收
+- `JNI_CreateJavaVM()` 建立 JVM，呼叫執行緒會附加為 main thread。
+- `JNIEnv*` 僅對當前 native thread 有效。
+- 其他 native thread 需 `AttachCurrentThread()` 或 `AttachCurrentThreadAsDaemon()`。
+- attached native thread 結束前必須 `DetachCurrentThread()`。
+- `DestroyJavaVM()` 會等待 non-daemon threads（非 daemon 執行緒）終止後才完成 JVM termination；因此 Ckarta 必須先停止／join（加入等待）自己的 native worker 與 JNI-attached thread，再進入 JVM destroy phase。
 
-Nginx：吸收明確程序 lifecycle、master／worker 啟動與停止概念。
+來源：
+https://docs.oracle.com/en/java/javase/21/docs/specs/jni/invocation.html
+
+## 9. JVM bootstrap thread 具體策略
+
+第一階段採：
+
+C main
+→ create bootstrap pthread（建立啟動 pthread）
+→ bootstrap thread：JNI_CreateJavaVM
+→ Java bootstrap / container init
+→ 發出 JAVA_CONTAINER_READY
+→ C main／control thread 收到 ready
+→ 開放 network
+
+bootstrap thread 在 JVM 存續期間的職責必須明確；不可任意讓 worker 以共享 `JNIEnv*` 方式操作 JVM。
+
+停止時：
+
+stop admission
+→ stop／drain Java container
+→ finish/cancel Servlet work
+→ detach remaining native JNI threads
+→ DestroyJavaVM
+→ join bootstrap thread if applicable
+→ native cleanup
+
+實際的 thread join 順序必須在第一個 C entrypoint 實作前再以可執行測試固定；本文件不假造尚未存在的 Ckarta API。
+
+## 10. 與 Nginx／Tomcat 的吸收
+
+Nginx：吸收明確程序 lifecycle、master／worker 啟動與停止、設定完成後才進入服務 cycle 的結構；但 Ckarta 第一階段不採 JVM 已建立後 fork。
 
 Tomcat：吸收明確 Java container init/load/start/stop lifecycle 與 classloader isolation（類別載入器隔離）概念。
 
-兩者的私有 API、內部資料結構與實作細節不得直接變成 Ckarta ABI。
+OpenJDK：採用 Invocation API 對 primordial thread、JNIEnv thread affinity（執行緒親和性）、native thread attachment 與 DestroyJavaVM 的明確生命週期要求。
+
+三者的私有 API、內部資料結構與實作細節不得直接變成 Ckarta ABI。

@@ -4,7 +4,7 @@
 
 ## 1. 目前 repository 狀態
 
-截至 2026-09-08，`main` 最新提交應以 GitHub 為準；本文件目前已隨 thread benchmark 與文件一致性修訂一起提交。
+截至 2026-09-08，`main` 最新提交應以 GitHub 為準；本文件目前已隨 gateway／Servlet／native bridge 研究修訂一起提交。
 
 目前重要基線：
 
@@ -16,13 +16,14 @@
 
 ## 2. 已落實的核心文件
 
-- `WORKING_RULES.md`：工程基線、MD 一致性檢查、離線 fallback（替代方法）、工作成果持久化、新工作階段重新讀取，以及變更衝突／版本一致性檢查規則。
+- `WORKING_RULES.md`：工程基線、MD 一致性檢查、離線 fallback（替代方法）、工作成果持久化、新工作階段重新讀取、變更衝突／版本一致性、規則衝突處理與最小 wrapper 規則。
 - `docs/ENTRYPOINT_DESIGN.md`：C main 與專用 JVM bootstrap thread。
 - `docs/STARTUP_STATE_MACHINE.md`：啟動／停止狀態機。
 - `docs/CONCURRENCY_MODEL.md`：整體並行原則。
 - `docs/THREAD_MODEL.md`：thread model 權威研究文件。
 - `docs/THREAD_BENCHMARK_PLAN.md`：thread topology 與 JNI bridge/direct-attach 實驗定義。
 - `bench/jni/`：獨立 JNI thread benchmark harness。
+- `docs/GATEWAY_SERVLET_NATIVE_BRIDGE_RESEARCH.md`：CGI／FastCGI／Tomcat Servlet／CGIServlet／OpenJDK HotSpot／Ckarta JNI 邊界研究。
 - `docs/JNI_ABI.md`：JNI 邊界與 ownership。
 - `docs/JNI_COST_MODEL.md`：OpenJDK 21 JNI 成本研究。
 - `docs/CONNECTION_OWNERSHIP.md`：C connection、Java facade、buffer lifetime。
@@ -30,7 +31,7 @@
 
 ## 3. 目前 thread model 決策
 
-第一階段暫定：
+第一階段維持可實測候選，而不是先驗固定最終 topology：
 
 ```text
 C main / control thread
@@ -41,16 +42,32 @@ C main / control thread
         ├── C worker threads
         │       └── event loop + connection ownership
         │
-        └── JNI bridge thread／pool
+        └── JNI bridge thread／pool（候選）
                 │
                 └── Java Servlet executor threads
 ```
 
-第一階段不把所有 C workers 固定 attach JVM。C worker 將已完成解析的 request descriptor 放入 bounded JNI queue，由 JNI bridge 執行粗粒度 JNI dispatch，再以 completion record 回到原 owner worker。
+正式候選至少包括：
 
-這仍是工程假設，不是已證明的效能最優解。direct attach 與 bridge model 的差異必須由 benchmark 決定。
+A. stable C worker long-lived AttachCurrentThread；
+B. worker group 對應受控 JNI bridge；
+C. central bridge pool。
 
-## 4. 本機可重現驗證
+目前沒有證據支持把 C 固定到 A、B 或 C 為最終唯一模型。
+
+## 4. Gateway／Servlet／native bridge 研究結論
+
+Classic CGI 的主要邊界是 OS process；Nginx 的實際動態 gateway 主要是 FastCGI 等 upstream protocol，而不是在 Nginx worker 內直接執行一般 CGI。
+
+Tomcat 標準 Servlet 路徑主要留在 JVM／Java thread execution；Tomcat `CGIServlet` 則透過 `Runtime.exec()` 進入 JDK `ProcessImpl` 的 native process-creation path，最後形成 OS-process／stdio 邊界。
+
+Ckarta JNI 與 FastCGI 的主要差別在邊界位置：Ckarta 是 in-process HotSpot/JNI，而 FastCGI 是 protocol/socket/upstream boundary。因此不能因為 FastCGI 的 gateway pattern 有價值，就把 socket／protocol serialization 原封不動放進同程序 JNI。
+
+OpenJDK 21 HotSpot 的 JNI method invocation 最終進入 `JavaCalls::call` 等 runtime machinery；`NewObjectA/V` 則涉及 instance allocation、JNI handle 與 constructor invocation。因此 C request struct 不應逐欄物件化為大量 Java mirror fields。
+
+詳細權威研究見 `docs/GATEWAY_SERVLET_NATIVE_BRIDGE_RESEARCH.md`。
+
+## 5. 本機可重現驗證
 
 Codex 本機測試環境：
 
@@ -58,60 +75,45 @@ Codex 本機測試環境：
 - GCC 14.2.0
 - OpenJDK 21.0.11
 
-已建立並建置獨立 `bench/jni` harness：
+已建立並建置獨立 `bench/jni` harness。一次校驗樣本顯示 direct attach 在極小 workload 下明顯避免了 central queue handoff；bridge／bridge pool 則出現顯著 queue／serialization overhead。
 
-```text
-make
-./build/ckarta-jni-thread-bench direct 2 10000
-./build/ckarta-jni-thread-bench bridge 2 10000 1
-./build/ckarta-jni-thread-bench bridge 2 10000 2
-```
+這些數字只用來驗證 harness 與成本拆解方向，不是 Ckarta 整體效能結論，也不是固定 OpenJDK 21.0.8 的正式 benchmark。
 
-一次校驗樣本：
+## 6. 尚待完成的 thread 實驗
 
-```text
-direct 2/10000：throughput 約 6.01 M ops/s，avg operation 約 110 ns
-bridge 2/10000/1：throughput 約 0.104 M ops/s，avg operation 約 13.2 us，avg queue wait 約 6.39 us
-bridge 2/10000/2：throughput 約 0.0419 M ops/s，avg operation 約 36.4 us，avg queue wait 約 21.1 us
-```
-
-這些數字只證明目前 harness 能運作並顯示 queue／serialization overhead（佇列／序列化額外成本）可能非常顯著；它們不是 Ckarta 整體效能結論，也不是固定 OpenJDK 21.0.8 的 benchmark 基線。
-
-## 5. 尚待完成的 thread 實驗
-
-- repetitions 與 warm-up 控制。
-- CPU affinity／isolation（CPU 親和／隔離）控制。
+- repetitions、warm-up、CPU affinity／isolation 控制。
 - worker count × bridge count 矩陣。
 - p50／p95／p99 histogram。
-- direct attach 的長生命週期 attached worker 模式。
+- long-lived direct attach 的實際 lifecycle。
 - JNI invocation、queue wait、Java executor scheduling 的分段量測。
 - allocation／GC 與 CPU utilization。
-- 將 workload 從 primitive `long` 擴展到 C canonical request、opaque handle 與 DirectByteBuffer。
-- shutdown、cancellation 與 connection ownership 的整合測試。
+- C canonical request、opaque handle、DirectByteBuffer 與 Java facade workload。
+- shutdown、cancellation、AsyncContext 與 connection ownership 的整合測試。
 
-## 6. 下一個工程閘門
+## 7. 下一個工程閘門
 
 依優先序：
 
 1. 最小 Ckarta build system。
 2. 真正 C `main()` 與 bootstrap thread。
 3. ready/error handoff。
-4. JNI bridge queue 的正式 ownership／cancellation ABI。
+4. JNI boundary 的正式 ownership／cancellation ABI。
 5. Java bootstrap API 最小公開邊界。
 6. shutdown／join 可執行測試。
 7. 再把 thread benchmark 接到真實 Ckarta request path。
 
-不得因 benchmark harness 已存在而宣稱正式 Ckarta runtime 已實作。
+不得因 benchmark harness 或研究文件已存在而宣稱正式 Ckarta runtime 已實作。
 
-## 7. 新工作階段接手規則
+## 8. 新工作階段接手規則
 
 新工作階段應依序讀取：
 
 1. `WORKING_RULES.md`
 2. 本文件
-3. `docs/THREAD_MODEL.md`
-4. `docs/THREAD_BENCHMARK_PLAN.md`
-5. 與當前任務直接相關的架構／JNI／lifecycle 文件
-6. 必要時重新核對固定版本 Nginx、Tomcat、OpenJDK 與學術來源
+3. `docs/GATEWAY_SERVLET_NATIVE_BRIDGE_RESEARCH.md`
+4. `docs/THREAD_MODEL.md`
+5. `docs/THREAD_BENCHMARK_PLAN.md`
+6. 與當前任務直接相關的架構／JNI／lifecycle 文件
+7. 必要時重新核對固定版本 Nginx、Tomcat、OpenJDK 與學術來源
 
 任何只存在聊天上下文、尚未進 repository 的重要決策，不應視為已持久化工程狀態。

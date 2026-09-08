@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sched.h>
 
 static ck_runtime_t runtime;
 
@@ -23,7 +24,9 @@ int main(int argc, char **argv)
 	const unsigned char body[] = "ckarta-jni-smoke";
 	ck_request_descriptor_t descriptor;
 	ck_request_t request;
+	ck_completion_t completion;
 	int result;
+	int completion_result;
 
 	(void)argc;
 	(void)argv;
@@ -45,6 +48,8 @@ int main(int argc, char **argv)
 	descriptor.body = body;
 	descriptor.body_length = sizeof(body) - 1;
 
+	ck_completion_init(&completion);
+
 	result = ck_request_init(&request, &descriptor);
 	if (check_result("REQUEST_INIT", result) != 0)
 	{
@@ -57,7 +62,25 @@ int main(int argc, char **argv)
 		return EXIT_FAILURE;
 	}
 
-	result = ck_runtime_dispatch_smoke(&runtime, &request);
+	result = ck_runtime_dispatch_async_smoke(&runtime, &request, &completion);
+	if (check_result("DISPATCH_SUBMIT", result) != 0)
+	{
+		ck_runtime_shutdown(&runtime);
+		ck_runtime_destroy(&runtime);
+		return EXIT_FAILURE;
+	}
+
+	do
+	{
+		completion_result = ck_runtime_poll_completion(&request, &completion);
+		if (completion_result == 0)
+		{
+			sched_yield();
+		}
+	} while (completion_result == 0);
+
+	result = completion_result == 1 ? 0 : -1;
+
 	if (check_result("DISPATCH", result) != 0)
 	{
 		if (ck_request_state(&request) == CK_REQUEST_RUNNING)

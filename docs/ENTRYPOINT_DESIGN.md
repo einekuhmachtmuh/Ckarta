@@ -90,7 +90,7 @@ Invocation API 要點：
 來源：
 https://docs.oracle.com/en/java/javase/21/docs/specs/jni/invocation.html
 
-## 9. JVM bootstrap thread 具體策略
+## 9. JVM bootstrap thread 與 JNI bridge
 
 第一階段採：
 
@@ -100,27 +100,32 @@ C main
 → Java bootstrap / container init
 → 發出 JAVA_CONTAINER_READY
 → C main／control thread 收到 ready
+→ 建立 JNI bridge thread／pool
 → 開放 network
 
-bootstrap thread 在 JVM 存續期間的職責必須明確；不可任意讓 worker 以共享 `JNIEnv*` 方式操作 JVM。
+C worker 不直接共享 `JNIEnv*`。第一階段暫不要求 C worker 永久 attach JVM；C worker 將完成解析的 request descriptor 放入 bounded JNI queue，再由 JNI bridge thread 取得當前 thread 的 `JNIEnv*` 執行粗粒度 JNI dispatch，最後以 completion record 回到原 owner worker。
+
+這是 thread／ownership 的初步決策，不代表 bridge thread 一定比 C worker 直接 attach 更快；完整待測方案見 `docs/THREAD_MODEL.md`。
 
 停止時：
 
 stop admission
-→ stop／drain Java container
+→ stop／drain JNI dispatch
 → finish/cancel Servlet work
-→ detach remaining native JNI threads
+→ stop C workers
+→ detach remaining JNI-attached native threads
+→ terminate Java container
 → DestroyJavaVM
-→ join bootstrap thread if applicable
+→ join bootstrap／bridge／worker threads
 → native cleanup
 
-實際的 thread join 順序必須在第一個 C entrypoint 實作前再以可執行測試固定；本文件不假造尚未存在的 Ckarta API。
+真正的 thread join 順序、bridge thread 數量與 queue policy 必須以可執行測試及 benchmark 固定；本文件不假造尚未存在的 Ckarta API。
 
-## 10. 與 Nginx／Tomcat 的吸收
+## 10. 與 Nginx／Tomcat／OpenJDK 的吸收
 
 Nginx：吸收明確程序 lifecycle、master／worker 啟動與停止、設定完成後才進入服務 cycle 的結構；但 Ckarta 第一階段不採 JVM 已建立後 fork。
 
-Tomcat：吸收明確 Java container init/load/start/stop lifecycle 與 classloader isolation（類別載入器隔離）概念。
+Tomcat：吸收明確 Java container init/load/start/stop lifecycle 與 classloader isolation（類別載入器隔離）概念，以及其 endpoint／executor 分層思維；不直接複製 Tomcat thread topology（執行緒拓撲）。
 
 OpenJDK：採用 Invocation API 對 primordial thread、JNIEnv thread affinity（執行緒親和性）、native thread attachment 與 DestroyJavaVM 的明確生命週期要求。
 

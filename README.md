@@ -34,7 +34,7 @@ Nginx 與 Apache Tomcat 不直接複製進 Ckarta repository，而是以 Git sub
 
 ## 文件
 
-- WORKING_RULES.md：工程、命名、驗證、安全、工成果持久化與自動化基準。
+- WORKING_RULES.md：工程、命名、驗證、安全、工作成果持久化與自動化基準。
 - docs/ARCHITECTURE.md：C/Java 邊界、資料流、並行模型、C 化決策與補充需求。
 - docs/HOT_PATH_REVIEW.md：Nginx／Tomcat hot path（熱路徑）與 whole path（完整路徑）基線。
 - docs/FUNCTION_TRACE.md：固定版本的逐函式 hot path 追蹤。
@@ -52,6 +52,7 @@ Nginx 與 Apache Tomcat 不直接複製進 Ckarta repository，而是以 Git sub
 - docs/TCK_INTEGRATION_PLAN.md：Jakarta Servlet 6.1 TCK 驗證計畫。
 - docs/REFERENCE_SOURCES.md：參考原始碼版本、commit、授權與研究規則。
 - docs/WORKING_TREE.md：實際 repository 工作樹規劃。
+- docs/WORK_STATE.md：跨對話可接手的工程現況、已驗證事項與下一個工程閘門。
 
 ## 參考原始碼版本
 

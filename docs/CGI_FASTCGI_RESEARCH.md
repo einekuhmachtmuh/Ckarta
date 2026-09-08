@@ -323,3 +323,151 @@ resource limits
 security tests
 protocol tests
 benchmark
+
+
+## 17. 「核心無 CGI」與「可掛接模組」效能比較
+
+本比較區分三種狀態，而不是只比較「有沒有 CGI 功能」。
+
+### A. 建置時不包含 CGI/FastCGI 模組
+
+Ckarta 核心 request path 不需保存 CGI/FastCGI 的 configuration（設定）、process state（程序狀態）或 upstream state（上游狀態）。
+
+對非 CGI request：
+
+T_A ≈ T_core
+
+這是最低風險、最低額外狀態與最容易驗證的基線。
+
+### B. 模組已存在／可載入，但 request 沒有命中 CGI/FastCGI route
+
+此情況可能增加：
+
+- startup configuration parsing（啟動設定解析）
+- module metadata（模組中繼資料）
+- route／phase dispatch（路由／階段分派）
+- per-location module configuration（每路徑模組設定）
+- module registry bookkeeping（模組登錄管理）
+
+Nginx 1.30.4 的 HTTP 初始化會為 HTTP modules 建立 main／server／location configuration context，並建立 phase engine；因此「模組存在」不等於「每 request 都進入模組 handler」，但會有啟動與記憶體方面的成本。
+
+固定原始碼：
+https://github.com/nginx/nginx/blob/017cf98dcce217946572a896f0992370475e189f/src/http/ngx_http.c
+
+### C. request 命中 CGI/FastCGI route
+
+此時成本不是模組分派本身，而主要來自 application gateway：
+
+T_C ≈ T_core + T_gateway + T_application + T_output
+
+其中 T_gateway 包含 request parameter generation、protocol framing、connection／pipe handling、buffering 與 failure handling。
+
+對 CGI：
+
+T_gateway 另外包含 process creation、process setup、stdio pipe 等成本。
+
+對 FastCGI：
+
+T_gateway 改成 persistent upstream connection、FastCGI record framing、request／response streaming 與 process pool 的外部管理成本。
+
+## 18. 為什麼 CGI 不應進核心 hot path
+
+若所有 request 都經：
+
+request
+→ CGI capability check
+→ CGI route decision
+→ external gateway state
+
+即使沒有命中 CGI，也可能在 hot path 增加 branch、state access 或 cache footprint。
+
+因此 Ckarta 應採 route-driven optional module：
+
+request
+→ normal core routing
+→ selected handler/module only when configured
+
+而非把 CGI abstraction（抽象）做成所有 request 都經過的 mandatory layer（強制層）。
+
+這也符合 Nginx phase／location 設計：FastCGI handler 只在對應 location configuration 啟用時進入，未命中者仍沿一般 HTTP core path。
+
+固定 FastCGI handler：
+https://github.com/nginx/nginx/blob/017cf98dcce217946572a896f0992370475e189f/src/http/modules/ngx_http_fastcgi_module.c
+
+## 19. 學術證據的限制
+
+Apte、Hansen、Reeser 的 2003 年 Computer Communications 研究直接比較 CGI、FastCGI、Servlet、JSP，並發現 FastCGI 一般優於 CGI；但其 Servlet／JSP／CGI 結果來自當時具體實作與硬體，不能直接外推到今天的 HotSpot、Nginx 或 Ckarta。
+
+正式書目：
+
+Varsha Apte, Tony Hansen, Paul Reeser, “Performance comparison of dynamic web platforms”, Computer Communications 26(8), 2003, 888–898.
+
+DOI：
+https://doi.org/10.1016/S0140-3664(02)00221-9
+
+可閱讀版本：
+https://www.cse.iitb.ac.in/~varsha/allpapers/mypapers/web_comparison_journal.pdf
+
+其最有價值的結論不是固定倍率，而是 performance ranking（效能排名）會隨 application complexity（應用程式複雜度）改變。
+
+因此 Ckarta 目前只能建立：
+
+CGI 具有 process creation 的結構性額外成本；
+FastCGI 消除每 request process creation；
+module not installed 能避免其 per-request module state；
+但實際差距必須以 Ckarta 自有 benchmark 驗證。
+
+## 20. 最終產品決策
+
+正式核心：
+
+不包含 CGI request execution。
+
+可掛接模組：
+
+- CGI module：未來可選。
+- FastCGI module：未來可選，PHP integration 優先。
+- 其他 application gateway：沿用同一 module boundary。
+
+核心 API 應只知道：
+
+route
+→ selected application handler
+
+而不應硬編碼：
+
+route
+→ CGI
+或
+route
+→ FastCGI。
+
+模組載入、配置與 handler registration 應在 startup/configuration 階段完成；非命中 request 不建立 CGI/FastCGI request state。
+
+這是一個架構原則，不代表現在已經存在 module loader 或 CGI/FastCGI implementation。
+
+## 21. 建議 benchmark
+
+未來至少比較：
+
+1. CGI module not built。
+2. CGI module built but disabled。
+3. CGI module enabled but route not hit。
+4. CGI route hit。
+5. FastCGI module enabled but route not hit。
+6. FastCGI route hit。
+7. Servlet route hit。
+
+每組都應使用相同 HTTP parser、TCP/TLS、request size、response size、keep-alive 與 concurrency，並量測：
+
+- requests/s
+- p50／p95／p99 latency
+- CPU
+- RSS／memory
+- allocation／GC
+- event-loop utilization
+- routing overhead
+- gateway queue wait
+- process creation／upstream connect cost
+
+不能把「CGI module 存在但沒命中」與「真的執行 CGI」混成同一個 benchmark。

@@ -124,7 +124,7 @@ thread model 的 direct-attach 與 JNI bridge 差異見 docs/THREAD_MODEL.md。
 
 ## 15. Executor handoff slice
 
-目前 executable slice 的 dispatch 會先進入 Java ThreadPoolExecutor，再由 executor thread 建立 NativeRequest 並執行 smoke workload；C 端等待結果只是同步驗證方式，不得作為 production event-loop API。
+目前 executable slice 使用 Java ThreadPoolExecutor 的有界工作佇列。C worker 僅負責 submission 後 detach；Java executor thread 建立 NativeRequest 並執行 smoke workload；C 以非阻塞 JNI poll 取得 completion。此 polling 仍是 smoke slice，正式 production event loop 尚需更高效率的通知／多請求 completion queue。
 
 Java executor 必須使用有界容量；飽和時不得 fallback 到 C event-loop thread 執行 Servlet application。
 

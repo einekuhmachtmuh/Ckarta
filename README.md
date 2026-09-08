@@ -47,6 +47,7 @@ Nginx 與 Apache Tomcat 不直接複製進 Ckarta repository，而是以 Git sub
 - docs/THREAD_MODEL.md：C worker、JVM bootstrap、JNI bridge 與 direct-attach 候選的 thread model（執行緒模型）研究基線。
 - docs/THREAD_BENCHMARK_PLAN.md：direct attach／JNI bridge／bridge pool 的可重現比較計畫。
 - docs/GATEWAY_SERVLET_NATIVE_BRIDGE_RESEARCH.md：CGI／FastCGI／Tomcat Servlet／CGIServlet／OpenJDK HotSpot／Ckarta JNI 邊界研究。
+- docs/OPENJDK_21U_SOURCE_AUDIT.md：固定 JDK 21u tags 的 HotSpot source audit，核對 21.0.8 與 21.0.11 對 JNI 研究結論的實際影響。
 - docs/CANCELLATION_MODEL.md：連線、Servlet 非同步與 JNI 取消語意。
 - docs/JNI_ABI.md：JNI 邊界與所有權門檻。
 - docs/JNI_COST_MODEL.md：OpenJDK 21 JNI 跨語言成本模型與 C struct → Java object 策略。
@@ -64,7 +65,7 @@ Nginx：stable 1.30.4，commit `017cf98dcce217946572a896f0992370475e189f`。
 
 Apache Tomcat：11.0.25，commit `cbe6e15ee81e2fc6232954292a80cca5d1e84009`。
 
-OpenJDK 21 JNI 研究基線：`jdk-21.0.8-ga`。
+OpenJDK 21 JNI 研究基線：`jdk-21.0.8-ga`；另以 `jdk-21.0.11-ga` 做 fixed-tag implementation audit。完整結果見 `docs/OPENJDK_21U_SOURCE_AUDIT.md`。
 
 ## 入口與 thread 原則
 
@@ -80,7 +81,7 @@ C canonical request
 → 批次初始化
 → DirectByteBuffer data view
 
-OpenJDK 21 的 JNI 成本研究見 docs/JNI_COST_MODEL.md；任何效能結論仍須由可重現 benchmark 證明。
+OpenJDK 21 的 JNI 成本研究見 docs/JNI_COST_MODEL.md；固定 21u HotSpot implementation audit 見 docs/OPENJDK_21U_SOURCE_AUDIT.md。任何效能結論仍須由可重現 benchmark 證明。
 
 ## 架構原則
 

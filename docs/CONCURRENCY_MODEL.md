@@ -164,3 +164,8 @@ https://docs.oracle.com/en/java/javase/21/docs/specs/jni/invocation.html
 Servlet 6.1 的 externally visible semantics 與 internal scheduling strategy 分離。Ckarta 可用 C event-driven scheduling 提供 input/output readiness，再由 Java executor 執行 Servlet application。
 
 不得為符合規格而把 HTTP socket readiness 或 native connection state 暴露給 Servlet application。
+
+
+## 12. Completion handoff
+
+Java executor completion 不得要求 C event-loop thread blocking 等待。smoke slice 以 Java 有界完成佇列 + C 非阻塞 poll 驗證此邊界；正式路徑仍待加入高效率通知機制與多請求 routing。

@@ -194,3 +194,9 @@ Native module 暫定為 load-at-start、ABI/version/signature 驗證、dependenc
 ## 22. 多請求 completion smoke
 
 2026-09-09：多請求 completion routing 已完成第一個可執行 smoke slice。兩個 C request 可在同一 Java executor completion queue 完成，completion 帶 request_id、owner_token、lifetime_token、result、status，C 不依賴完成順序進行 routing。此 slice 仍由 smoke worker 建立後 join，未代表正式 event-loop 非阻塞 producer，也未使用高效率事件通知原語。
+
+## 23. Win32 與 completion notification 研究
+
+2026-09-09：完成 Apache httpd 2.4.68 mpm_winnt、Nginx 1.30.4 IOCP/select、Tomcat 11.0.25 Nio2Endpoint 與 Linux/Windows 官方 I/O 文件交叉研究。Windows 正式架構目標可行；primary event backend 候選為 IOCP + Overlapped Winsock I/O，Linux primary 為 epoll。Java→C completion notification 候選為 Linux eventfd + epoll、Windows PostQueuedCompletionStatus + IOCP。raw syscall／未文件化 Windows NT system call 不採用。完整研究見 docs/WIN32_PORTABILITY_AND_IO_RESEARCH.md 與 docs/COMPLETION_NOTIFICATION_RESEARCH.md。
+
+目前尚未實作 Windows backend 或正式 notification primitive；下一個實作前置步驟是 benchmark 與 platform backend contract。

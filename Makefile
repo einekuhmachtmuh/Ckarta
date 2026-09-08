@@ -9,7 +9,7 @@ ABI_TEST := $(BIN_DIR)/ckarta-request-lifecycle-test
 CC ?= cc
 CFLAGS := -std=c11 -Wall -Wextra -Wpedantic -Werror -O2 -pthread
 CPPFLAGS := -I$(JAVA_HOME)/include -I$(JAVA_HOME)/include/linux
-LDFLAGS := -L$(JAVA_HOME)/lib/server -Wl,-rpath,$(JAVA_HOME)/lib/server -ljvm -pthread
+LDFLAGS := -rdynamic -L$(JAVA_HOME)/lib/server -Wl,-rpath,$(JAVA_HOME)/lib/server -ljvm -pthread
 
 JAVA_SOURCES := $(shell find java -name '*.java' -print)
 

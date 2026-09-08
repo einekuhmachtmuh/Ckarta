@@ -1,6 +1,7 @@
 #include "../c/config/ck_config.h"
 
 #include <assert.h>
+#include <stdio.h>
 #include <string.h>
 
 static int apply_class_path(void *data, size_t argc,

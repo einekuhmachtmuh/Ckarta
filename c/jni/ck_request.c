@@ -1,5 +1,7 @@
 #include "ck_request.h"
 
+#include <stddef.h>
+
 static int ck_request_descriptor_valid(const ck_request_descriptor_t *descriptor)
 {
 	if (descriptor == NULL)

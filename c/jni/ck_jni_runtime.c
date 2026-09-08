@@ -340,6 +340,9 @@ int ck_runtime_poll_completion(ck_runtime_t *runtime, ck_request_t *request)
 		return -1;
 	}
 
+	printf("CKARTA_DISPATCH handle=%lld result=%lld status=%d\\n",
+			(long long)request_handle, (long long)result_value, (int)status);
+
 	finish_result = ck_request_finish(request,
 			status == 0 ? CK_REQUEST_COMPLETED : CK_REQUEST_FAILED);
 	return finish_result == 0 && status == 0 ? 1 : -1;

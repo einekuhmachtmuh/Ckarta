@@ -190,3 +190,7 @@ Java executor handoff 的 v2 smoke slice 使用 bounded Java completion queue，
 2026-09-09：完成 Apache HTTP Server、Nginx、Tomcat 的核心設定候選與 native module 架構交叉研究。研究結果持久化於 docs/CORE_CONFIGURATION_CANDIDATES.md 與 docs/MODULE_ARCHITECTURE_RESEARCH.md；目前不實作新的 core config options 或 module loader。候選分為 P0 程序／路徑／listener、P1 安全／資源／併行、P2 靜態／代理／觀測、P3 平台調校。
 
 Native module 暫定為 load-at-start、ABI/version/signature 驗證、dependency DAG、module-owned configuration、request route pre-resolution；不做 runtime unload。完整 module benchmark 尚未建立。
+
+## 22. 多請求 completion smoke
+
+2026-09-09：多請求 completion routing 已完成第一個可執行 smoke slice。兩個 C request 可在同一 Java executor completion queue 完成，completion 帶 request_id、owner_token、lifetime_token、result、status，C 不依賴完成順序進行 routing。此 slice 仍由 smoke worker 建立後 join，未代表正式 event-loop 非阻塞 producer，也未使用高效率事件通知原語。

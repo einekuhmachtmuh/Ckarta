@@ -61,7 +61,51 @@ Java request object 是 Servlet API facade（Servlet API 外觀）。
 - response sink
 - async lifecycle operation
 
-## 6. AsyncContext
+## 6. JNI 物件成本與所有權
+
+Java request facade 不得是 C struct 的逐欄鏡像。
+
+核准的初步模型：
+
+C canonical request
+→ opaque request handle
+→ 一個 Java facade
+→ 一次批次初始化
+→ DirectByteBuffer data view（直接位元組緩衝區資料視圖）
+
+避免：
+
+C struct
+→ N 個 Set<Field>
+→ M 個 Java String
+→ K 個 header object
+
+OpenJDK 21 HotSpot 的 `NewObjectA`／`NewObjectV` 會配置 Java instance、建立 local JNI handle 並呼叫 constructor；大量欄位 JNI 存取因此不是「把記憶體直接映射進 Java object」。
+
+來源：
+https://github.com/openjdk/jdk21u/blob/jdk-21.0.8-ga/src/hotspot/share/prims/jni.cpp
+
+## 7. Buffer ownership
+
+所有 buffer 都必須標示：
+
+OWNER
+BORROWER
+LIFETIME
+READ/WRITE PERMISSION
+
+Java 使用 native buffer 時，預設為 borrow-only（借用）。
+
+Java 不得 free native buffer。
+
+C 不得在 Java 尚未完成 borrow 時 recycle buffer。
+
+`NewDirectByteBuffer` 可建立指向 native memory 的 Java ByteBuffer，但不會替 Ckarta 定義 ownership；因此 DirectByteBuffer reference lifetime（直接緩衝區參照生命週期）必須與 native allocation lifetime（原生配置生命週期）明確綁定。
+
+來源：
+https://docs.oracle.com/en/java/javase/21/docs/specs/jni/functions.html
+
+## 8. AsyncContext
 
 當 Servlet 呼叫 startAsync：
 
@@ -86,22 +130,7 @@ ASYNC_WAIT
 → COMPLETING
 → OUTPUT／CLOSE
 
-## 7. Buffer ownership
-
-所有 buffer 都必須標示：
-
-OWNER
-BORROWER
-LIFETIME
-READ/WRITE PERMISSION
-
-Java 使用 native buffer 時，預設為 borrow-only（借用）。
-
-Java 不得 free native buffer。
-
-C 不得在 Java 尚未完成 borrow 時 recycle buffer。
-
-## 8. Cancellation
+## 9. Cancellation
 
 以下事件都必須能取消 pending operation（待處理操作）：
 
@@ -116,41 +145,51 @@ C 不得在 Java 尚未完成 borrow 時 recycle buffer。
 
 同一 operation 不能因兩個競爭 cancellation path 而 double free。
 
-## 9. Error propagation
+## 10. Error propagation
 
 C → Java：
-
 native error code + stable metadata
 
 Java → C：
-
 Servlet exception／response state／completion state
 
 不得讓 C 直接解讀 Java exception object 的內部 implementation detail（實作細節）。
 
-## 10. JNI 原則
+## 11. JNI crossing
 
 JNI entry point 應以「一次完成一個有意義的工作單元」為原則。
 
-避免：
-
-read 64 bytes → JNI → Java → JNI → read 64 bytes
-
-優先：
+推薦：
 
 read buffer
 → parse
-→ descriptor
+→ canonical descriptor
 → single JNI transition
-→ Java request processing
+→ Java processing
 
-## 11. 暫時禁止
+避免：
 
-在下列文件尚未完成前，不建立公開 JNI API：
+read 64 bytes
+→ JNI
+→ Java
+→ JNI
+→ read 64 bytes
+
+## 12. Thread rules
+
+JNIEnv pointer（JNI 環境指標）不得跨執行緒共享。
+
+每個需要使用 JNI 的 native thread 必須具有自己的 JNI attachment 狀態，並在生命週期終止時按 JNI 規則 detach。
+
+## 13. 暫時禁止
+
+在下列文件尚未完成並審查前，不建立正式 JNI public API：
 
 - docs/HTTP_FRAMING_POLICY.md
 - docs/CANCELLATION_MODEL.md
 - docs/JNI_ABI.md
 - docs/CONCURRENCY_MODEL.md
 
-這是為了避免 ABI 被未完成的 lifecycle assumptions 固化。
+成本模型見：
+
+docs/JNI_COST_MODEL.md

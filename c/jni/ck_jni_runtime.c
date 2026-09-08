@@ -216,6 +216,7 @@ static void *ck_worker_main(void *arg)
 	struct ck_worker_args *worker = arg;
 	JNIEnv *env = NULL;
 	jint result;
+	size_t i;
 
 	if (worker->request_count == 0)
 	{
@@ -228,33 +229,22 @@ static void *ck_worker_main(void *arg)
 	if (result != JNI_OK)
 	{
 		worker->result = result;
-		for (size_t i = 0; i < worker->request_count; i++)
+		return NULL;
+		return NULL;
+	}
+
+	worker->result = 0;
+	for (i = 0; i < worker->request_count; i++)
+	{
+		if (ck_request_begin(&worker->requests[i]) != 0 ||
+				ck_call_dispatch_async(env, &worker->requests[i].descriptor) != 0)
 		{
 			if (ck_request_state(&worker->requests[i]) == CK_REQUEST_RUNNING)
 			{
 				(void)ck_request_finish(&worker->requests[i],
 						CK_REQUEST_FAILED);
 			}
-		}
-		return NULL;
-	}
-
-	{
-		size_t i;
-
-		worker->result = 0;
-		for (i = 0; i < worker->request_count; i++)
-		{
-			if (ck_request_begin(&worker->requests[i]) != 0 ||
-					ck_call_dispatch_async(env, &worker->requests[i].descriptor) != 0)
-			{
-				if (ck_request_state(&worker->requests[i]) == CK_REQUEST_RUNNING)
-				{
-					(void)ck_request_finish(&worker->requests[i],
-							CK_REQUEST_FAILED);
-				}
-				worker->result = -1;
-			}
+			worker->result = -1;
 		}
 	}
 
@@ -400,7 +390,6 @@ int ck_runtime_poll_completion(ck_runtime_t *runtime, ck_request_t *requests,
 				return finish_result == 0 && status == 0 ? 1 : -2;
 			}
 		}
-	return -3;
 	}
 
 	return -3;

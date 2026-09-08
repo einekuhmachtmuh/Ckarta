@@ -43,21 +43,32 @@ int ck_config_set_class_path(ck_config_t *config, const char *value,
 
 	if (config == NULL || value == NULL || value[0] == '\0')
 	{
-		return ck_config_set_error(error, error_size, 0,
-				"class_path requires a non-empty value");
+		if (error != NULL && error_size > 0)
+		{
+			(void)snprintf(error, error_size,
+					"class_path requires a non-empty value");
+		}
+		return -1;
 	}
 
 	if (config->class_path_configured)
 	{
-		return ck_config_set_error(error, error_size, 0,
-				"duplicate class_path directive");
+		if (error != NULL && error_size > 0)
+		{
+			(void)snprintf(error, error_size,
+					"duplicate class_path directive");
+		}
+		return -1;
 	}
 
 	path = ck_config_copy_string(value, strlen(value));
 	if (path == NULL)
 	{
-		return ck_config_set_error(error, error_size, 0,
-				"out of memory");
+		if (error != NULL && error_size > 0)
+		{
+			(void)snprintf(error, error_size, "out of memory");
+		}
+		return -1;
 	}
 
 	free(config->class_path);

@@ -227,8 +227,15 @@ static void *ck_worker_main(void *arg)
 			(void **)&env, NULL);
 	if (result != JNI_OK)
 	{
-		(void)ck_request_finish(worker->request, CK_REQUEST_FAILED);
 		worker->result = result;
+		for (size_t i = 0; i < worker->request_count; i++)
+		{
+			if (ck_request_state(&worker->requests[i]) == CK_REQUEST_RUNNING)
+			{
+				(void)ck_request_finish(&worker->requests[i],
+						CK_REQUEST_FAILED);
+			}
+		}
 		return NULL;
 	}
 
@@ -393,7 +400,10 @@ int ck_runtime_poll_completion(ck_runtime_t *runtime, ck_request_t *requests,
 				return finish_result == 0 && status == 0 ? 1 : -2;
 			}
 		}
+	return -3;
 	}
+
+	return -3;
 }
 
 int ck_runtime_init(ck_runtime_t *runtime, const char *class_path)

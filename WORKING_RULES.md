@@ -14,6 +14,10 @@
 
 若本機執行環境（Codex 測試環境）無法網路連線，必須先嘗試其他可行方法完成工作目標，例如使用已存在的本機來源、已下載的原始碼／依賴、Git metadata、既有測試資產、可用的快取或其他不依賴即時網路的方法；若在合理範圍內仍無法達成，必須直接向使用者說明無法完成的部分與實際限制，不得以推測結果冒充已驗證結果。
 
+工作成果持久化：必須隨時考慮工作可能因流量限制、新對話或目前對話狀態遺失而中斷；凡是尚未落實成程式碼、測試或正式 MD 的重要研究結果、決策、待辦、限制、驗證狀態或中間成果，應以適當且可追溯的形式留存在 repository（例如權威 MD、研究紀錄、測試資產、程式碼、commit history（提交歷史）或其他具版本控制的工程產物），避免只存在當前對話記憶中。
+
+預設後續 Codex 工作可能在不了解工作現況的情況下開始，因此任何新的工作階段都必須以 repository 中已持久化的規則、文件、程式碼、測試、commit 與研究紀錄為主要現況來源；不得假設新工作階段會自動知道上一個對話的未持久化內容。
+
 修訂後必須交叉檢查 README、架構、hot path（熱路徑）、JNI、測試與安全文件的一致性。精簡的目的只能是去重與提高可掌握性，不得犧牲可追溯性。
 
 ## 2. 專案與規格
@@ -131,6 +135,7 @@ docs/ENTRYPOINT_DESIGN.md
 docs/STARTUP_STATE_MACHINE.md
 docs/HTTP_FRAMING_POLICY.md
 docs/CONCURRENCY_MODEL.md
+docs/THREAD_MODEL.md
 docs/CANCELLATION_MODEL.md
 docs/JNI_ABI.md
 docs/JNI_COST_MODEL.md

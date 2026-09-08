@@ -146,3 +146,13 @@ Little 定律 `L = λW` 與 SEDA 所強調的 explicit stage／queue／resource 
 同時，Servlet 6.1 的 AsyncContext 與 non-blocking I/O 意味著 Java request lifecycle 可以超出一次同步 service invocation；因此 benchmark 必須包含 asynchronous completion 與 cancellation，不得只測一個同步 Java method。
 
 完整理論研究見 docs/WEB_SERVER_THEORY_SERVLET_NGINX.md。
+
+## 12. Cross-platform notification benchmark
+
+正式 notification benchmark 必須分平台測量，不能把 Linux 與 Windows 結果混成單一排名。
+
+Linux：eventfd + epoll；pipe + epoll 作 fallback。
+
+Windows：IOCP + PostQueuedCompletionStatus；控制事件不作高頻 completion 首選。
+
+測量 Java executor completion → JNI notification → kernel wait/wake → C drain 的端到端成本，以及 batch size、producer count、queue depth、p50／p95／p99 latency、CPU utilization、wakeups/completion、shutdown 與 cancellation。

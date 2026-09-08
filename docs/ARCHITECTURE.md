@@ -474,3 +474,9 @@ C event-driven network data plane
 Servlet 6.1 的 Request／Response、Filter、Listener、Session、RequestDispatcher、AsyncContext 與 non-blocking I/O 語意必須保持；其 Java object model、blocking request style 與 callback 實作方式不必成為 C 資料平面的內部表示。
 
 完整批判研究見 docs/SERVLET_6_1_CRITIQUE.md。
+
+## 24. CGI／FastCGI application gateway
+
+CGI／FastCGI 可以作為獨立的 external application gateway（外部應用程式閘道），與 Java Servlet semantic plane 分離。純 CGI 走 OS process lifecycle；PHP 優先對接 FastCGI／PHP-FPM。CGI 不得阻塞 C event loop，child process 的 stdin／stdout／stderr、timeout、cancellation、reaping 與 resource limits 必須有獨立 state machine。
+
+完整研究見 docs/CGI_FASTCGI_RESEARCH.md。

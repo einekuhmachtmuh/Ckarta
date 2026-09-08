@@ -487,3 +487,9 @@ CGI／FastCGI 可以作為獨立的 external application gateway（外部應用�
 CGI/1.1 與 FastCGI 定位為未來可掛接的 application gateway module，不屬於 Ckarta 核心 request execution path。核心只提供足以讓模組掛接的 handler／route 邊界，不硬編碼 CGI/FastCGI 語意。
 
 依 Nginx 1.30.4 的模組／phase 架構，模組存在、模組啟用但未命中、以及真正進入 FastCGI handler 是三種不同成本；因此 Ckarta benchmark 必須分別量測。完整研究見 docs/CGI_FASTCGI_RESEARCH.md。
+
+## 26. 跨平台事件後端
+
+Ckarta 的 portable core（可攜式核心）不直接依賴 epoll、IOCP 或 select；事件後端是平台邊界。Linux primary candidate 為 epoll；Windows primary candidate 為 IOCP + Overlapped Winsock I/O。上層只處理共同的 event／completion 語意。
+
+Java→C completion notification 也沿同一原則：Linux 優先 eventfd + epoll，Windows 優先 PostQueuedCompletionStatus + IOCP；notification 只負責喚醒，completion queue 才是正確性來源。

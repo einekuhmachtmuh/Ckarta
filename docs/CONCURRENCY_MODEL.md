@@ -1,5 +1,7 @@
 # Ckarta 並行模型
 
+本文件描述整體並行原則；具體 thread roles（執行緒角色）、JNI attachment、queue 與 shutdown 約束以 `docs/THREAD_MODEL.md` 為權威。
+
 ## 1. 基本模型
 
 第一階段：
@@ -8,11 +10,13 @@ one JVM process（單一 JVM 程序）
 +
 C event worker threads（C 事件工作者執行緒）
 +
+JNI bridge thread／pool（JNI 橋接執行緒／執行緒池）
++
 Java Servlet executor threads（Java Servlet 執行器執行緒）
 +
 JVM bootstrap thread（JVM 啟動執行緒）
 
-這不是「所有工作都在事件迴圈」。
+這不是「所有工作都在事件迴圈」，也不是「每一 request 一個 native thread」。
 
 ## 2. C
 
@@ -38,7 +42,7 @@ Java executor 執行：
 - Listener callbacks（監聽器回呼）
 - application task
 
-C event loop 不得直接呼叫會長時間阻塞的 Servlet application code。
+C event loop 不得直接執行可能長時間阻塞的 Servlet application code。
 
 ## 4. JNI
 
@@ -46,8 +50,12 @@ JNI crossing（JNI 邊界穿越）應在 request lifecycle 的粗粒度階段：
 
 C parse complete
 → descriptor
+→ bounded JNI queue
+→ JNI bridge
 → Java processing
 → response descriptor
+→ completion queue
+→ C worker
 
 而非：
 
@@ -56,7 +64,9 @@ header byte
 → next header byte
 → Java
 
-`JNIEnv*` 是 thread-local（執行緒區域）介面；不得在 C workers 之間共享。需要進入 JVM 的 native worker 必須按 Invocation API attach／detach 規則管理自己的 `JNIEnv*`。
+`JNIEnv*` 是 thread-local（執行緒區域）介面；不得在 C workers 或 bridge threads 之間共享。每個需要 JVM 存取的 native thread 都必須遵守自身 attach／detach 生命週期。
+
+第一階段暫不要求所有 C worker 永久 attach JVM；此取捨與測試方案見 `docs/THREAD_MODEL.md`。
 
 ## 5. Worker ownership
 
@@ -110,7 +120,10 @@ global cache mutation
 ## 9. Java與C的平行化界線
 
 C event worker：
-只推進 native state machine（原生狀態機）。
+只推進 native state machine（原生狀態機）與 connection ownership。
+
+JNI bridge：
+只負責受控的粗粒度 native↔JVM dispatch，不取得 connection ownership。
 
 Java executor：
 推進 application-visible Servlet semantics（應用程式可見 Servlet 語意）。
@@ -126,15 +139,20 @@ JVM bootstrap thread：
 shutdown 時：
 
 停止新 dispatch
-→ 停止／排空 Java task
+→ 停止／排空 JNI queue
+→ 完成／取消 Java task
 → 完成 async cancellation
 → 關閉 C connections
-→ 等待／停止 JNI-attached native threads
+→ 停止 C workers
+→ detach remaining JNI-attached native threads
+→ terminate Java container
 → DestroyJavaVM
-→ join bootstrap thread／其他受控執行緒
+→ join bootstrap／bridge／worker threads
 → native cleanup
 
 OpenJDK 21 Invocation API 規定 `DestroyJavaVM()` 會等待 non-daemon threads，因此 shutdown 必須先使 JNI-attached thread 的生命週期可控。
+
+詳細停止順序與競態案例見 `docs/THREAD_MODEL.md`、`docs/CANCELLATION_MODEL.md`。
 
 來源：
 

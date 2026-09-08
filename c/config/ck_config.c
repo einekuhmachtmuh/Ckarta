@@ -77,29 +77,6 @@ int ck_config_set_class_path(ck_config_t *config, const char *value,
 	return 0;
 }
 
-static int ck_config_class_path(void *data, size_t argc,
-		const char *const *argv, size_t line, char *error, size_t error_size)
-{
-	int result;
-
-	if (argc != 1)
-	{
-		return ck_config_set_error(error, error_size, line,
-				"class_path requires exactly one value");
-	}
-
-	result = ck_config_set_class_path(data, argv[0], error, error_size);
-	if (result != 0 && error != NULL && error_size > 0 && line != 0)
-	{
-		char message[512];
-
-		(void)snprintf(message, sizeof(message), "%s", error);
-		(void)snprintf(error, error_size, "line %zu: %s", line, message);
-	}
-
-	return result;
-}
-
 static int ck_config_parse_token(char **cursor, char *token,
 		size_t token_size, size_t line, char *error, size_t error_size)
 {

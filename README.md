@@ -46,6 +46,12 @@ Nginx 與 Apache Tomcat 不直接複製進 Ckarta repository，而是以 Git sub
 - docs/CONNECTION_OWNERSHIP.md：C 連線、Request（請求）、AsyncContext（非同步內容）與 JNI 所有權基線。
 - docs/DESIGN_DECISIONS.md：架構決策與 Nginx/Tomcat／學術證據矩陣。
 - docs/WORKING_TREE.md：實際 Repository 工作樹規劃。
+- docs/ENTRYPOINT_DESIGN.md：C main 入口與 JVM 啟動模型。
+- docs/HTTP_FRAMING_POLICY.md：HTTP/1.1 framing（訊息框架）權威解析政策。
+- docs/CONCURRENCY_MODEL.md：C 事件並行與 Java Servlet 執行模型。
+- docs/CANCELLATION_MODEL.md：連線、Servlet 非同步與 JNI 取消語意。
+- docs/JNI_ABI.md：JNI 邊界與所有權設計門檻。
+- docs/TCK_INTEGRATION_PLAN.md：Jakarta Servlet 6.1 TCK（技術相容性套件）驗證計畫。
 - docs/REFERENCE_SOURCES.md：參考原始碼版本、commit、授權與研究使用規則。
 
 ## 參考原始碼版本

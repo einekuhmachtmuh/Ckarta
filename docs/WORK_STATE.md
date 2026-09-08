@@ -4,9 +4,7 @@
 
 ## 1. 目前 repository 狀態
 
-截至 2026-09-08，本文件建立時 `main` 最新已核驗提交為：
-
-`c544db787459a765ab2eb98750196af53ada4bb0`
+截至 2026-09-08，`main` 最新提交應以 GitHub 為準；本文件目前已隨最新 MD 一致性修訂一起提交。
 
 目前重要基線：
 
@@ -62,7 +60,7 @@ Codex 本機測試環境：
 
 1. C `main()` 建立專用 pthread。
 2. bootstrap pthread 呼叫 `JNI_CreateJavaVM()`。
-3. Java 方法確認該 thread 在 JVM 中可執行且為 JVM main thread。
+3. Java 方法確認該 thread 在 JVM 中執行並為 JVM main thread。
 4. 第二個 native pthread 用 `AttachCurrentThread()` 進入 JVM。
 5. 該 thread 成功執行 Java 方法。
 6. 兩個 native thread 正常 detach。

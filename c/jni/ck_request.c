@@ -1,6 +1,7 @@
 #include "ck_request.h"
 
 #include <stddef.h>
+#include <stdint.h>
 
 static int ck_request_descriptor_valid(const ck_request_descriptor_t *descriptor)
 {
@@ -19,8 +20,14 @@ static int ck_request_descriptor_valid(const ck_request_descriptor_t *descriptor
 		return 0;
 	}
 
-	if ((descriptor->ownership_flags & CK_REQUEST_JAVA_BORROWS_BUFFER) != 0
-			&& descriptor->body == NULL && descriptor->body_length != 0)
+	if (descriptor->body_length != 0 && descriptor->body == NULL)
+	{
+		return 0;
+	}
+
+	if (descriptor->body_length > (uint64_t)INT64_MAX
+			|| descriptor->request_id > (uint64_t)INT64_MAX
+			|| descriptor->request_id == 0)
 	{
 		return 0;
 	}

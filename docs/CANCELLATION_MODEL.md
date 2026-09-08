@@ -12,7 +12,7 @@ upstream failure（上游失敗）
 
 ## 2. Operation state
 
-每一個跨層 operation（跨層操作）至少具有：
+每一個跨層 operation 至少具有：
 
 PENDING
 RUNNING
@@ -20,11 +20,12 @@ CANCELLING
 COMPLETED
 FAILED
 
-狀態轉移必須不可逆。
+成功路徑：`PENDING → RUNNING → COMPLETED|FAILED`。
+取消路徑：`PENDING|RUNNING → CANCELLING`；一旦 cancellation 勝出，不得覆寫成另一個 terminal state。
 
 ## 3. Cancellation authority
 
-任何來源都可以提出 cancellation request（取消要求），但最後狀態只能由單一 owner 決定。
+任何來源都可以提出 cancellation request，但最後 terminal state 與資源回收責任只能由單一 owner 決定。
 
 目的：
 
@@ -73,7 +74,7 @@ JNI bridge 應轉換成明確的 completion/error record。
 
 ## 7. Idempotence
 
-cancel(operation) 必須是 idempotent（冪等）的。
+cancel(operation) 必須是 idempotent（冪等）的。\n\n目前 `ck_request_cancel()` 對已取消／已終止 operation 重複呼叫無副作用；`ck_request_finish()` 不會覆寫已勝出的 cancellation。
 
 第二次 cancel：
 
@@ -105,10 +106,14 @@ ngx_http_request.c 中的 request finalize／close 路徑。
 
 學術背景：
 
-Zeldovich 等人的事件驅動多處理器研究支持以明確事件與 ownership 降低並行控制複雜度。
+Zeldovich 等人的事件驅動多處理器研究支持以明確事件與 ownership 降低並行控制複雜度；Clarke、Potter、Noble 的 ownership types 研究提供 alias／ownership containment 的形式化背景。本專案不把這些研究視為 JNI correctness proof。
 
 來源：
 
 https://github.com/apache/tomcat/blob/cbe6e15ee81e2fc6232954292a80cca5d1e84009/java/org/apache/catalina/connector/CoyoteAdapter.java
 https://github.com/nginx/nginx/blob/017cf98dcce217946572a896f0992370475e189f/src/http/ngx_http_request.c
 https://www.usenix.org/conference/2003-usenix-annual-technical-conference/multiprocessor-support-event-driven-programs
+
+## 10. Current implementation boundary
+
+目前 C request lifecycle 已具備 atomic state、idempotent cancellation 與 terminal ownership gate；真正 Servlet AsyncContext 的跨執行緒 cancellation、connection close 與 Java completion 整合仍待 integration test。

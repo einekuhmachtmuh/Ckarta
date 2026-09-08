@@ -81,10 +81,12 @@ public final class CkartaRuntime
 	{
 		ThreadPoolExecutor currentExecutor;
 		ArrayBlockingQueue<CompletionRecord> currentCompletions;
+		AtomicBoolean currentOverflow;
 		synchronized (EXECUTOR_LOCK)
 		{
 			currentExecutor = executor;
 			currentCompletions = completions;
+			currentOverflow = completionOverflow;
 		}
 
 		if (currentExecutor == null || currentCompletions == null)
@@ -117,14 +119,9 @@ public final class CkartaRuntime
 				if (!currentCompletions.offer(
 						new CompletionRecord(requestHandle, result, status)))
 				{
-					AtomicBoolean overflow;
-					synchronized (EXECUTOR_LOCK)
+					if (currentOverflow != null)
 					{
-						overflow = completionOverflow;
-					}
-					if (overflow != null)
-					{
-						overflow.set(true);
+						currentOverflow.set(true);
 					}
 				}
 			});
@@ -132,17 +129,10 @@ public final class CkartaRuntime
 		catch (RejectedExecutionException exception)
 		{
 			if (!currentCompletions.offer(
-					new CompletionRecord(requestHandle, 0L, -2)))
+					new CompletionRecord(requestHandle, 0L, -2))
+				&& currentOverflow != null)
 			{
-				AtomicBoolean overflow;
-				synchronized (EXECUTOR_LOCK)
-				{
-					overflow = completionOverflow;
-				}
-				if (overflow != null)
-				{
-					overflow.set(true);
-				}
+				currentOverflow.set(true);
 			}
 		}
 	}

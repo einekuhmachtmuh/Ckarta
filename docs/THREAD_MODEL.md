@@ -50,7 +50,7 @@ C. central bridge thread pool，只有在實測 queue contention（佇列競爭�
 
 同一 connection 原則上維持單一 owner worker，以減少 shared mutable state（共享可變狀態）。worker 不得共享 `JNIEnv*`。
 
-C worker 是否直接 attach JVM 是正式 benchmark 的比較項目，不在本文件先驗固定。
+C worker 是否 attach JVM 作為 JNI submission control path 是正式 benchmark 的比較項目；「attached worker 直接執行 Servlet application」不是合法候選。
 
 ### JNI bridge thread
 

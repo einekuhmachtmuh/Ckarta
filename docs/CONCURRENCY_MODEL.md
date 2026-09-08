@@ -10,7 +10,7 @@ one JVM process（單一 JVM 程序）
 +
 C event worker threads（C 事件工作者執行緒）
 +
-JNI bridge thread／pool（JNI 橋接執行緒／執行緒池）
+JNI semantic handoff（JNI 語意交接；attached submission 或 bridge）
 +
 Java Servlet executor threads（Java Servlet 執行器執行緒）
 +
@@ -50,11 +50,11 @@ JNI crossing（JNI 邊界穿越）應在 request lifecycle 的粗粒度階段：
 
 C parse complete
 → descriptor
-→ bounded JNI queue
-→ JNI bridge
-→ Java processing
+→ bounded semantic handoff
+→ Java executor
+→ Servlet processing
 → response descriptor
-→ completion queue
+→ completion owner
 → C worker
 
 而非：
@@ -66,7 +66,7 @@ header byte
 
 `JNIEnv*` 是 thread-local（執行緒區域）介面；不得在 C workers 或 bridge threads 之間共享。每個需要 JVM 存取的 native thread 都必須遵守自身 attach／detach 生命週期。
 
-第一階段暫不要求所有 C worker 永久 attach JVM；此取捨與測試方案見 `docs/THREAD_MODEL.md`。
+第一階段不把「worker 是否 attach JVM」與「Servlet application 執行在哪個 thread」混為一談；後者固定由 Java executor／container thread 負責。前者的取捨見 `docs/THREAD_MODEL.md`。
 
 ## 5. Worker ownership
 

@@ -16,7 +16,9 @@ HTTP/1.1 parser（解析器）留 C，建立單一 framing interpretation（訊�
 
 ## 3. Servlet execution
 
-Java executor／thread pool（執行器／執行緒池）執行 Servlet application。Tomcat 路徑：SocketProcessor.doRun → Http11Processor.service → CoyoteAdapter.service → Container Pipeline → StandardWrapperValve.invoke → Filter Chain → Servlet.service。
+Java executor／thread pool（執行器／執行緒池）執行 Servlet application；C event-loop thread 不得直接執行 Servlet application code。Tomcat 路徑：SocketProcessor.doRun → Http11Processor.service → CoyoteAdapter.service → Container Pipeline → StandardWrapperValve.invoke → Filter Chain → Servlet.service。
+
+Servlet 6.1 的 AsyncContext 表示 request lifecycle 可超出一次同步 service invocation；Ckarta 必須因此將 connection lifetime 與 Servlet execution lifetime 分離。
 
 ## 4. Worker ownership
 
@@ -24,7 +26,7 @@ Java executor／thread pool（執行器／執行緒池）執行 Servlet applicat
 
 ## 5. Thread model
 
-第一階段維持多個可實測候選：stable C worker long-lived direct attach、worker-group JNI bridge、central JNI bridge pool。
+第一階段維持三類可實測候選：C worker attached submission、worker-group JNI bridge、central JNI bridge pool。attached worker 只允許作 JNI control／submission，不得執行 Servlet application。
 
 不能在沒有相同 workload benchmark 前宣稱任何一者較快。完整 thread role、shutdown、queue、direct-attach 與 benchmark 設計見 docs/THREAD_MODEL.md。
 
@@ -106,3 +108,7 @@ Apte／Hansen／Reeser：https://doi.org/10.1016/S0140-3664(02)00221-9
 TLS library、allocator strategy beyond pool、HTTP/2、HTTP/3、exact JNI ABI、Java package layout、build system、JNI benchmark threshold、C worker／JNI bridge 的最終 thread count 與 topology。
 
 任何效能優勢宣稱都必須由 Ckarta + OpenJDK 21 可重現 benchmark 證明。
+
+## 13. Web server 理論修正
+
+結論：不推翻 Ckarta 的 C data plane + Java Servlet container；改為「C event-driven data plane + bounded semantic handoff + Java Servlet semantic plane」。理論依據與 Little／SEDA／事件遞送分析見 docs/WEB_SERVER_THEORY_SERVLET_NGINX.md。

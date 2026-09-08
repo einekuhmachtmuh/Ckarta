@@ -10,11 +10,11 @@ Ckarta 不應成為「C 版 Tomcat」，也不應成為「Nginx 加 JNI」。
 
 推薦模型是：
 
-Nginx 式 C 資料平面
+Nginx 式 C 事件驅動資料平面
 +
-Tomcat 式 Java Servlet 容器
+Tomcat／Jakarta Servlet 式 Java 語意平面
 +
-極薄、具有明確 ownership（所有權）契約的 JNI 邊界。
+極薄、具有明確 ownership（所有權）與 lifecycle（生命週期）契約的 JNI 語意交接。
 
 這個模型符合 Jakarta Servlet 6.1 允許 Servlet container 與 Web server 位於同一程序或不同程序的架構彈性；Ckarta 選擇同程序 JNI 是效能導向的工程取捨，而非規格強制要求。
 
@@ -129,9 +129,9 @@ C event loop：
 1. 收到可讀／可寫事件。
 2. 推進 connection state machine。
 3. 完成可以在 C 中快速完成的工作。
-4. 將 Servlet 工作提交 Java executor。
-5. 回到 event loop。
-6. Java completion event 到達後再推進 C connection state。
+4. 透過有界 semantic handoff 將 Servlet 工作提交 Java executor。
+5. 立即回到 event loop；不得等待 Servlet application code。
+6. Java completion／async lifecycle event 到達後再推進 C connection state。
 
 ## 5. 為什麼不是全部使用 C
 
@@ -453,3 +453,9 @@ https://www.rfc-editor.org/rfc/rfc9112.html
 
 SEDA：
 https://doi.org/10.1145/502059.502057
+
+## 22. 理論架構修正
+
+Little 定律 L = λW 顯示每個新增的跨層階段都可能增加服務時間與等待時間；因此 Ckarta 不以「把更多工作搬到 C」作為目標，而以最小化跨界次數、跨界資料量與有界排隊為目標。
+
+Servlet 6.1 的 AsyncContext 與 non-blocking I/O 使 Java application 可以把等待與 request execution 分離；因此 C 資料平面應負責高密度 I/O／connection scheduling，而 Java 保留 Servlet semantics。完整理論分析見 docs/WEB_SERVER_THEORY_SERVLET_NGINX.md。

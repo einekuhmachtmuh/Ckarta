@@ -20,14 +20,14 @@ https://docs.oracle.com/en/java/javase/21/docs/specs/jni/invocation.html
 第一階段採 process-local request descriptor；Java 不直接接收 descriptor struct 或 native pointer。
 
 固定欄位：
-- `abi_version)：ABI 版本。
-- `struct_size)：實際大小，用於版本／布局檢查。
-- `feature_flags)：功能旗標。
-- `ownership_flags)：owner／borrow 語意。
-- `owner_token)：C owner 的邏輯識別。
-- `lifetime_token)：native storage 有效期間的識別。
-- `request_id)：request 邏輯識別。
-- `body`／`body_length)：C-owned native bytes。
+- `abi_version`：ABI 版本。
+- `struct_size`：實際大小，用於版本／布局檢查。
+- `feature_flags`：功能旗標。
+- `ownership_flags`：owner／borrow 語意。
+- `owner_token`：C owner 的邏輯識別。
+- `lifetime_token`：native storage 有效期間的識別。
+- `request_id`：request 邏輯識別。
+- `body`／`body_length`：C-owned native bytes。
 
 descriptor 不是 wire protocol；atomic lifecycle state 不放入 descriptor，避免把同步實作細節固定成 ABI。
 
@@ -59,11 +59,13 @@ NewDirectByteBuffer 可提供 native memory view，但不決定 Ckarta ownership
 
 ## 6. Thread rules
 
-`JNIEnv*` 不得跨執行緒共享。第一階段不把所有 C worker 固定 attach JVM；C worker 以 request descriptor 經 bounded JNI queue 交由受控 JNI bridge thread／pool 執行跨 JVM dispatch。
+`JNIEnv*` 不得跨執行緒共享。C event-loop thread 不得執行 Servlet application code。
+
+第一階段的可實測邊界包括：C worker attached submission、worker-group JNI bridge、central JNI bridge pool；其中 attached worker 只能執行 JNI control／submission，不得直接執行 Servlet application。
 
 JNI bridge thread 必須具有自己的 attachment／detach 生命週期。需要保存的是 process-level `JavaVM*`，不是可跨 thread 傳遞的 `JNIEnv*`。
 
-具體 thread topology（執行緒拓撲）與 direct-attach alternative（直接附加替代方案）見 docs/THREAD_MODEL.md。
+具體 thread topology 見 docs/THREAD_MODEL.md。
 
 ## 7. Exception
 
@@ -85,7 +87,9 @@ JNI 呼叫返回不等於 request 完成。Servlet AsyncContext 可以讓請求�
 
 ## 11. JNI crossing 策略
 
-優先：read buffer → parse → canonical descriptor → bounded JNI queue → JNI bridge transition → Java processing → completion queue。
+優先：read buffer → parse → canonical descriptor → bounded semantic handoff → Java executor → Java processing → completion record。
+
+semantic handoff 可由 attached submission 或受控 bridge queue 實作；實際 topology 必須由 benchmark 決定。
 
 避免每個 header、body chunk 或 write operation 都跨 JNI。
 

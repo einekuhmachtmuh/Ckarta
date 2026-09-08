@@ -6,7 +6,7 @@
 
 比較：
 
-1. C worker 直接 AttachCurrentThread() 後呼叫 Java。
+1. C worker AttachCurrentThread() 後只執行 JNI control／submission，Servlet application code 由 Java executor 執行。
 2. C worker 將 operation 放入 bounded JNI queue，由固定 JNI bridge thread 執行 Java invocation。
 3. 小型 JNI bridge thread pool。
 
@@ -22,17 +22,19 @@ Java target method 必須保持簡單且固定，避免把 Servlet framework、I
 
 ## 3. 實驗模式
 
-### Direct attach
+### Attached submission
 
 ```text
-C producer/worker
+C event-loop worker
 → AttachCurrentThread()
-→ CallStatic<Type>MethodA/V
-→ result
+→ JNI submission/control call
+→ Java executor
+→ Servlet/application work
+→ completion
 → DetachCurrentThread()
 ```
 
-實際長生命週期版本也必須測量 thread 已經 attached、只重複 JNI call 的情況，避免把 attach 一次性成本誤認成每次 request 成本。
+實際長生命週期版本也必須測量 thread 已經 attached、只重複 JNI submission 的情況；不得用此模式讓 C event-loop thread 執行 Servlet application code。
 
 ### Single bridge
 
@@ -90,7 +92,7 @@ C producer/worker
 
 不能只看平均值。若 bridge queue 降低 JNI thread lifecycle 複雜度，卻提高 p99 latency，必須保留此 trade-off（取捨）。
 
-不能因 direct attach 在 microbenchmark 勝出，就直接決定正式架構；必須再把 connection ownership、AsyncContext、cancellation、shutdown、Servlet executor 與 JNI lifetime 納入整體測試。
+不能因 attached submission 在 microbenchmark 勝出，就直接決定正式架構；必須再把 connection ownership、AsyncContext、cancellation、shutdown、Servlet executor 與 JNI lifetime 納入整體測試。
 
 反之，bridge model 也不能因 ownership 較簡單就假定效能較佳。
 
@@ -136,3 +138,11 @@ https://docs.oracle.com/en/java/javase/21/docs/specs/jni/functions.html
 ## 10. 現況
 
 本文件只定義實驗；正式 thread topology 在可重現 benchmark 完成前維持暫定。
+
+## 11. 理論修正
+
+Little 定律 `L = λW` 與 SEDA 所強調的 explicit stage／queue／resource control 顯示，新增 JNI handoff 不只增加單次 call cost，也可能新增排隊節點。故正式 benchmark 必須將 queue wait 與 Java executor scheduling 分開量測。
+
+同時，Servlet 6.1 的 AsyncContext 與 non-blocking I/O 意味著 Java request lifecycle 可以超出一次同步 service invocation；因此 benchmark 必須包含 asynchronous completion 與 cancellation，不得只測一個同步 Java method。
+
+完整理論研究見 docs/WEB_SERVER_THEORY_SERVLET_NGINX.md。

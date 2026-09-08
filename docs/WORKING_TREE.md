@@ -42,6 +42,7 @@ third_party/
 ## 3. c/
 
 c/
+├── config/
 ├── core/
 ├── event/
 ├── http/
@@ -146,3 +147,7 @@ docs/THREAD_MODEL.md 是 Ckarta thread model（執行緒模型）的權威研究
 docs/WORK_STATE.md 保存重要的跨對話工程現況、已驗證事項、目前決策與下一個工程閘門。它不是專題規格的第二權威來源；新工作階段仍應先閱讀 `WORKING_RULES.md`，再依當前任務讀取相關權威文件與工作現況。
 
 新工作階段不得假設上一個對話中、但未進 repository 的決策或研究結果仍然存在。
+
+## 12. 啟動配置
+
+c/config/ 保存啟動配置 parser（解析器）與其驗證邊界；conf/ 保存預設主設定檔。配置模組不擁有 JVM 或 network runtime；設定快照由 C main 在不可逆 runtime 初始化前建立與驗證。

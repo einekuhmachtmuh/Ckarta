@@ -1,6 +1,6 @@
 # Ckarta 設計決策矩陣
 
-本文件的完整 JNI 成本研究已集中於 docs/JNI_COST_MODEL.md；本文件只保留其必要決策摘要，以避免重複與失配。
+本文件的完整 JNI 成本研究已集中於 docs/JNI_COST_MODEL.md；thread model 的完整研究已集中於 docs/THREAD_MODEL.md。本文件只保留必要決策摘要，以避免重複與失配。
 
 ## 1. 事件驅動核心
 
@@ -22,7 +22,21 @@ Java executor／thread pool（執行器／執行緒池）執行 Servlet applicat
 
 優先 worker ownership（工作者所有權）與 sharding（分片），不預設 lock-free。Zeldovich 等的 USENIX ATC 2003 研究支持以不共享可變狀態降低事件平行化的同步負擔：https://www.usenix.org/conference/2003-usenix-annual-technical-conference/multiprocessor-support-event-driven-programs
 
-## 5. JNI 成本決策
+## 5. Thread model
+
+第一階段採：
+
+C main／control thread
+→ JVM bootstrap thread
+→ C worker threads
+→ JNI bridge thread／pool
+→ Java Servlet executor threads
+
+第一階段暫不把所有 C workers 永久 attach JVM。JNI bridge 使用 bounded queue 接收 C worker 的 request descriptor，執行粗粒度 JNI dispatch，再以 completion record 回到原 owner worker。
+
+完整 thread role、shutdown、queue、direct-attach alternative 與 benchmark 設計見 docs/THREAD_MODEL.md。
+
+## 6. JNI 成本決策
 
 OpenJDK 21 Update `jdk-21.0.8-ga` 是 JNI 研究基線。
 
@@ -44,7 +58,7 @@ C canonical request
 https://github.com/openjdk/jdk21u/blob/jdk-21.0.8-ga/src/hotspot/share/prims/jni.cpp
 https://docs.oracle.com/en/java/javase/21/docs/specs/jni/functions.html
 
-## 6. JNI API 選擇
+## 7. JNI API 選擇
 
 | API | 初步決策 |
 |---|---|
@@ -57,26 +71,26 @@ https://docs.oracle.com/en/java/javase/21/docs/specs/jni/functions.html
 | NewDirectByteBuffer | 優先作 bulk native data view（大量原生資料視圖） |
 | GetDirectBufferAddress | 優先 |
 
-## 7. Session 與 lifetime
+## 8. Session 與 lifetime
 
 Session semantics（會話語意）留 Java。connection lifetime 與 Servlet request lifetime 必須可分離；Tomcat CoyoteAdapter.asyncDispatch() 是重要交叉依據。
 
-## 8. Timer
+## 9. Timer
 
 第一版採 timer tree（計時器樹）；未經 benchmark 不換 timing wheel（時間輪）。Varghese／Lauck DOI：https://doi.org/10.1109/90.650142
 
-## 9. 研究來源限制
+## 10. 研究來源限制
 
 Kurzyniec／Sunderam JNI benchmark 與 Bubak 等人的 Janet 研究均早於 OpenJDK 21，不直接提供 Ckarta 的現代 ns／µs 成本數字。
 
 Janet DOI：https://doi.org/10.1155/2001/582127
 
-SEDA DOI：https://doi.org/10.1145/502059.502057
+SEDA 期刊版 DOI：https://doi.org/10.1145/502059.502057
 
-Capriccio DOI：https://doi.org/10.1145/945445.945471
+Capriccio proceedings DOI：https://doi.org/10.1145/945445.945471
 
-## 10. 尚未決定
+## 11. 尚未決定
 
-TLS library、allocator strategy beyond pool、HTTP/2、HTTP/3、exact JNI ABI、Java package layout、build system、JNI benchmark threshold。
+TLS library、allocator strategy beyond pool、HTTP/2、HTTP/3、exact JNI ABI、Java package layout、build system、JNI benchmark threshold、C worker／JNI bridge 的最終 thread count。
 
 任何效能優勢宣稱都必須由 Ckarta + OpenJDK 21 可重現 benchmark 證明。

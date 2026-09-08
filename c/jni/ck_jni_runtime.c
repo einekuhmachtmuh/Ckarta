@@ -87,9 +87,20 @@ static void *ck_bootstrap_main(void *arg)
 	char option_string[4096];
 	jint create_result;
 	int start_status;
+	int option_length;
 
-	snprintf(option_string, sizeof(option_string), "-Djava.class.path=%s",
-			runtime->class_path);
+	option_length = snprintf(option_string, sizeof(option_string),
+			"-Djava.class.path=%s", runtime->class_path);
+	if (option_length < 0 || (size_t)option_length >= sizeof(option_string))
+	{
+		pthread_mutex_lock(&runtime->lock);
+		runtime->bootstrap_status = JNI_EVERSION;
+		runtime->bootstrap_done = 1;
+		pthread_cond_broadcast(&runtime->condition);
+		pthread_mutex_unlock(&runtime->lock);
+		return NULL;
+	}
+
 	option.optionString = option_string;
 	option.extraInfo = NULL;
 	memset(&args, 0, sizeof(args));

@@ -93,15 +93,14 @@ Codex 本機測試環境：
 
 ## 7. 下一個工程閘門
 
-依優先序：
+1. 以 bounded semantic handoff 為架構基線，完成 Java executor submission 與 completion ownership。
+2. 實作 Servlet 6.1 request／response facade 的最小必要邊界；不得讓 C event-loop thread 執行 Servlet application code。
+3. 將 AsyncContext lifecycle 接到 C request cancellation／connection ownership。
+4. 建立 bounded JNI queue／completion queue 的正式 contract。
+5. 將 attached submission、worker-group bridge、central bridge pool 接到相同 canonical request workload。
+6. 執行 p50／p95／p99、queue wait、JNI latency、Java scheduling、allocation／GC、CPU utilization 與 memory footprint benchmark。
 
-1. 將 request lifecycle ABI 接入真正 Java Servlet request／response facade。
-2. 實作 Servlet AsyncContext 與 C connection cancellation 的跨層整合。
-3. 建立 bounded JNI queue／completion queue 的正式 ownership contract。
-4. 將 direct attach、worker-group bridge、central bridge pool 接到相同 canonical request workload。
-5. 執行 p50／p95／p99、queue wait、JNI latency、Java scheduling、allocation／GC、CPU utilization 與 memory footprint benchmark。
-
-不得因 smoke harness 或局部 lifecycle test 已存在而宣稱正式 Servlet runtime、AsyncContext cancellation 或最終 thread topology 已實作／定案。
+不得因局部 JNI smoke test、request lifecycle test 或理論分析而宣稱正式 Servlet runtime 或最終 thread topology 已完成。
 
 ## 8. 新工作階段接手規則
 
@@ -145,3 +144,7 @@ PR #1 已合併至 `main`，merge commit `e501249ce91fd7c76c6625f1826ec0240d4d7d
 ## 11. 最新 ABI 進度
 
 PR #2 已於 2026-09-08 squash-merge 至 `main`，merge commit `2638bc5017093b5f6e28478c347c95b77009a8cc`。其 CI 已驗證 request lifecycle ABI、JNI dispatch、DirectByteBuffer 與 shutdown smoke path；下一階段是把此 process-local lifecycle model 接入真正 Servlet AsyncContext／connection ownership。
+
+## 12. Web server theory 結論
+
+2026-09-08：Servlet 6.1、固定 Nginx/Tomcat 原始碼與事件／排隊理論比較後，Ckarta 整體方向維持，但將 JNI bridge 改以「bounded semantic handoff」描述；attached worker 只允許作 JNI control／submission，不得執行 Servlet application。完整研究見 `docs/WEB_SERVER_THEORY_SERVLET_NGINX.md`。

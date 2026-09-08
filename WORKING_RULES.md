@@ -4,7 +4,7 @@
 
 狀態：架構基線，已完成專業架構評定。
 
-本文件是 Ckarta repository（儲存庫）的最高優先工作準則之一。任何自動化開發、程式碼產生、重構、效能最佳化、安全修補或架構變更，開始前都必須閱讀本文件與 ARCHITECTURE.md、HOT_PATH_REVIEW.md。
+本文件是 Ckarta repository（儲存庫）的最高優先工作準則之一。任何自動化開發、程式碼產生、重構、效能最佳化、安全修補或架構變更，開始前都必須閱讀本文件，以及 docs/ARCHITECTURE.md、docs/HOT_PATH_REVIEW.md、docs/FUNCTION_TRACE.md、docs/CONNECTION_OWNERSHIP.md。
 
 本文件不宣稱 Ckarta 已經實作 Jakarta Servlet 6.1；它只定義目前核准的目標架構與工程約束。
 
@@ -391,7 +391,7 @@ CPU、核心數、作業系統、核心版本、編譯器、JDK、TLS 設定、�
 - 效能假設
 - 測試計畫
 
-重大變更應更新 ARCHITECTURE.md 與 HOT_PATH_REVIEW.md。
+重大變更應更新 docs/ARCHITECTURE.md、docs/HOT_PATH_REVIEW.md、docs/FUNCTION_TRACE.md；若影響生命週期、記憶體所有權或 ABI，亦必須更新 docs/CONNECTION_OWNERSHIP.md 與相關設計文件。
 
 ## 28. 英文術語寫法
 

@@ -20,10 +20,6 @@ JVM／Java Servlet 容器
 ├── README.md
 ├── .gitmodules
 ├── docs/
-│   ├── ARCHITECTURE.md
-│   ├── HOT_PATH_REVIEW.md
-│   ├── SECURITY_BASELINE.md
-│   └── REFERENCE_SOURCES.md
 ├── third_party/
 │   ├── nginx/        # Git submodule，固定 upstream commit
 │   └── tomcat/       # Git submodule，固定 upstream commit
@@ -34,25 +30,27 @@ JVM／Java Servlet 容器
 └── tools/
 ```
 
-Nginx 與 Apache Tomcat 不直接複製進 Ckarta repository，而是以 Git submodule 固定 upstream commit。這使參考原始碼可重現、可更新、可與 Ckarta 自身修改清楚區分。
+Nginx 與 Apache Tomcat 不直接複製進 Ckarta repository，而是以 Git submodule 固定 upstream commit。
 
 ## 文件
 
 - WORKING_RULES.md：工程、命名、驗證、安全與自動化基準。
 - docs/ARCHITECTURE.md：C/Java 邊界、資料流、並行模型、C 化決策與補充需求。
 - docs/HOT_PATH_REVIEW.md：Nginx／Tomcat hot path（熱路徑）與 whole path（完整路徑）基線。
-- docs/SECURITY_BASELINE.md：安全模型與驗證門檻。
-- docs/FUNCTION_TRACE.md：固定版本的逐函式 Hot Path（熱路徑）追蹤。
-- docs/CONNECTION_OWNERSHIP.md：C 連線、Request（請求）、AsyncContext（非同步內容）與 JNI 所有權基線。
-- docs/DESIGN_DECISIONS.md：架構決策與 Nginx/Tomcat／學術證據矩陣。
-- docs/WORKING_TREE.md：實際 Repository 工作樹規劃。
+- docs/FUNCTION_TRACE.md：固定版本的逐函式 hot path 追蹤。
+- docs/CONNECTION_OWNERSHIP.md：C 連線、Request、AsyncContext 與 JNI 所有權基線。
+- docs/DESIGN_DECISIONS.md：架構決策與證據矩陣。
 - docs/ENTRYPOINT_DESIGN.md：C main 入口與 JVM 啟動模型。
+- docs/STARTUP_STATE_MACHINE.md：C main、JVM、Java container、network runtime 的啟動／停止狀態機。
 - docs/HTTP_FRAMING_POLICY.md：HTTP/1.1 framing（訊息框架）權威解析政策。
 - docs/CONCURRENCY_MODEL.md：C 事件並行與 Java Servlet 執行模型。
 - docs/CANCELLATION_MODEL.md：連線、Servlet 非同步與 JNI 取消語意。
-- docs/JNI_ABI.md：JNI 邊界與所有權設計門檻。
-- docs/TCK_INTEGRATION_PLAN.md：Jakarta Servlet 6.1 TCK（技術相容性套件）驗證計畫。
-- docs/REFERENCE_SOURCES.md：參考原始碼版本、commit、授權與研究使用規則。
+- docs/JNI_ABI.md：JNI 邊界與所有權門檻。
+- docs/JNI_COST_MODEL.md：OpenJDK 21 JNI 跨語言成本模型與 C struct → Java object 策略。
+- docs/SECURITY_BASELINE.md：安全模型與驗證門檻。
+- docs/TCK_INTEGRATION_PLAN.md：Jakarta Servlet 6.1 TCK 驗證計畫。
+- docs/REFERENCE_SOURCES.md：參考原始碼版本、commit、授權與研究規則。
+- docs/WORKING_TREE.md：實際 repository 工作樹規劃。
 
 ## 參考原始碼版本
 
@@ -60,53 +58,30 @@ Nginx：stable 1.30.4，commit `017cf98dcce217946572a896f0992370475e189f`。
 
 Apache Tomcat：11.0.25，commit `cbe6e15ee81e2fc6232954292a80cca5d1e84009`。
 
-Nginx 官方目前列出的 stable 版本為 1.30.4；Apache Tomcat 目前 11.x 下載頁列為 11.0.25。版本更新時必須重新做 hot path 與安全基線核對。
+OpenJDK 21 JNI 研究基線：`jdk-21.0.8-ga`。
+
+## 入口與 JNI 原則
+
+正式 Ckarta server 入口為 C `main()`；由 C 透過 JNI Invocation API 建立 JVM。
+
+JNI request hot path 不採 C struct 逐欄映射為 Java object。初步採：
+
+C canonical request
+→ opaque request handle
+→ 一個 Java request facade
+→ 批次初始化
+→ DirectByteBuffer data view
+
+OpenJDK 21 的 JNI 成本研究見 docs/JNI_COST_MODEL.md；任何效能結論仍須由可重現 benchmark 證明。
 
 ## 架構原則
 
-C：
+C：non-blocking I/O（非阻塞輸入輸出）、event loop（事件迴圈）、HTTP parsing（HTTP 解析）、TLS、static file、reverse proxy、load balancing、rate／connection limiting、output pipeline。
 
-- non-blocking I/O（非阻塞輸入輸出）
-- event loop（事件迴圈）
-- HTTP parsing（HTTP 解析）
-- TLS
-- static file serving（靜態檔案傳送）
-- reverse proxy（反向代理）
-- load balancing（負載平衡）
-- rate／connection limiting（速率／連線限制）
-- output pipeline（輸出管線）
-
-Java：
-
-- Jakarta Servlet 6.1
-- Servlet lifecycle（Servlet 生命週期）
-- Filter
-- Listener
-- Session
-- ServletContext
-- RequestDispatcher
-- AsyncContext
-- Web application lifecycle（網頁應用程式生命週期）
-- class loading（類別載入）
-
-## 規格與參考
-
-Jakarta Servlet 6.1：
-https://jakarta.ee/specifications/servlet/6.1/
-
-Nginx：
-https://nginx.org/
-https://github.com/nginx/nginx
-
-Apache Tomcat：
-https://tomcat.apache.org/
-https://github.com/apache/tomcat
-
-RFC 9112：
-https://www.rfc-editor.org/rfc/rfc9112.html
+Java：Jakarta Servlet 6.1、Servlet lifecycle、Filter、Listener、Session、ServletContext、RequestDispatcher、AsyncContext、web application lifecycle、class loading。
 
 ## 重要聲明
 
-目前文件是架構與工程基線，不代表 Ckarta 已完成 Servlet 6.1 相容性、Nginx 級安全性或任何效能目標。
+目前文件是架構與驗證基線，不代表 Ckarta 已完成 Servlet 6.1 相容性、已通過 TCK、已達到 Nginx 安全程度或已證明效能優越。
 
-所有「已實作」「已通過」「更快」「更安全」等宣稱，都必須有 repository 內測試或可重現測量證據。
+所有「已實作」「已通過」「更快」「更安全」宣稱，都必須有 repository 測試或可重現測量證據。

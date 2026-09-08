@@ -169,3 +169,9 @@ Servlet 6.1 的 externally visible semantics 與 internal scheduling strategy �
 ## 12. Completion handoff
 
 Java executor completion 不得要求 C event-loop thread blocking 等待。smoke slice 以 Java 有界完成佇列 + C 非阻塞 poll 驗證此邊界；正式路徑仍待加入高效率通知機制與多請求 routing。
+
+## 13. 多請求 completion routing
+
+正式多請求模型中，Java executor completion 不能只回到單一全域 mailbox；每個 completion 必須攜帶 request_id 與 owner/lifetime identity，並由 C side routing（路由）回唯一 request owner。queue overflow、late completion、duplicate completion、cancelled request 與 owner teardown 都必須有明確且可測試的狀態轉移。
+
+通知機制先不鎖定 Linux-specific primitive（Linux 專用原語）；可候選 eventfd、pipe、socketpair 或既有 event backend，最終選擇必須以 hot-path benchmark、跨平台需求與 lifecycle correctness 決定。

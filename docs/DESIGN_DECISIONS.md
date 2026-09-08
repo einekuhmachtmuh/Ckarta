@@ -112,3 +112,12 @@ TLS library、allocator strategy beyond pool、HTTP/2、HTTP/3、exact JNI ABI�
 ## 13. Web server 理論修正
 
 結論：不推翻 Ckarta 的 C data plane + Java Servlet container；改為「C event-driven data plane + bounded semantic handoff + Java Servlet semantic plane」。理論依據與 Little／SEDA／事件遞送分析見 docs/WEB_SERVER_THEORY_SERVLET_NGINX.md。
+
+
+## 14. Servlet 6.1 compatibility boundary
+
+決策：保持 Servlet 6.1 compatibility surface（相容性表面），不把 Servlet 6.1 object model（物件模型）當成整個 Web server internal representation（內部表示）。
+
+Level 1 API、Level 2 semantics、Level 3 timing/concurrency semantics 必須遵守；Level 4 internal implementation 保留自由度，允許 C event loop、native buffers、lazy materialization 與不同 executor topology。
+
+完整研究：docs/SERVLET_6_1_CRITIQUE.md

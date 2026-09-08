@@ -1,517 +1,138 @@
 # Ckarta 工作準則
 
-## 0. 文件狀態
+本文件是 Ckarta 自動化與人工開發的最高優先工程基線。每次工作開始前，必須閱讀本文件，以及 docs/ARCHITECTURE.md、docs/HOT_PATH_REVIEW.md、docs/FUNCTION_TRACE.md、docs/CONNECTION_OWNERSHIP.md。
 
-狀態：架構基線，已完成專業架構評定。
+## 1. 文件修訂與整合規則
 
-本文件是 Ckarta repository（儲存庫）的最高優先工作準則之一。任何自動化開發、程式碼產生、重構、效能最佳化、安全修補或架構變更，開始前都必須閱讀本文件，以及 docs/ARCHITECTURE.md、docs/HOT_PATH_REVIEW.md、docs/FUNCTION_TRACE.md、docs/CONNECTION_OWNERSHIP.md。
+文件修改必須採「保留後整合」原則：先保留所有仍有效的規範、證據、限制、來源與決策，再做增補或受控整併。
 
-本文件不宣稱 Ckarta 已經實作 Jakarta Servlet 6.1；它只定義目前核准的目標架構與工程約束。
+不得為了精簡任意刪除已有內容。只有內容重複、被更高優先規格取代或已明確失效時，才可合併／移除；若移除重要內容，必須在 commit message（提交訊息）或文件中說明原因。
 
-## 1. 專案目標
+長篇研究只保留一個權威版本；其他文件保留必要結論、限制與連結，不得形成互相衝突的第二套規則。
 
-Ckarta 是以 Jakarta Servlet 6.1 為相容性目標的 Servlet container（伺服端小程式容器）與高效能 Web server（網頁伺服器）。
+修訂後必須交叉檢查 README、架構、hot path（熱路徑）、JNI、測試與安全文件的一致性。精簡的目的只能是去重與提高可掌握性，不得犧牲可追溯性。
 
-最低 Java 平台版本：Java SE 17。
+## 2. 專案與規格
 
-JVM 內的 Java 部分負責 Servlet API（伺服端小程式應用程式介面）語意與容器生命週期；C 部分優先負責網路資料平面。
+Ckarta 是以 Jakarta Servlet 6.1 為相容性目標的 Servlet container（伺服端小程式容器）與 Web server（網頁伺服器）。Servlet 6.1 的平台要求以正式規格為準；目前 JVM/JNI 研究暫以 OpenJDK 21 為基線。
 
-## 2. 規格優先順序
-
-發生衝突時：
-
-1. 適用的 RFC／正式網路標準。
-2. Jakarta Servlet 6.1 規格。
-3. 官方 API specification（應用程式介面規格）。
-4. Ckarta 本文件與架構不變條件。
-5. Nginx 官方文件與原始碼。
-6. Apache Tomcat 官方文件與原始碼。
-7. 可驗證的同儕審查學術文獻。
-8. 其他可靠技術資料。
-
-不得以「Tomcat 這樣做」取代 Servlet 規格要求。
+規格優先順序：RFC／正式標準 → Jakarta Servlet 6.1 → 官方 API specification（應用程式介面規格）→ Ckarta 安全與生命週期不變條件 → Nginx/Tomcat 官方文件與原始碼 → 可驗證同儕審查學術來源 → 其他可靠資料。
 
 ## 3. C/Java 邊界
 
-### C 負責
+C 負責 socket（通訊端）、event loop（事件迴圈）、I/O multiplexing（輸入輸出多路複用）、HTTP parsing（HTTP 解析）、TLS termination（TLS 終止）、connection management（連線管理）、static file serving（靜態檔案傳送）、reverse proxy（反向代理）、load balancing（負載平衡）、buffering（緩衝）、compression（壓縮）、rate／connection limiting（速率／連線限制）、network access control（網路存取控制）、logging（日誌）與 metrics transport（指標傳輸）。
 
-- socket（通訊端）
-- event loop（事件迴圈）
-- I/O multiplexing（輸入輸出多路複用）
-- HTTP parsing（HTTP 解析）
-- TLS termination（TLS 終止）
-- connection management（連線管理）
-- static file serving（靜態檔案傳送）
-- reverse proxy（反向代理）
-- load balancing（負載平衡）
-- response buffering（回應緩衝）
-- compression（壓縮）
-- rate limiting（速率限制）
-- connection limiting（連線限制）
-- network-layer access control（網路層存取控制）
-- logging（日誌）
-- metrics transport（指標傳輸）
+Java 負責 Servlet API、ServletContext、Request／Response 語意、Filter（過濾器）、Listener（監聽器）、RequestDispatcher（請求分派器）、AsyncContext（非同步內容）、Session（會話）、Web application lifecycle（網頁應用程式生命週期）、class loading（類別載入）、deployment（部署）與 application execution（應用程式執行）。
 
-### Java 負責
+C 不得直接執行 Servlet application code（Servlet 應用程式程式碼）；Servlet application code 不得在 C event-loop thread 上執行。
 
-- Servlet API
-- ServletContext
-- Request／Response 語意
-- Filter（過濾器）
-- Listener（監聽器）
-- RequestDispatcher（請求分派器）
-- AsyncContext（非同步內容）
-- Session（會話）
-- Web application lifecycle（網頁應用程式生命週期）
-- class loading（類別載入）
-- deployment（部署）
-- Java application execution（Java 應用程式執行）
+## 4. 程序入口
 
-C 不得直接執行任意 Java Web application（網頁應用程式）程式碼。
+正式產品程序唯一外部入口為 C main()。Java main() 僅可用於測試或工具。
 
-Servlet application code 不得在 C event-loop thread（事件迴圈執行緒）上執行。
+C main() 擁有程序級啟動／停止、原生設定、原生資源、listener／socket、C worker 與 JVM bootstrap coordination（JVM 啟動協調）。JVM 由 C 透過 JNI Invocation API（JNI 虛擬機器啟動介面）建立。
 
-## 4. JNI 邊界
+第一階段禁止啟動 JVM 後 fork 並讓子程序繼承已建立 JVM。
 
-JNI（Java Native Interface，Java 原生介面）是首選的進程內整合方式。
+完整狀態模型見 docs/ENTRYPOINT_DESIGN.md 與 docs/STARTUP_STATE_MACHINE.md。
 
-JNI crossing（JNI 邊界穿越）必須粗粒度化；禁止為單一位元組、單一標頭或極小片段反覆呼叫 Java。
+## 5. JNI
 
-Native buffer（原生緩衝區）若被 Java 透過 DirectByteBuffer（直接位元組緩衝區）觀察，其生命週期必須覆蓋所有 Java 使用時間。
+JNI（Java Native Interface，Java 原生介面）是主要進程內整合方式。JNI crossing（JNI 邊界穿越）必須粗粒度化。
 
-每個 native allocation（原生配置）必須具有：
+Native buffer（原生緩衝區）若由 Java 透過 DirectByteBuffer（直接位元組緩衝區）觀察，C 必須保證完整生命週期。
 
-- owner（擁有者）
-- lifetime（生命週期）
-- length（實際長度）
-- capacity（容量）
-- release rule（釋放規則）
+JNIEnv pointer（JNI 環境指標）不得跨執行緒共享；native thread 必須依 JNI 規則管理 attachment（附加）與 detach（脫離）。
 
-不得允許 Java 保存已銷毀 C memory pool（記憶體池）的指標。
+## 6. JNI 物件化限制
 
-## 5. C 命名
+禁止將 C request struct（請求結構）逐欄映射成大量 Java fields、Strings 或 header objects。
 
-沿用 Nginx 官方 C 命名精神，但將 nginx 的 ngx_ 字首改為 ck_。
+目前核准的初步模型：
 
-例如：
+C canonical request（權威原生請求） → opaque request handle（不透明請求控制代碼） → 一個 Java request facade（請求外觀） → 批次初始化 → DirectByteBuffer data view。
 
-ngx_event_t -> ck_event_t
-ngx_connection_t -> ck_connection_t
-ngx_pool_t -> ck_pool_t
+Call*MethodA/V 僅作粗粒度 dispatch（分派）；NewObjectA/V 僅用於必要薄 facade；String／Array 物件化優先延遲；GetPrimitiveArrayCritical 不得作一般零拷貝策略。
 
-Ckarta 不得宣稱這些名稱是 Nginx API。它們是 Ckarta 私有名稱。
+詳細成本研究見 docs/JNI_COST_MODEL.md。不得把舊 JNI benchmark（效能基準測試）數字直接套用 OpenJDK 21。
 
-## 6. C 排版
+## 7. C 格式與命名
 
-縮排只能使用 Tab。
+C 沿用 Nginx 命名精神，將 ngx_ 改為 ck_；這不是 Nginx API。縮排只能使用 Tab；大括弧採 Allman style（Allman 風格）。
 
-禁止使用空格進行縮排。
+Java 遵循 Oracle Java Code Conventions：Class UpperCamelCase、method／variable lowerCamelCase、constant UPPER_CASE_WITH_UNDERSCORES。
 
-大括弧採 Allman style（Allman 風格）。
+## 8. 並行與非阻塞
 
-函式：
+C 採 worker + event loop；Java Servlet 採 executor／thread pool（執行器／執行緒池）。優先 worker ownership（工作者所有權）、sharding（分片）與 immutable state（不可變狀態），不預設 lock-free data structure（無鎖資料結構）。
 
-static void
-ck_example(void)
-{
-	...
-}
+C event loop 不得執行未知時間的 blocking operation（阻塞操作）。
 
-控制結構：
+## 9. HTTP 與連線
 
-if (condition)
-{
-	...
-}
-else
-{
-	...
-}
+HTTP/1.1 framing（訊息框架）必須只有一套規範化解析語意。Content-Length、Transfer-Encoding、chunked encoding、重複標頭與異常訊息框架依適用 RFC 處理。
 
-不得在 C 程式碼中引入與此規則衝突的自動格式化設定。
+HTTP request smuggling（HTTP 請求走私）是阻斷式安全需求。
 
-## 7. Java 命名
+每個 connection 必須有顯式 state machine（狀態機），並具備有界 timeout（逾時）與資源限制。
 
-遵循 Oracle Java Code Conventions（Oracle Java 程式碼慣例）：
+## 10. 記憶體與零拷貝
 
-- Class（類別）：UpperCamelCase
-- method（方法）：lowerCamelCase
-- variable（變數）：lowerCamelCase
-- constant（常數）：UPPER_CASE_WITH_UNDERSCORES
+request-scoped temporary data（請求範圍暫態資料）優先使用 C memory pool（記憶體池）；pool 不管理 Java heap object（Java 堆積物件）。
 
-## 8. 並行模型
+zero-copy（零拷貝）是條件式最佳化；TLS、compression 或 Java 內容產生可能需要 CPU processing（CPU 處理）。
 
-C 資料平面：
+## 11. 靜態、代理、Session
 
-worker process（工作者程序） + event loop。
+靜態檔案預設不進 JVM，必須防 path traversal（路徑穿越）、symlink escape（符號連結逃逸）與 canonicalization mismatch（正規化不一致）。
 
-Java Servlet 平面：
+代理至少規劃 weighted round robin（加權輪詢）、failure counting（失敗計數）、timeout、connection limit、backup server（備援伺服器）與 upstream connection reuse（上游連線重用）。不得未分析方法語意就重試非冪等請求。
 
-executor／thread pool（執行器／執行緒池）。
+Session 語意由 Java Servlet container 管理；C 不建立第二套 Session authority（權威來源）。
 
-第一優先是 worker ownership（工作者所有權）與資料分片，不是 lock-free（無鎖）。
+## 12. 安全
 
-禁止因「無鎖」名稱而直接採用複雜 lock-free data structure（無鎖資料結構）。
+至少涵蓋 TLS、HTTP security headers（HTTP 安全標頭）、request size limits（請求大小限制）、rate／connection limits、timeouts、access control（存取控制）、request smuggling、Slowloris（慢速攻擊）、buffer overflow（緩衝區溢位）、integer overflow（整數溢位）、use-after-free（釋放後使用）、double free（二次釋放）與 least privilege（最小權限）。
 
-## 9. 非阻塞規則
+所有外部長度必須檢查；parser 優先 pointer + length（指標加實際長度）。禁止 gets、strcpy、strcat 與無界 sprintf 類用法。
 
-C event loop 不得執行未知執行時間的阻塞操作。
+## 13. 測試、相容性與效能
 
-需要阻塞的作業必須：
+核心模組至少規劃 unit、integration、negative、stress、fuzz、shutdown、resource exhaustion tests（測試）。JNI 必須測 lifetime、重入、例外、取消與 buffer ownership。
 
-- 移入獨立工作執行緒／執行器；
-- 或使用明確的非同步機制；
-- 或在架構文件中證明它不會阻塞。
+必須執行 Jakarta Servlet 6.1 TCK（Technology Compatibility Kit，技術相容性套件）；未通過前不得標示相容。
 
-Servlet application 不受 C event loop 直接支配。
+faster、lower latency、less memory、higher throughput 等宣稱必須有可重現 benchmark，並記錄硬體、OS、kernel、compiler、JDK、TLS、concurrency、request／response size、keep-alive、cache state、版本與 commit。
 
-## 10. HTTP framing（HTTP 訊息框架）
+## 14. 第三方來源
 
-request framing（請求框架）只能有一個規範化解析路徑。
+Nginx 與 Apache Tomcat 以 Git submodule（Git 子模組）固定於 third_party/nginx 與 third_party/tomcat；目前版本：Nginx 1.30.4 commit 017cf98dcce217946572a896f0992370475e189f；Tomcat 11.0.25 commit cbe6e15ee81e2fc6232954292a80cca5d1e84009。
 
-前端 parser（解析器）、proxy parser（代理解析器）與 upstream parser（上游解析器）不得採用互相衝突的訊息長度規則。
+禁止未經架構決策直接複製 upstream code（上游程式碼）。移植前必須檢查 license、dependency、平台假設、安全與語意差異。
 
-所有 Content-Length、Transfer-Encoding、chunked encoding（分塊編碼）、重複標頭與異常訊息框架都必須以適用 RFC 為準。
+## 15. 學術與證據規則
 
-HTTP request smuggling（HTTP 請求走私）是阻斷式安全需求，不是未來最佳化項目。
+任何學術來源必須確認作者、標題、出版資訊、DOI 或穩定網址與可閱讀位置；無法確認就標記「無法確認」且不得引用。
 
-## 11. 連線狀態
+重大決策必須交叉比對固定版本的 Nginx、Tomcat、OpenJDK 與相關學術來源，不得依單一來源作結論。
 
-每個 connection（連線）必須由顯式 state machine（狀態機）表示。
+## 16. 文件索引
 
-至少涵蓋：
-
-ACCEPTED
-TLS
-READ_HEADER
-READ_BODY
-ROUTE
-SERVLET
-WRITE_HEADER
-WRITE_BODY
-KEEPALIVE
-CLOSED
-
-實際狀態名稱可調整，但生命週期不可依賴隱含控制流程。
-
-## 12. 逾時與資源上限
-
-至少考慮：
-
-- TLS handshake timeout（TLS 握手逾時）
-- header read timeout（標頭讀取逾時）
-- body read timeout（本文讀取逾時）
-- keep-alive timeout（持久連線逾時）
-- upstream connect timeout（上游連線逾時）
-- upstream response timeout（上游回應逾時）
-- AsyncContext timeout
-- graceful shutdown timeout（優雅停止逾時）
-
-任何可由遠端輸入無限延長的狀態都必須有資源上限。
-
-## 13. 記憶體
-
-一般 request-scoped temporary data（請求範圍暫態資料）優先使用 C memory pool。
-
-memory pool 不得管理 Java heap object（Java 堆積物件）。
-
-大型資料不得因方便而整批複製到 Java heap。
-
-任何 pool lifetime 都必須有明確 owner。
-
-## 14. 零拷貝
-
-zero-copy（零拷貝）是條件式最佳化，不是所有路徑的保證。
-
-無內容轉換的靜態檔案路徑可使用 sendfile。
-
-需要壓縮、TLS 加密或 Java 應用程式產生內容時，不得宣稱端到端零拷貝。
-
-## 15. 靜態檔案
-
-靜態檔案預設繞過 JVM。
-
-必須防止：
-
-- path traversal（路徑穿越）
-- symlink escape（符號連結逃逸）
-- path canonicalization mismatch（路徑正規化不一致）
-- range abuse（範圍請求濫用）
-
-大型檔案不得無條件整個讀入 heap。
-
-## 16. 代理與負載平衡
-
-初始目標：
-
-- weighted round robin（加權輪詢）
-- failure counting（失敗計數）
-- timeout
-- connection limit
-- backup server（備援伺服器）
-- upstream connection reuse（上游連線重用）
-
-不得在沒有正確方法語意分析的情況下自動重試非冪等 HTTP request（HTTP 請求）。
-
-## 17. Session
-
-Session 語意由 Java Servlet container 管理。
-
-C 可以協助：
-
-- Cookie transport（Cookie 傳輸）
-- session affinity（會話黏著）
-- routing metadata（路由資訊）
-
-C 不得建立一個與 Java Session 生命週期互相競爭的第二套 Servlet Session semantics（Servlet 會話語意）。
-
-## 18. 安全
-
-至少涵蓋：
-
-- TLS
-- HTTP security headers（HTTP 安全標頭）
-- request size limits（請求大小限制）
-- rate limits
-- connection limits
-- timeout
-- access control
-- request smuggling 防禦
-- Slowloris（慢速攻擊）防禦
-- buffer overflow（緩衝區溢位）防禦
-- integer overflow（整數溢位）檢查
-- use-after-free（釋放後使用）防護
-- double free（二次釋放）防護
-- least privilege（最小權限）
-
-所有外部長度都必須驗證。
-
-所有 parser 優先使用 pointer + length（指標加實際長度）模型。
-
-禁止 gets、strcpy、strcat，以及無界 sprintf 類使用方式。
-
-## 19. TLS
-
-TLS termination 必須在 C data plane（C 資料平面）完成，除非有明確架構例外。
-
-部署基準必須支援現代安全 TLS 配置，並建立 protocol downgrade（協定降級）、invalid handshake（錯誤握手）、certificate validation（憑證驗證）與 session resumption（會話恢復）測試。
-
-TLS private key（私鑰）必須受到作業系統權限保護。
-
-## 20. 最小權限
-
-公開服務不得以 root 身分長期執行。
-
-master process（主程序）、worker process 與管理介面應具有可分離權限。
-
-Servlet application 不得自動取得 C manager（C 管理元件）的管理權限。
-
-## 21. 測試
-
-所有核心模組至少規劃：
-
-- unit test（單元測試）
-- integration test（整合測試）
-- negative test（負向測試）
-- stress test（壓力測試）
-- fuzz test（模糊測試）
-- shutdown test（停止測試）
-- resource exhaustion test（資源耗盡測試）
-
-JNI 邊界必須測試 lifetime、重入、例外與取消。
-
-## 22. 相容性
-
-必須取得並執行 Jakarta Servlet 6.1 TCK（Technology Compatibility Kit，技術相容性套件）。
-
-相容性判定不得只依賴「能跑 Tomcat 應用程式」。
-
-## 23. 效能宣稱
-
-以下詞語都需要實測證據：
-
-- faster（更快）
-- lower latency（更低延遲）
-- less memory（更少記憶體）
-- higher throughput（更高吞吐量）
-- more scalable（更可擴展）
-
-benchmark（效能基準測試）至少記錄：
-
-CPU、核心數、作業系統、核心版本、編譯器、JDK、TLS 設定、連線數、請求大小、回應大小、keep-alive、快取狀態、測試版本與 commit。
-
-禁止從 Big-O 複雜度直接推出真實效能結論。
-
-## 24. 學術來源規則
-
-學術來源必須可驗證存在。
-
-引用必須確認：
-
-- 作者
-- 標題
-- 出版資訊
-- DOI 或穩定網址
-- 可閱讀位置
-
-無法確認的資料標記「無法確認」，不得引用。
-
-## 25. Nginx/Tomcat 證據規則
-
-每個重大架構決策若宣稱來自 Nginx 或 Tomcat，必須指出：
-
-- 官方文件或 repository
-- 實際模組或類別
-- 實際檔案路徑
-- 若適用，實際關鍵函式或方法
-- Ckarta 採用或不採用的原因
-
-## 26. 禁止事項
-
-禁止：
-
-- 虛構 API
-- 虛構設定指令
-- 虛構原始碼路徑
-- 虛構論文
-- 虛構 DOI
-- 虛構 benchmark
-- 虛構安全保證
-- 把設計意圖寫成已實作功能
-- 把理論可行寫成已驗證可行
-
-## 27. 變更管理
-
-任何架構修改都必須說明：
-
-- 修改原因
-- 受影響模組
-- 規格影響
-- 安全影響
-- 效能假設
-- 測試計畫
-
-重大變更應更新 docs/ARCHITECTURE.md、docs/HOT_PATH_REVIEW.md、docs/FUNCTION_TRACE.md；若影響生命週期、記憶體所有權或 ABI，亦必須更新 docs/CONNECTION_OWNERSHIP.md 與相關設計文件。
-
-## 28. 英文術語寫法
-
-本專案文件第一次出現英文電腦科學術語時，必須在其後以括弧提供台灣繁體中文翻譯。
-
-例：
-
-event loop（事件迴圈）
-non-blocking I/O（非阻塞輸入輸出）
-memory pool（記憶體池）
-zero-copy（零拷貝）
-
-標準名稱、API 名稱、類別名稱、函式名稱與檔案名稱可以保持官方英文拼法。
-
-## 29. 本基準的定位
-
-本文件是 Ckarta 工程基線，不代表 Nginx、Tomcat、Jakarta EE 或任何學術來源為 Ckarta 背書。
-
-所有第三方實作只能作為證據與設計參考。
-
-
-## 30. Third-party reference source tree
-
-Nginx 與 Apache Tomcat 的原始碼以 Git submodule（Git 子模組）形式保存於：
-
-third_party/nginx
-third_party/tomcat
-
-禁止直接修改 submodule working tree（子模組工作樹）中的 upstream source（上游原始碼）並將其誤當作 Ckarta 原始碼。
-
-每個 submodule 必須固定到已確認的 upstream commit，而不是 branch（分支）頭。
-
-目前基準：
-
-Nginx stable 1.30.4
-commit 017cf98dcce217946572a896f0992370475e189f
-
-Apache Tomcat 11.0.25
-commit cbe6e15ee81e2fc6232954292a80cca5d1e84009
-
-若需要更新參考版本，必須同時記錄：
-
-- upstream version
-- exact commit
-- 更新日期
-- 更新原因
-- 受影響的 hot path review
-- 安全影響
-- license compatibility（授權相容性）
-
-## 31. Upstream source usage
-
-third_party/nginx 與 third_party/tomcat 是 reference implementation（參考實作），不是 Ckarta runtime dependency（執行期相依套件）。
-
-Ckarta 程式碼不得在沒有架構決策記錄的情況下直接複製 upstream implementation（上游實作）。
-
-若需要移植程式碼，必須單獨檢查：
-
-- license
-- copyright notice（著作權聲明）
-- dependency
-- platform assumptions（平台假設）
-- security implications（安全影響）
-- semantic differences（語意差異）
-
-## 32. Repository working tree
-
-目前核准的工作樹：
-
-/
-├── WORKING_RULES.md
-├── README.md
-├── .gitmodules
-├── docs/
-├── third_party/
-│   ├── nginx/
-│   └── tomcat/
-├── c/
-├── java/
-├── tests/
-├── bench/
-└── tools/
-
-除 WORKING_RULES.md、README.md、CI／repository metadata 外，一般長篇架構與研究文件集中於 docs/。
-
-
-## 33. 程式程序進入點
-
-正式產品程序唯一外部進入點為 C 的 main()。
-
-C main() 負責：
-
-- 程序級命令列處理
-- 初始設定載入
-- 原生資源初始化
-- JVM 啟動協調
-- C 網路資料平面初始化
-- 生命週期與停止協調
-
-Java 的 public static void main(String[]) 不得作為 Ckarta 正式產品程序入口。
-
-Java main-class 可以存在於測試、工具或獨立開發程式，但不得成為正式 Ckarta server（伺服器）程序的第一入口。
-
-JVM 必須由 C 透過 JNI Invocation API（JNI 虛擬機器啟動介面）建立。
-
-不得在 C fork（建立子程序）之後繼承一個已啟動的 JVM；任何多程序 JVM 模型都必須先另行完成 fork／JVM initialization（JVM 初始化）安全性研究與測試。
-
-C main 的正式啟動順序必須由 docs/ENTRYPOINT_DESIGN.md 定義。
-
-## 34. 啟動邊界
-
-C main、JVM bootstrap（JVM 啟動）、C worker（C 工作者）與 Java Servlet executor（Java Servlet 執行器）是四個不同概念。
-
-不得把：
-
-- main thread（主執行緒）
-- event-loop thread（事件迴圈執行緒）
-- Java Servlet executor thread（Java Servlet 執行器執行緒）
-- worker process（工作者程序）
-
-視為同一物件。
-
-任何 JNI AttachCurrentThread（附加目前執行緒）操作都必須有明確 thread lifetime（執行緒生命週期）與 detach（脫離）規則。
+docs/ARCHITECTURE.md
+docs/HOT_PATH_REVIEW.md
+docs/FUNCTION_TRACE.md
+docs/CONNECTION_OWNERSHIP.md
+docs/DESIGN_DECISIONS.md
+docs/ENTRYPOINT_DESIGN.md
+docs/STARTUP_STATE_MACHINE.md
+docs/HTTP_FRAMING_POLICY.md
+docs/CONCURRENCY_MODEL.md
+docs/CANCELLATION_MODEL.md
+docs/JNI_ABI.md
+docs/JNI_COST_MODEL.md
+docs/TCK_INTEGRATION_PLAN.md
+docs/SECURITY_BASELINE.md
+docs/REFERENCE_SOURCES.md
+docs/WORKING_TREE.md
+
+本文件是工程入口；長篇研究以 docs 對應文件為權威內容。

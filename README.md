@@ -34,7 +34,7 @@ Nginx 與 Apache Tomcat 不直接複製進 Ckarta repository，而是以 Git sub
 
 ## 文件
 
-- WORKING_RULES.md：工程、命名、驗證、安全與自動化基準。
+- WORKING_RULES.md：工程、命名、驗證、安全、工成果持久化與自動化基準。
 - docs/ARCHITECTURE.md：C/Java 邊界、資料流、並行模型、C 化決策與補充需求。
 - docs/HOT_PATH_REVIEW.md：Nginx／Tomcat hot path（熱路徑）與 whole path（完整路徑）基線。
 - docs/FUNCTION_TRACE.md：固定版本的逐函式 hot path 追蹤。
@@ -44,6 +44,7 @@ Nginx 與 Apache Tomcat 不直接複製進 Ckarta repository，而是以 Git sub
 - docs/STARTUP_STATE_MACHINE.md：C main、JVM、Java container、network runtime 的啟動／停止狀態機。
 - docs/HTTP_FRAMING_POLICY.md：HTTP/1.1 framing（訊息框架）權威解析政策。
 - docs/CONCURRENCY_MODEL.md：C 事件並行與 Java Servlet 執行模型。
+- docs/THREAD_MODEL.md：C worker、JVM bootstrap、JNI bridge 與 Java executor 的 thread model（執行緒模型）研究基線。
 - docs/CANCELLATION_MODEL.md：連線、Servlet 非同步與 JNI 取消語意。
 - docs/JNI_ABI.md：JNI 邊界與所有權門檻。
 - docs/JNI_COST_MODEL.md：OpenJDK 21 JNI 跨語言成本模型與 C struct → Java object 策略。
@@ -60,9 +61,11 @@ Apache Tomcat：11.0.25，commit `cbe6e15ee81e2fc6232954292a80cca5d1e84009`。
 
 OpenJDK 21 JNI 研究基線：`jdk-21.0.8-ga`。
 
-## 入口與 JNI 原則
+## 入口與 thread 原則
 
 正式 Ckarta server 入口為 C `main()`；由受控的專用 bootstrap thread（啟動執行緒）透過 JNI Invocation API 建立 JVM，而不是直接在 primordial process thread（原始程序執行緒）上載入 JVM。
+
+第一階段暫不把所有 C worker 固定 attach 到 JVM；C worker 維持 network connection ownership，JNI bridge thread 負責粗粒度跨 JVM dispatch，Java executor 負責 Servlet execution。完整理由與待測方案見 `docs/THREAD_MODEL.md`。
 
 JNI request hot path 不採 C struct 逐欄映射為 Java object。初步採：
 

@@ -224,9 +224,13 @@ int main(int argc, char **argv)
 		{
 			sched_yield();
 		}
-	} while (completion_result == 0 || completed_count < 2);
+		else
+		{
+			break;
+		}
+	} while (completed_count < 2);
 
-	result = completion_result == 1 ? 0 : -1;
+	result = completed_count == 2 ? 0 : -1;
 	if (check_result("DISPATCH", result) != 0)
 	{
 		ck_runtime_shutdown(&runtime);

@@ -15,15 +15,27 @@ https://docs.oracle.com/en/java/javase/21/docs/specs/jni/invocation.html
 
 主要 API：JNI_CreateJavaVM、DestroyJavaVM、AttachCurrentThread、DetachCurrentThread、GetEnv。
 
-## 3. Descriptor
+## 3. Descriptor 與生命週期
 
-跨界資料必須以明確 descriptor（描述元）傳遞。
+第一階段採 process-local request descriptor；Java 不直接接收 descriptor struct 或 native pointer。
 
-request descriptor 至少需要：identifier、method、target、protocol version、header view、body state、remote endpoint metadata、native buffer reference、lifetime token。
+固定欄位：
+- `abi_version)：ABI 版本。
+- `struct_size)：實際大小，用於版本／布局檢查。
+- `feature_flags)：功能旗標。
+- `ownership_flags)：owner／borrow 語意。
+- `owner_token)：C owner 的邏輯識別。
+- `lifetime_token)：native storage 有效期間的識別。
+- `request_id)：request 邏輯識別。
+- `body`／`body_length)：C-owned native bytes。
 
-response descriptor 至少需要：status、header output、body output state、completion state、error state。
+descriptor 不是 wire protocol；atomic lifecycle state 不放入 descriptor，避免把同步實作細節固定成 ABI。
 
-以上為 Ckarta 設計資料結構，不是假定的現成 API。
+### 狀態機
+
+`PENDING → RUNNING → COMPLETED|FAILED`；取消可由 `PENDING|RUNNING → CANCELLING`。一旦進入 `CANCELLING`，不得再被 `COMPLETED` 或 `FAILED` 覆寫。
+
+C 實作用 atomic CAS 保證競爭 cancellation 不重複取得 terminal ownership。
 
 ## 4. C struct → Java object
 
@@ -91,9 +103,15 @@ GetPrimitiveArrayCritical：只可作符合 JNI critical region 限制的短操�
 
 NewDirectByteBuffer／GetDirectBufferAddress：優先作大量 native bytes 視圖，但 ownership／lifetime 必須由 Ckarta 明確管理。
 
-## 13. 研究與 benchmark
+## 13. 學術與 ownership 背景
 
-OpenJDK 21 成本基線與 API 比較見 docs/JNI_COST_MODEL.md。
+Clarke、Potter、Noble 的 *Ownership Types for Flexible Alias Protection* 將 ownership 與 alias visibility／representation containment 形式化；Ckarta 只借用其 ownership 設計思想，correctness 仍由 C lifecycle、JNI specification 與測試決定。
+
+來源：https://doi.org/10.1145/286936.286947
+
+## 14. 研究與 benchmark
+
+OpenJDK 21 成本基線與 API 比較見 docs/JNI_COST_MODEL.md；fixed-tag HotSpot audit 見 docs/OPENJDK_21U_SOURCE_AUDIT.md。
 
 thread model 的 direct-attach 與 JNI bridge 差異見 docs/THREAD_MODEL.md。
 

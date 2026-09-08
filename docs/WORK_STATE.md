@@ -169,4 +169,8 @@ PR #2 已於 2026-09-08 squash-merge 至 `main`，merge commit `2638bc5017093b5f
 
 CGI/FastCGI 已正式定位為未來可掛接 application gateway module，不進核心 request execution；完整效能比較見 docs/CGI_FASTCGI_RESEARCH.md。
 
-Java executor handoff 的 v2 smoke slice 使用 bounded Java completion queue，C 不再 Future.get() 阻塞。PR #8 的最新 CI 正在／尚待最終驗證；在 CI 成功前不得視為主線完成。
+Java executor handoff 的 v2 smoke slice 使用 bounded Java completion queue，C 不再 Future.get() 阻塞。PR #8 已於 2026-09-08 squash-merge；其 GitHub Actions Build and test 已成功。此 slice 仍只代表單一 in-flight smoke request，不代表正式多請求 completion queue。
+
+## 18. 本輪 CI 錯誤與規則檢查
+
+本輪非阻塞交接實作曾依序發現：20-byte completion record 被錯誤配置成 16 bytes；舊 synchronous dispatch 定義殘留；既有 smoke 腳本要求保留 CKARTA_DISPATCH 診斷輸出。三者均已有現行函式簽名、型態轉換、邊界與全 repository 引用檢查規則涵蓋，因此未新增重複規則；實際改正後 PR #8 的 Build and test 成功。

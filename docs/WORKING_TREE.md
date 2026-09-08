@@ -140,4 +140,8 @@ docs/THREAD_MODEL.md 是 Ckarta thread model（執行緒模型）的權威研究
 - shutdown／join 約束
 - 尚待 benchmark 驗證的 thread 數量方案
 
-新工作階段應先讀取 `WORKING_RULES.md` 與該文件，才能判斷目前 thread model 的實際決策狀態。
+## 11. 跨對話工作狀態
+
+docs/WORK_STATE.md 保存重要的跨對話工程現況、已驗證事項、目前決策與下一個工程閘門。它不是專題規格的第二權威來源；新工作階段仍應先閱讀 `WORKING_RULES.md`，再依當前任務讀取相關權威文件與工作現況。
+
+新工作階段不得假設上一個對話中、但未進 repository 的決策或研究結果仍然存在。

@@ -1,148 +1,94 @@
 # Ckarta JNI ABI 基線
 
+本文件固定 JNI（Java Native Interface，Java 原生介面）邊界；完整成本研究見 docs/JNI_COST_MODEL.md。
+
 ## 1. 定位
 
-JNI ABI（JNI 應用程式二進位介面）是 C 資料平面與 Java Servlet 容器之間的最小邊界。
-
-第一階段禁止建立「萬用 JNI API」。
+JNI ABI（應用程式二進位介面）是 C 資料平面與 Java Servlet 容器之間的最小邊界。第一階段禁止建立萬用 JNI API。
 
 ## 2. Invocation
 
-C main() 啟動 JVM。
+正式產品由 C main() 啟動 JVM。
 
 Oracle JNI Invocation API：
+https://docs.oracle.com/en/java/javase/21/docs/specs/jni/invocation.html
 
-https://docs.oracle.com/en/java/javase/17/docs/specs/jni/invocation.html
-
-核心 API 包括：
-
-JNI_CreateJavaVM
-DestroyJavaVM
-AttachCurrentThread
-DetachCurrentThread
-GetEnv
+主要 API：JNI_CreateJavaVM、DestroyJavaVM、AttachCurrentThread、DetachCurrentThread、GetEnv。
 
 ## 3. Descriptor
 
 跨界資料必須以明確 descriptor（描述元）傳遞。
 
-request descriptor 至少需要：
+request descriptor 至少需要：identifier、method、target、protocol version、header view、body state、remote endpoint metadata、native buffer reference、lifetime token。
 
-- identifier
-- method
-- target
-- protocol version
-- header view
-- body state
-- remote endpoint metadata
-- native buffer reference
-- lifetime token
+response descriptor 至少需要：status、header output、body output state、completion state、error state。
 
-response descriptor 至少需要：
+以上為 Ckarta 設計資料結構，不是假定的現成 API。
 
-- status
-- header output
-- body output state
-- completion state
-- error state
+## 4. C struct → Java object
 
-以上是 Ckarta 設計資料結構，不是現成 JNI API。
+禁止把 C request struct（請求結構）逐欄映射為大量 Java fields、Strings 或 header objects。
 
-## 4. Buffer
+初步核准模型：
 
-Java 使用 native buffer 時：
+C canonical request
+→ opaque request handle
+→ 一個 Java request facade（請求外觀）
+→ 一次批次初始化
+→ DirectByteBuffer data view（直接位元組緩衝區資料視圖）
 
-ownership = C
+OpenJDK 21 HotSpot 的 NewObjectA／NewObjectV 涉及 Java instance allocation、local JNI handle、參數整理與 constructor invocation；大量 Set/Get field 因此不是單純記憶體映射。
 
-Java = borrower
+## 5. Buffer ownership
 
-Java 不得 free。
+Java 使用 native buffer 時預設為 borrow-only（借用）；Java 不得 free。C 不得在 Java borrow 未結束前 recycle。
 
-若需要持久保存：
+NewDirectByteBuffer 可提供 native memory view，但不決定 Ckarta ownership；native allocation lifetime 必須覆蓋所有 Java 使用時間。
 
-必須建立新的擁有權轉移機制。
+## 6. Thread rules
 
-## 5. Thread rules
+JNIEnv pointer（JNI 環境指標）不得跨執行緒共享。native thread 使用 JNI 必須具有自己的 attachment／detach 生命週期。
 
-JNIEnv pointer（JNI 環境指標）不可在執行緒間直接共享。
+## 7. Exception
 
-每個 native thread：
-
-AttachCurrentThread
-→ 使用自己的 JNIEnv
-→ 完成工作
-→ DetachCurrentThread
-
-實際啟動與停止時序必須再以 JDK 17 測試確認。
-
-## 6. Exception
-
-所有 JNI 呼叫後都必須有 exception check（例外檢查）。
-
-C 不直接操作 Java exception internals（例外內部實作）。
-
-## 7. Crossing granularity
-
-優先：
-
-one request stage
-→ one JNI transition
-
-避免：
-
-每個 header
-每個 body chunk
-每個 write operation
-
-都跨越 JNI。
+每次 JNI 呼叫後都必須檢查 exception。C 不得依賴 Java exception object 的私有實作細節。
 
 ## 8. Async
 
-JNI 不得假設：
-
-CallStatic／CallVoidMethod 返回
-=
-request 完成
-
-AsyncContext 可能使 request 在 Java method return 後繼續存在。
+JNI 呼叫返回不等於 request 完成。Servlet AsyncContext 可以讓請求在 Java method return 後繼續存在。
 
 ## 9. ABI stability
 
-正式 ABI 進入穩定版前，必須有：
+正式 ABI 穩定前必須有：version、struct size、feature flags（功能旗標）、reserved fields（保留欄位）、ownership flags（所有權旗標）。
 
-- version field
-- struct size
-- feature flags（功能旗標）
-- reserved fields（保留欄位）
-- explicit ownership flags（明確所有權旗標）
-
-不得依賴 C struct 自然布局作為長期 ABI，除非另有明確 compatibility contract（相容性契約）。
+不得依賴 C struct 自然布局作為長期 ABI，除非另有明確相容性契約。
 
 ## 10. Forbidden
 
-禁止：
+禁止：expose raw socket fd to Servlet application、expose C pool pointer、Java free native memory、C access private Java object internals、hidden global native state。
 
-- expose raw socket fd to Servlet application（把原始 socket fd 暴露給 Servlet）
-- expose C pool pointer
-- Java free native memory
-- C access private Java object internals
-- hidden global native state
+## 11. JNI crossing 策略
 
-## 11. Native memory
+優先：read buffer → parse → canonical descriptor → single JNI transition → Java processing。
 
-所有 native allocation 必須可追蹤：
+避免每個 header、body chunk 或 write operation 都跨 JNI。
 
-owner
-lifetime
-length
-capacity
-release rule
+## 12. 成本與 API 選擇
 
-## 12. 後續實作門檻
+Call<Type>MethodA/V：粗粒度 request／stage dispatch。
 
-以下文件完成並審查前，不建立正式 JNI public API：
+NewObjectA/V：只建立必要薄 facade，不逐欄建立 mirror object（鏡像物件）。
 
-docs/HTTP_FRAMING_POLICY.md
-docs/CANCELLATION_MODEL.md
-docs/CONCURRENCY_MODEL.md
+Set/Get field：只作少量狀態。
 
+String／array：優先 lazy materialization（延遲物件化）；不可假設所有 array access 都零拷貝。
+
+GetPrimitiveArrayCritical：只可作符合 JNI critical region 限制的短操作。
+
+NewDirectByteBuffer／GetDirectBufferAddress：優先作大量 native bytes 視圖，但 ownership／lifetime 必須由 Ckarta 明確管理。
+
+## 13. 研究與 benchmark
+
+OpenJDK 21 成本基線與 API 比較見 docs/JNI_COST_MODEL.md。
+
+該文件把 OpenJDK 21 原始碼分析與歷史 JNI benchmark 數值分開；未完成 Ckarta 自有 benchmark 前，不得宣稱某 JNI API 更快。

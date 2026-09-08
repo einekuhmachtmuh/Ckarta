@@ -1,9 +1,8 @@
 package org.ckarta.bootstrap;
 
 import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.util.concurrent.ArrayBlockingQueue;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Future;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
@@ -17,8 +16,10 @@ public final class CkartaRuntime
 {
 	private static final Object EXECUTOR_LOCK = new Object();
 	private static final int EXECUTOR_QUEUE_CAPACITY = 16;
+	private static final int COMPLETION_QUEUE_CAPACITY = 16;
 
 	private static ThreadPoolExecutor executor;
+	private static ArrayBlockingQueue<CompletionRecord> completions;
 
 	private CkartaRuntime()
 	{
@@ -37,6 +38,7 @@ public final class CkartaRuntime
 						TimeUnit.MILLISECONDS,
 						new ArrayBlockingQueue<>(EXECUTOR_QUEUE_CAPACITY),
 						new ThreadPoolExecutor.AbortPolicy());
+				completions = new ArrayBlockingQueue<>(COMPLETION_QUEUE_CAPACITY);
 			}
 		}
 		System.out.println("CKARTA_JAVA_READY");
@@ -49,6 +51,7 @@ public final class CkartaRuntime
 		{
 			currentExecutor = executor;
 			executor = null;
+			completions = null;
 		}
 
 		if (currentExecutor != null)
@@ -70,70 +73,86 @@ public final class CkartaRuntime
 		System.out.println("CKARTA_JAVA_STOP");
 	}
 
-	public static long dispatch(long requestHandle, ByteBuffer data)
+	public static void dispatchAsync(long requestHandle, ByteBuffer data)
 	{
 		ThreadPoolExecutor currentExecutor;
+		ArrayBlockingQueue<CompletionRecord> currentCompletions;
 		synchronized (EXECUTOR_LOCK)
 		{
 			currentExecutor = executor;
+			currentCompletions = completions;
 		}
 
-		if (currentExecutor == null)
+		if (currentExecutor == null || currentCompletions == null)
 		{
 			throw new IllegalStateException("Ckarta runtime is not running");
 		}
 
-		final long callerThreadId = Thread.currentThread().getId();
-		final Future<Long> completion;
 		try
 		{
-			completion = currentExecutor.submit(() ->
+			currentExecutor.execute(() ->
 			{
-				if (Thread.currentThread().getId() == callerThreadId)
+				long result = 0L;
+				int status = 0;
+				try
 				{
-					throw new IllegalStateException(
-							"Servlet execution remained on JNI caller thread");
+					NativeRequest request = new NativeRequest(requestHandle, data);
+					if (!request.data().isDirect())
+					{
+						throw new IllegalArgumentException(
+								"native request data must be direct");
+					}
+
+					result = request.handle() + request.data().remaining();
+				}
+				catch (RuntimeException exception)
+				{
+					status = -1;
 				}
 
-				NativeRequest request = new NativeRequest(requestHandle, data);
-				if (!request.data().isDirect())
-				{
-					throw new IllegalArgumentException(
-							"native request data must be direct");
-				}
-
-				return request.handle() + request.data().remaining();
+				currentCompletions.offer(
+						new CompletionRecord(requestHandle, result, status));
 			});
 		}
 		catch (RejectedExecutionException exception)
 		{
-			throw new IllegalStateException("Java request executor is saturated",
-					exception);
+			currentCompletions.offer(
+					new CompletionRecord(requestHandle, 0L, -2));
+		}
+	}
+
+	public static int pollCompletion(ByteBuffer output)
+	{
+		if (output == null || !output.isDirect() || output.capacity() < 16)
+		{
+			throw new IllegalArgumentException("completion output buffer");
 		}
 
-		try
+		ArrayBlockingQueue<CompletionRecord> currentCompletions;
+		synchronized (EXECUTOR_LOCK)
 		{
-			/*
-			 * This blocking wait is only part of the executable smoke slice.
-			 * The production C event loop must use a non-blocking completion path.
-			 */
-			return completion.get();
+			currentCompletions = completions;
 		}
-		catch (InterruptedException exception)
+
+		if (currentCompletions == null)
 		{
-			completion.cancel(true);
-			Thread.currentThread().interrupt();
-			throw new IllegalStateException(
-					"Interrupted while awaiting Java request completion", exception);
+			return -1;
 		}
-		catch (ExecutionException exception)
+
+		CompletionRecord completion = currentCompletions.poll();
+		if (completion == null)
 		{
-			Throwable cause = exception.getCause();
-			if (cause instanceof RuntimeException runtimeException)
-			{
-				throw runtimeException;
-			}
-			throw new IllegalStateException("Java request execution failed", cause);
+			return 0;
 		}
+
+		output.order(ByteOrder.nativeOrder());
+		output.putLong(0, completion.requestHandle());
+		output.putLong(8, completion.result());
+		output.putInt(12, completion.status());
+		return 1;
+	}
+
+	private record CompletionRecord(long requestHandle, long result, int status)
+	{
 	}
 }

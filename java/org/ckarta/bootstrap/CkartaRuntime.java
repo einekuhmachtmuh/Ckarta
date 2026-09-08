@@ -20,6 +20,9 @@ public final class CkartaRuntime
 
 	private static ThreadPoolExecutor executor;
 
+	private static native int nativeComplete(long completionToken, long requestHandle,
+			long result, int status);
+
 	private CkartaRuntime()
 	{
 	}
@@ -68,6 +71,61 @@ public final class CkartaRuntime
 			}
 		}
 		System.out.println("CKARTA_JAVA_STOP");
+	}
+
+	public static void dispatchAsync(long requestHandle, ByteBuffer data,
+			long completionToken)
+	{
+		ThreadPoolExecutor currentExecutor;
+		synchronized (EXECUTOR_LOCK)
+		{
+			currentExecutor = executor;
+		}
+
+		if (currentExecutor == null)
+		{
+			throw new IllegalStateException("Ckarta runtime is not running");
+		}
+
+		final long callerThreadId = Thread.currentThread().getId();
+		try
+		{
+			currentExecutor.execute(() ->
+			{
+				long result = 0L;
+				int status = 0;
+
+				try
+				{
+					if (Thread.currentThread().getId() == callerThreadId)
+					{
+						throw new IllegalStateException(
+								"Servlet execution remained on JNI caller thread");
+					}
+
+					NativeRequest request = new NativeRequest(requestHandle, data);
+					if (!request.data().isDirect())
+					{
+						throw new IllegalArgumentException(
+								"native request data must be direct");
+					}
+
+					result = request.handle() + request.data().remaining();
+				}
+				catch (RuntimeException exception)
+				{
+					status = -1;
+				}
+				finally
+				{
+					nativeComplete(completionToken, requestHandle, result, status);
+				}
+			});
+		}
+		catch (RejectedExecutionException exception)
+		{
+			nativeComplete(completionToken, requestHandle, 0L, -2);
+		}
 	}
 
 	public static long dispatch(long requestHandle, ByteBuffer data)

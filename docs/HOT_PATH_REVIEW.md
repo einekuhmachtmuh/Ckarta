@@ -1,447 +1,219 @@
-# Ckarta Nginx／Tomcat Hot Path 與 Whole Path 基線分析
+# Ckarta Nginx／Tomcat Hot Path 基線
 
-## 1. 目的
+本文件現在以固定版本為唯一研究基線。逐函式細節見 docs/FUNCTION_TRACE.md。
 
-本文件不是說 Ckarta 已經重現 Nginx 或 Tomcat。
+## 1. 固定參考版本
 
-目的在於回答：
+Nginx 1.30.4 stable
+commit 017cf98dcce217946572a896f0992370475e189f
 
-「哪些具體執行路徑值得移到 C、哪些必須保留 Java，以及哪些 Nginx/Tomcat 機制不能直接拼接？」
+Apache Tomcat 11.0.25
+commit cbe6e15ee81e2fc6232954292a80cca5d1e84009
 
-## 2. Nginx 事件路徑
+參考來源與版本治理見 docs/REFERENCE_SOURCES.md。
 
-已核對官方 development guide 與 source：
+## 2. Nginx
 
-Nginx event loop（事件迴圈）由：
+已核對的主要 hot path：
 
 ngx_process_events_and_timers()
-
-反覆驅動。
-
-在 Linux，正常事件處理會走 epoll notification（epoll 事件通知），官方開發文件明確指出會呼叫 epoll_wait()。
-
-證據：
-
-https://nginx.org/en/docs/dev/development_guide.html
-https://github.com/nginx/nginx/blob/master/src/event/ngx_event.c
-
-官方文件描述的基本次序包含：
-
-1. 找到最近到期 timer（計時器）。
-2. 等待 I/O event（輸入輸出事件）。
-3. 執行 event handler（事件處理器）。
-4. 處理 posted events（已排程事件）。
-5. 到期 timer。
-6. 再處理 posted events。
-
-Ckarta 應保留這個思想，但不直接複製 Nginx 原始碼。
-
-## 3. Nginx 記憶體路徑
-
-已核對：
-
-src/core/ngx_palloc.c
-
-關鍵函式：
-
-ngx_create_pool
-ngx_palloc
-ngx_pcalloc
-ngx_destroy_pool
-ngx_pool_cleanup_add
-
-Nginx 官方文件指出，大多數 allocation（配置）由 pool 管理，pool destroy 時一次釋放。
-
-Ckarta 應採 request／connection scoped pool，但必須改成 ck_ 命名，並建立自己的 lifetime 契約。
-
-證據：
-
-https://nginx.org/en/docs/dev/development_guide.html
-https://github.com/nginx/nginx/blob/master/src/core/ngx_palloc.c
-
-## 4. Nginx timer
-
-Nginx 使用 global timer red-black tree（全域計時器紅黑樹），event object 含 timer node。
-
-Ckarta 初版採相同複雜度特性的 timer tree 是合理選擇。
-
-若日後大量 timer 成為瓶頸，可研究 timing wheel（時間輪），但不得在沒有 benchmark 前宣稱更快。
-
-學術來源：
-
-George Varghese and Tony Lauck,
-"Hashed and Hierarchical Timing Wheels: Data Structures for the Efficient Implementation of a Timer Facility"
-
-DOI:
-https://doi.org/10.1145/41457.37504
-
-## 5. Nginx upstream hot path
-
-已核對：
-
-src/http/ngx_http_upstream.c
-
-實際檔案存在，且包含 upstream state、peer handling（節點處理）、連線與回應流程。
-
-Ckarta 的 proxy path（代理路徑）可以吸收此分層思想：
-
-route
-→ upstream selection
-→ upstream connection
-→ upstream request
-→ upstream response
-→ output
-
-但不能把 Nginx 的內部資料結構當成 API。
-
-證據：
-
-https://github.com/nginx/nginx/blob/master/src/http/ngx_http_upstream.c
-
-## 6. Tomcat NIO whole path
-
-已核對 Tomcat main branch 的：
-
-java/org/apache/tomcat/util/net/NioEndpoint.java
-
-其中存在：
-
-- Poller
-- Selector
-- PollerEvent
-- SocketProcessor
-- NioChannel
-- SecureNioChannel
-
-而 startInternal() 啟動 Acceptor／Poller／executor 等元件。
-
-這說明 Tomcat 自己已經把低階 I/O 與工作執行器分層，而不是一條「socket 直接呼叫 Servlet」路徑。
-
-證據：
-
-https://github.com/apache/tomcat/blob/main/java/org/apache/tomcat/util/net/NioEndpoint.java
-
-## 7. Tomcat HTTP protocol layer
-
-已核對：
-
-Http11NioProtocol.java
-
-其建構方式直接使用 NioEndpoint。
-
-因此 Tomcat 的結構可概括為：
-
-HTTP/1.1 protocol
-→ NIO endpoint
-→ socket processing
-→ Coyote request/response
-→ Catalina adapter
-→ Container
-
-證據：
-
-https://github.com/apache/tomcat/blob/main/java/org/apache/coyote/http11/Http11NioProtocol.java
-
-## 8. Tomcat Coyote → Catalina 邊界
-
-已核對：
-
-CoyoteAdapter.java
-
-此類別處理 Coyote Request/Response 與 Catalina Request/Response 的銜接，也處理 async dispatch 等狀態。
-
-Ckarta 的 JNI bridge 在架構上最接近這個「低階傳輸表示 → Servlet 容器表示」邊界。
-
-但 Ckarta 不應照搬 Java class hierarchy；JNI bridge 必須維持 ownership 與 buffer lifetime。
-
-證據：
-
-https://github.com/apache/tomcat/blob/main/java/org/apache/catalina/connector/CoyoteAdapter.java
-
-## 9. Tomcat Container path
-
-Tomcat StandardContext.java：
-
-Context 是 Container tree 中處理特定 Web application 的核心層之一，並建立 basic Valve。
-
-Tomcat StandardWrapper.java：
-
-Wrapper 表示單一 servlet definition（Servlet 定義），並負責 Servlet instance lifecycle（實例生命週期）、load、init 與 allocation。
-
-因此目標 Java 路徑：
-
-Engine
-→ Host
-→ Context
-→ Wrapper
-→ Filter chain
+→ ngx_process_events()
+→ ngx_epoll_process_events()（Linux）
+→ ngx_http_init_connection()
+→ ngx_http_wait_request_handler()
+→ ngx_http_process_request_line()
+→ ngx_http_process_request_headers()
+→ ngx_http_process_request()
+→ ngx_http_handler()
+→ ngx_http_core_run_phases()
+
+主要來源：
+
+third_party/nginx/src/event/ngx_event.c
+third_party/nginx/src/event/modules/ngx_epoll_module.c
+third_party/nginx/src/http/ngx_http_request.c
+third_party/nginx/src/http/ngx_http_core_module.c
+third_party/nginx/src/core/ngx_palloc.c
+
+## 3. Tomcat
+
+已核對的主要 hot path：
+
+NioEndpoint.Poller.run()
+→ Poller.processKey()
+→ SocketProcessor.doRun()
+→ Http11Processor.service()
+→ CoyoteAdapter.service()
+→ Container Pipeline
+→ StandardWrapperValve.invoke()
+→ ApplicationFilterFactory.createFilterChain()
+→ ApplicationFilterChain.doFilter()
+→ Servlet.service()
+
+主要來源：
+
+third_party/tomcat/java/org/apache/tomcat/util/net/NioEndpoint.java
+third_party/tomcat/java/org/apache/coyote/http11/Http11Processor.java
+third_party/tomcat/java/org/apache/catalina/connector/CoyoteAdapter.java
+third_party/tomcat/java/org/apache/catalina/core/StandardWrapperValve.java
+
+## 4. 交叉結論
+
+Nginx 與 Tomcat 都具有 I/O readiness／event processing，但它們的上層執行模型不同。
+
+Nginx：
+
+event-driven data plane（事件驅動資料平面）
+→ C handler
+→ phase pipeline
+
+Tomcat：
+
+Java NIO
+→ SocketProcessor
+→ protocol processor
+→ CoyoteAdapter
+→ Container Pipeline
 → Servlet
 
-是有官方原始碼依據的。
+因此 Ckarta 採：
 
-證據：
-
-https://github.com/apache/tomcat/blob/main/java/org/apache/catalina/core/StandardContext.java
-https://github.com/apache/tomcat/blob/main/java/org/apache/catalina/core/StandardWrapper.java
-
-## 10. Tomcat async path
-
-CoyoteAdapter.java 的 asyncDispatch() 顯示 async request 的 timeout／error 等狀態需要重新進入容器處理。
-
-這對 Ckarta 有重大影響：
-
-Servlet AsyncContext 不能設計成「Java 回傳後 request 一定完成」。
-
-C connection state 必須能：
-
-SERVED
-→ ASYNC_WAIT
-→ completion/timeout/error
-→ WRITE/CLOSE
-
-因此 connection lifetime 與 Servlet async lifetime 必須可分離。
-
-## 11. Nginx 與 Tomcat 的真正差異
-
-Nginx 的核心優勢：
-
-event-driven（事件驅動）
+C event-driven network data plane
 +
-worker process
-+
-non-blocking I/O
-+
-memory pool
-+
-資料平面高度 C 化
+Java executor-based Servlet execution（Java 執行器式 Servlet 執行）
 
-Tomcat 的優勢：
+## 5. 必須保留的 Nginx 特性
 
-Servlet container semantics
-+
-Java object lifecycle
-+
-Container hierarchy
-+
-NIO endpoint
-+
-executor
-+
-Servlet async lifecycle
+值得吸收：
 
-兩者不能直接 1:1 疊加。
+- event backend abstraction（事件後端抽象）
+- connection-oriented handler state
+- request-scoped pool
+- explicit phase processing
+- static file fast path
+- upstream state machine
 
-## 12. Ckarta hot path
+不可直接複製：
 
-推薦 hot path：
+Nginx 私有 data structure（資料結構）
+Nginx module ABI
+Nginx configuration semantics（設定語意）
 
-accept
-→ TLS state machine
-→ HTTP header parser
-→ request framing validation
-→ rate/connection limits
+## 6. 必須保留的 Tomcat 特性
+
+值得吸收：
+
+- Connector／protocol separation
+- Container hierarchy
+- Pipeline／Valve
+- Filter Chain
+- Servlet lifecycle
+- AsyncContext semantics（AsyncContext 語意）
+- executor／processor separation
+- Coyote／Catalina boundary
+
+不可直接複製：
+
+Tomcat internal class hierarchy
+Tomcat internal lifecycle contracts
+Tomcat private connector implementation
+
+## 7. Ckarta hot path
+
+Servlet：
+
+C event
+→ HTTP framing validation
 → route
-→ static/proxy/servlet decision
-
-### Static
-
-route
-→ file metadata
-→ range/conditional handling
-→ sendfile or buffered output
-→ compression if selected
-→ TLS
-→ socket
-
-### Proxy
-
-route
-→ peer selection
-→ upstream connection
-→ upstream HTTP parser
-→ response filters
-→ TLS
-→ socket
-
-### Servlet
-
-route
 → JNI request descriptor
 → Java request facade
-→ Engine
-→ Host
-→ Context
-→ Wrapper
-→ Filter chain
+→ Container
+→ Filter Chain
 → Servlet
-→ response descriptor
-→ JNI
+→ JNI response descriptor
 → C output pipeline
 → TLS
 → socket
 
-## 13. 不應採用的錯誤路徑
+Static：
 
-### 錯誤 A
+C event
+→ HTTP parser
+→ security
+→ route
+→ file
+→ sendfile／buffered output
+→ TLS
+→ socket
 
-C event loop
-→ JNI
-→ Servlet.service()
-→ database call
-→ event loop 被阻塞
+Proxy：
 
-禁止。
+C event
+→ HTTP parser
+→ security
+→ route
+→ upstream selection
+→ upstream I/O
+→ output filter
+→ TLS
+→ socket
 
-### 錯誤 B
+## 8. 不變條件
 
-C HTTP parser
-→ Java parser
-→ upstream parser
+C event loop 不得執行 Servlet application code。
 
-可能造成 request framing interpretation mismatch（請求框架解讀不一致）。
+JNI 不得成為每個 header／byte 的細粒度跨邊界。
 
-禁止在沒有明確協定邊界時重複解析。
+HTTP framing 必須只有一個權威語意。
 
-### 錯誤 C
+C memory ownership 必須可追蹤。
 
-C Session store
-+
-Java Session store
+Servlet AsyncContext 可在 Java 方法返回後繼續存在。
 
-容易造成生命週期與一致性衝突。
+Servlet request lifetime 與 TCP connection lifetime 不假設一對一。
 
-Servlet Session 語意保留 Java。
+## 9. 學術依據
 
-### 錯誤 D
+SEDA：
 
-「所有東西 lock-free」
+Matt Welsh、David Culler、Eric Brewer，
+SEDA: An Architecture for Well-Conditioned, Scalable Internet Services，
+ACM SIGOPS Operating Systems Review 35(5), 2001, 230–243。
+DOI：https://doi.org/10.1145/502059.502057
 
-沒有 benchmark 與 memory reclamation（記憶體回收）證據不得採用。
+Capriccio：
 
-## 14. SEDA 是否採用
+Rob von Behren、Jeremy Condit、Feng Zhou、George C. Necula、Eric Brewer，
+Capriccio: Scalable Threads for Internet Services，
+SOSP 2003。
+DOI：https://doi.org/10.1145/945445.945471
 
-SEDA 論文確實提出 staged event-driven architecture（分段事件驅動架構），使用 stage、queue 與資源控制處理高並行網路服務。
+Timing Wheels：
 
-Ckarta 可以吸收：
+George Varghese、Tony Lauck，
+Hashed and Hierarchical Timing Wheels: Data Structures for the Efficient Implementation of a Timer Facility。
+DOI：https://doi.org/10.1145/41457.37504
 
-stage isolation（階段隔離）
-+
-bounded queue（有界佇列）
-+
-overload control（過載控制）
+Lock-free Hash Tables：
 
-但 Ckarta 不應宣稱自身是 SEDA implementation（SEDA 實作），除非實際實作其核心模型。
+Maged M. Michael，
+High Performance Dynamic Lock-Free Hash Tables and List-Based Sets。
+DOI：https://doi.org/10.1145/564870.564881
 
-學術來源：
+學術來源只用來支持模型與限制，不用來宣稱 Ckarta 已經具有同等效能。
 
-Matt Welsh, David Culler, Eric Brewer,
-"SEDA: An Architecture for Well-Conditioned, Scalable Internet Services"
+## 10. 進一步研究要求
 
-DOI:
-https://doi.org/10.1145/502059.502057
+正式實作前仍需完成：
 
-## 15. 事件驅動多處理器
+- connection state transition table
+- allocation／free map
+- blocking point map
+- lock／atomic operation map
+- JNI ownership model
+- AsyncContext cancellation model
+- request framing test corpus
+- TCK integration plan
+- reproducible benchmark harness
 
-事件驅動程式若要利用多處理器，必須控制事件之間的資料相依。
-
-可引用的學術來源：
-
-"Multiprocessor Support for Event-Driven Programs"
-USENIX Annual Technical Conference 2003
-
-https://www.usenix.org/conference/2003-usenix-annual-technical-conference/multiprocessor-support-event-driven-programs
-
-Ckarta 由 worker ownership 與分片開始，而不是共享全域狀態。
-
-## 16. C10K
-
-C10K 不是 peer-reviewed paper，因此本文件只把它作為歷史／工程背景資料，不把它列為主要學術證據。
-
-來源：
-https://kegel.com/c10k.html
-
-## 17. 目前 hot-path 結論
-
-### C 化
-
-明確通過：
-
-- TCP socket handling
-- event loop
-- HTTP parsing
-- TLS
-- connection state
-- request size checks
-- static file
-- reverse proxy
-- load balancing
-- output buffering
-- rate limiting
-- connection limiting
-
-### Java 保留
-
-明確通過：
-
-- Servlet API
-- Servlet lifecycle
-- Filter
-- Listener
-- Session
-- ServletContext
-- RequestDispatcher
-- AsyncContext
-- class loading
-- web application lifecycle
-
-### 條件化
-
-需要 benchmark／安全分析後決定：
-
-- cache metadata
-- compression
-- structured logging
-- metrics aggregation
-- advanced lock-free structures
-- timing wheel
-- shared-memory cross-worker state
-
-## 18. 後續逐函式研究範圍
-
-實作前應再建立 function-level trace（逐函式追蹤），至少包含：
-
-Nginx：
-
-ngx_process_events_and_timers
-→ ngx_process_events
-→ Linux epoll backend
-→ connection handler
-→ HTTP request processing
-→ upstream / static / output path
-
-Tomcat：
-
-NioEndpoint.Poller
-→ SocketProcessor
-→ protocol processing
-→ CoyoteAdapter
-→ Container pipeline
-→ Wrapper／Servlet invocation
-→ async dispatch
-
-逐函式研究的目的不是複製程式碼，而是建立：
-
-- ownership map
-- state transition map
-- allocation map
-- blocking points
-- lock／atomic points
-- JNI crossing candidates
-- error propagation
-- cancellation points
-
-## 19. 基線聲明
-
-本文件所有「存在」的原始碼路徑都應以其官方 repository 目前可查版本為準。
-
-未在本文件明確列出的函式，不得在後續文件中宣稱已核對。
+以上每一項都必須以固定 upstream commit 與 Ckarta commit 為版本基準。

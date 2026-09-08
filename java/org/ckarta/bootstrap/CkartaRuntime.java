@@ -77,7 +77,8 @@ public final class CkartaRuntime
 		System.out.println("CKARTA_JAVA_STOP");
 	}
 
-	public static void dispatchAsync(long requestHandle, ByteBuffer data)
+	public static void dispatchAsync(long requestHandle, long ownerToken,
+		long lifetimeToken, ByteBuffer data)
 	{
 		ThreadPoolExecutor currentExecutor;
 		ArrayBlockingQueue<CompletionRecord> currentCompletions;
@@ -117,7 +118,7 @@ public final class CkartaRuntime
 				}
 
 				if (!currentCompletions.offer(
-						new CompletionRecord(requestHandle, result, status)))
+						new CompletionRecord(requestHandle, ownerToken, lifetimeToken, result, status)))
 				{
 					if (currentOverflow != null)
 					{
@@ -129,7 +130,7 @@ public final class CkartaRuntime
 		catch (RejectedExecutionException exception)
 		{
 			if (!currentCompletions.offer(
-					new CompletionRecord(requestHandle, 0L, -2))
+					new CompletionRecord(requestHandle, ownerToken, lifetimeToken, 0L, -2))
 				&& currentOverflow != null)
 			{
 				currentOverflow.set(true);
@@ -139,7 +140,7 @@ public final class CkartaRuntime
 
 	public static int pollCompletion(ByteBuffer output)
 	{
-		if (output == null || !output.isDirect() || output.capacity() < 20)
+		if (output == null || !output.isDirect() || output.capacity() < 36)
 		{
 			throw new IllegalArgumentException("completion output buffer");
 		}
@@ -174,12 +175,15 @@ public final class CkartaRuntime
 
 		output.order(ByteOrder.nativeOrder());
 		output.putLong(0, completion.requestHandle());
-		output.putLong(8, completion.result());
-		output.putInt(16, completion.status());
+		output.putLong(8, completion.ownerToken());
+		output.putLong(16, completion.lifetimeToken());
+		output.putLong(24, completion.result());
+		output.putInt(32, completion.status());
 		return 1;
 	}
 
-	private record CompletionRecord(long requestHandle, long result, int status)
+	private record CompletionRecord(long requestHandle, long ownerToken,
+		long lifetimeToken, long result, int status)
 	{
 	}
 }

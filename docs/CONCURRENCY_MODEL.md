@@ -9,6 +9,8 @@ one JVM process（單一 JVM 程序）
 C event worker threads（C 事件工作者執行緒）
 +
 Java Servlet executor threads（Java Servlet 執行器執行緒）
++
+JVM bootstrap thread（JVM 啟動執行緒）
 
 這不是「所有工作都在事件迴圈」。
 
@@ -24,6 +26,8 @@ C worker 擁有：
 同一 connection 原則上由固定 owner worker 推進。
 
 worker 間避免共享可變 connection state。
+
+C main／control thread 擁有 process lifecycle；bootstrap thread 負責 `JNI_CreateJavaVM()` 及其明確的 JVM startup／handoff（啟動／交接）責任。
 
 ## 3. Java
 
@@ -52,11 +56,13 @@ header byte
 → next header byte
 → Java
 
+`JNIEnv*` 是 thread-local（執行緒區域）介面；不得在 C workers 之間共享。需要進入 JVM 的 native worker 必須按 Invocation API attach／detach 規則管理自己的 `JNIEnv*`。
+
 ## 5. Worker ownership
 
 使用 worker ownership 主要是降低 shared mutable state（共享可變狀態）。
 
-這與 Zeldovich 等人的事件驅動多處理器研究相符：平行化的關鍵之一是找出不共享可變狀態的工作單元。
+這與 Zeldovich 等人的事件驅動多處理器研究相符：可將沒有共享可變狀態的工作單元以較粗粒度方式平行化，而避免不必要的 fine-grained synchronization（細粒度同步）。
 
 來源：
 
@@ -112,13 +118,24 @@ Java executor：
 跨界事件：
 completion record（完成記錄）。
 
+JVM bootstrap thread：
+只在啟動／停止協定需要時進行 JVM lifecycle coordination，不取代 C worker 的 network data-plane ownership。
+
 ## 10. 關閉
 
 shutdown 時：
 
 停止新 dispatch
-→ 等待／取消 Java task
+→ 停止／排空 Java task
 → 完成 async cancellation
-→ 關閉 C connection
-→ 結束 C worker
-→ JVM shutdown
+→ 關閉 C connections
+→ 等待／停止 JNI-attached native threads
+→ DestroyJavaVM
+→ join bootstrap thread／其他受控執行緒
+→ native cleanup
+
+OpenJDK 21 Invocation API 規定 `DestroyJavaVM()` 會等待 non-daemon threads，因此 shutdown 必須先使 JNI-attached thread 的生命週期可控。
+
+來源：
+
+https://docs.oracle.com/en/java/javase/21/docs/specs/jni/invocation.html

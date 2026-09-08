@@ -24,7 +24,7 @@ C main / control thread
 
 前一版曾暫偏向讓所有 C worker 經 central JNI bridge；經 gateway／Servlet／HotSpot 邊界研究與實際 microbenchmark 後，該選擇不再視為先驗決策。正式候選至少包括：
 
-A. stable C worker 一次 `AttachCurrentThread()`，長期重用自身 `JNIEnv*`；
+A. C worker 可長期 attach JVM，但只允許執行非 Servlet application code 的 JNI 控制／提交操作；不得在 C event-loop thread 上直接執行 Servlet application code。
 
 B. worker group 對應受控 JNI bridge，避免中央 queue 將所有 request 集中序列化；
 
@@ -72,16 +72,16 @@ OpenJDK 21 規定 `JNIEnv*` 只對目前 thread 有效；需要操作 JVM 的 na
 
 ## 4. Request 資料流
 
-direct attach 候選：
+attached submission 候選：
 
 ```text
-C worker
+C worker event loop
   → HTTP parse complete
   → canonical C request
   → opaque request handle
-  → JNI call on worker-owned attached thread
-  → Java request facade
-  → Java executor / Servlet
+  → JNI submission/control call on an attached worker
+  → Java executor
+  → Servlet application code
   → response descriptor
   → C worker event loop
 ```
@@ -114,7 +114,7 @@ queue 飽和時不能無限配置 request object；應回傳可觀測的 overloa
 
 JNI bridge → C worker 的 completion queue 同樣必須有界；completion 無法交付時必須有明確 failure／cancellation policy，不能靜默遺失 request ownership。
 
-direct attach 路徑雖無 bridge queue，仍必須有 Java executor 的有界資源控制；不可因移除一層 queue 就取消 backpressure。
+attached-submission 路徑若由 C worker 直接呼叫 Java executor 仍必須有 Java executor 的有界資源控制；而 Servlet application code 只能由 Java executor／container thread 執行，不得在 C event-loop thread 上執行。
 
 ## 6. Thread affinity 與 JNI
 
@@ -146,11 +146,12 @@ stop admission
   → DestroyJavaVM
 ```
 
-若採 direct attach：
+若採 attached submission：
 
 ```text
 共同部分
   → stop Java dispatch from workers
+  → ensure no attached worker remains in JNI call
   → detach worker JNI attachments
   → terminate Java container
   → DestroyJavaVM
@@ -232,7 +233,7 @@ https://github.com/openjdk/jdk21u/blob/jdk-21.0.8-ga/src/hotspot/share/runtime/j
 
 在正式固定 thread count 與 topology 前，必須 benchmark：
 
-1. stable C worker long-lived direct attach。
+1. C worker attached submission。
 2. per-worker／worker-group JNI bridge。
 3. central JNI bridge thread pool。
 4. 不同 C worker 數與 bridge thread 數的組合。

@@ -125,3 +125,19 @@ third_party/tomcat/
 docs/
 
 不得把第三方程式碼、研究結論與 Ckarta 已實作能力混成同一類。
+
+## 10. Thread model 文件位置
+
+docs/THREAD_MODEL.md 是 Ckarta thread model（執行緒模型）的權威研究文件，集中保存：
+
+- C main／control thread
+- JVM bootstrap thread
+- C worker threads
+- JNI bridge thread／pool
+- Java Servlet executor threads
+- thread ownership 與 JNI attachment
+- queue／backpressure
+- shutdown／join 約束
+- 尚待 benchmark 驗證的 thread 數量方案
+
+新工作階段應先讀取 `WORKING_RULES.md` 與該文件，才能判斷目前 thread model 的實際決策狀態。

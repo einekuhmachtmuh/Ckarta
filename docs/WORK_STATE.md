@@ -164,3 +164,9 @@ PR #2 已於 2026-09-08 squash-merge 至 `main`，merge commit `2638bc5017093b5f
 ## 16. CGI/FastCGI 模組化決策
 
 2026-09-08：CGI/FastCGI 正式定位為未來可掛接 application gateway module，不納入核心 request execution。效能研究已把「不存在／存在未命中／實際命中」三種成本分離；學術比較顯示 CGI 的 process creation 是結構性成本，FastCGI 將其移至長生命週期 application process。尚未實作 module loader、CGI process lifecycle 或 FastCGI client。
+
+## 17. 2026-09-08 CGI 模組與非阻塞交接狀態
+
+CGI/FastCGI 已正式定位為未來可掛接 application gateway module，不進核心 request execution；完整效能比較見 docs/CGI_FASTCGI_RESEARCH.md。
+
+Java executor handoff 的 v2 smoke slice 使用 bounded Java completion queue，C 不再 Future.get() 阻塞。PR #8 的最新 CI 正在／尚待最終驗證；在 CI 成功前不得視為主線完成。

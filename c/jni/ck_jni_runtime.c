@@ -230,7 +230,6 @@ static void *ck_worker_main(void *arg)
 	{
 		worker->result = result;
 		return NULL;
-		return NULL;
 	}
 
 	worker->result = 0;

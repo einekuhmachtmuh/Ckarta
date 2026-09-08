@@ -476,3 +476,42 @@ Ckarta 程式碼不得在沒有架構決策記錄的情況下直接複製 upstre
 └── tools/
 
 除 WORKING_RULES.md、README.md、CI／repository metadata 外，一般長篇架構與研究文件集中於 docs/。
+
+
+## 33. 程式程序進入點
+
+正式產品程序唯一外部進入點為 C 的 main()。
+
+C main() 負責：
+
+- 程序級命令列處理
+- 初始設定載入
+- 原生資源初始化
+- JVM 啟動協調
+- C 網路資料平面初始化
+- 生命週期與停止協調
+
+Java 的 public static void main(String[]) 不得作為 Ckarta 正式產品程序入口。
+
+Java main-class 可以存在於測試、工具或獨立開發程式，但不得成為正式 Ckarta server（伺服器）程序的第一入口。
+
+JVM 必須由 C 透過 JNI Invocation API（JNI 虛擬機器啟動介面）建立。
+
+不得在 C fork（建立子程序）之後繼承一個已啟動的 JVM；任何多程序 JVM 模型都必須先另行完成 fork／JVM initialization（JVM 初始化）安全性研究與測試。
+
+C main 的正式啟動順序必須由 docs/ENTRYPOINT_DESIGN.md 定義。
+
+## 34. 啟動邊界
+
+C main、JVM bootstrap（JVM 啟動）、C worker（C 工作者）與 Java Servlet executor（Java Servlet 執行器）是四個不同概念。
+
+不得把：
+
+- main thread（主執行緒）
+- event-loop thread（事件迴圈執行緒）
+- Java Servlet executor thread（Java Servlet 執行器執行緒）
+- worker process（工作者程序）
+
+視為同一物件。
+
+任何 JNI AttachCurrentThread（附加目前執行緒）操作都必須有明確 thread lifetime（執行緒生命週期）與 detach（脫離）規則。

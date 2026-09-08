@@ -95,15 +95,13 @@ Codex 本機測試環境：
 
 依優先序：
 
-1. 最小 Ckarta build system。
-2. 真正 C `main()` 與 bootstrap thread。
-3. ready/error handoff。
-4. JNI boundary 的正式 ownership／cancellation ABI。
-5. Java bootstrap API 最小公開邊界。
-6. shutdown／join 可執行測試。
-7. 再把 thread benchmark 接到真實 Ckarta request path。
+1. 將 request lifecycle ABI 接入真正 Java Servlet request／response facade。
+2. 實作 Servlet AsyncContext 與 C connection cancellation 的跨層整合。
+3. 建立 bounded JNI queue／completion queue 的正式 ownership contract。
+4. 將 direct attach、worker-group bridge、central bridge pool 接到相同 canonical request workload。
+5. 執行 p50／p95／p99、queue wait、JNI latency、Java scheduling、allocation／GC、CPU utilization 與 memory footprint benchmark。
 
-不得因 benchmark harness 或研究文件已存在而宣稱正式 Ckarta runtime 已實作。
+不得因 smoke harness 或局部 lifecycle test 已存在而宣稱正式 Servlet runtime、AsyncContext cancellation 或最終 thread topology 已實作／定案。
 
 ## 8. 新工作階段接手規則
 
@@ -118,17 +116,13 @@ Codex 本機測試環境：
 7. 與當前任務直接相關的架構／JNI／lifecycle 文件
 8. 必要時重新核對固定版本 Nginx、Tomcat、OpenJDK 與學術來源
 
-## 9. 本次 OpenJDK 21u 版本稽核結果
+## 9. OpenJDK 21u 版本稽核結果
 
-固定 `jdk-21.0.8-ga` 與 `jdk-21.0.11-ga` 後，核心 `runtime/javaCalls.cpp` blob SHA 相同，確認 JNI method invocation 所依賴的 `JavaCalls::call` machinery 在這兩個 update 間沒有變更。
+固定 `jdk-21.0.8-ga` 與 `jdk-21.0.11-ga` 後，核心 `runtime/javaCalls.cpp` blob SHA 相同；`prims/jni.cpp` 的差異未改動本專案依賴的 JNI invocation、object construction、DirectByteBuffer 路徑。權威稽核見 `docs/OPENJDK_21U_SOURCE_AUDIT.md`。
 
-`prims/jni.cpp` 的 compare 只有 6 行 change：copyright 年份及一處不可達 lint-noise return；未改動本專案所依賴的 JNI invocation、object construction、DirectByteBuffer 相關路徑。
+因此 architecture-level JNI path 已可定案；absolute performance 仍須 exact-build benchmark。
 
-因此「OpenJDK update 版本不同導致 architecture claim 無法定案」可以解除；現在僅剩 implementation-specific absolute performance 必須以實際 exact build benchmark 定量。
-
-權威稽核見 `docs/OPENJDK_21U_SOURCE_AUDIT.md`。
-
-## 10. 本次 executable vertical slice
+## 10. Executable bootstrap／JNI slice
 
 已建立 PR `#1`（branch `codex/bootstrap-jdk21-audit`），包含最小可執行：
 
@@ -147,3 +141,7 @@ PR #1 已合併至 `main`，merge commit `e501249ce91fd7c76c6625f1826ec0240d4d7d
 ## 11. 最新規則與 ABI 進度
 
 2026-09-08：`WORKING_RULES.md` 新增「精簡與整合檢查」及變數／欄位／狀態／handle／buffer reference 的 lifecycle／ownership 檢查，並完成自檢。JNI ownership/cancellation ABI 已進入可執行實作：process-local descriptor、owner/lifetime token、atomic lifecycle state、idempotent cancellation 與 lifecycle test 均已加入；真正 AsyncContext／connection cancellation integration 仍待完成。
+
+## 11. 最新 ABI 進度
+
+PR #2 已於 2026-09-08 squash-merge 至 `main`，merge commit `2638bc5017093b5f6e28478c347c95b77009a8cc`。其 CI 已驗證 request lifecycle ABI、JNI dispatch、DirectByteBuffer 與 shutdown smoke path；下一階段是把此 process-local lifecycle model 接入真正 Servlet AsyncContext／connection ownership。

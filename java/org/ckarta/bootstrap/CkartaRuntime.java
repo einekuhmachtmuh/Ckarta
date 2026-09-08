@@ -175,7 +175,7 @@ public final class CkartaRuntime
 		output.order(ByteOrder.nativeOrder());
 		output.putLong(0, completion.requestHandle());
 		output.putLong(8, completion.result());
-		output.putInt(12, completion.status());
+		output.putInt(16, completion.status());
 		return 1;
 	}
 

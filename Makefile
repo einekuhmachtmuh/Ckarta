@@ -24,9 +24,9 @@ $(CLASS_STAMP): $(JAVA_SOURCES)
 	javac --release 21 -d $(CLASS_DIR) $(JAVA_SOURCES)
 	@touch $@
 
-$(TARGET): c/core/main.c c/jni/ck_jni_runtime.c c/jni/ck_jni_runtime.h c/jni/ck_request.c c/jni/ck_request.h classes
+$(TARGET): c/core/main.c c/jni/ck_jni_runtime.c c/jni/ck_jni_runtime.h c/jni/ck_request.c c/jni/ck_request.h c/jni/ck_completion.c c/jni/ck_completion.h classes
 	@mkdir -p $(BIN_DIR)
-	$(CC) $(CFLAGS) $(CPPFLAGS) c/core/main.c c/jni/ck_jni_runtime.c c/jni/ck_request.c -o $@ $(LDFLAGS)
+	$(CC) $(CFLAGS) $(CPPFLAGS) c/core/main.c c/jni/ck_jni_runtime.c c/jni/ck_request.c c/jni/ck_completion.c -o $@ $(LDFLAGS)
 
 $(ABI_TEST): tests/request_lifecycle_test.c c/jni/ck_request.c c/jni/ck_request.h
 	@mkdir -p $(BIN_DIR)

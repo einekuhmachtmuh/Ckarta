@@ -139,7 +139,7 @@ public final class CkartaRuntime
 
 	public static int pollCompletion(ByteBuffer output)
 	{
-		if (output == null || !output.isDirect() || output.capacity() < 16)
+		if (output == null || !output.isDirect() || output.capacity() < 20)
 		{
 			throw new IllegalArgumentException("completion output buffer");
 		}

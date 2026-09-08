@@ -88,6 +88,7 @@ static void *ck_bootstrap_main(void *arg)
 	jint create_result;
 	int start_status;
 	int option_length;
+	int option_length;
 
 	option_length = snprintf(option_string, sizeof(option_string),
 			"-Djava.class.path=%s", runtime->class_path);

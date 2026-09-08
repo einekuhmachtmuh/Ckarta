@@ -253,3 +253,7 @@ Java executor thread 必須承擔 Servlet application execution；C event-loop t
 ## 14. Completion routing
 
 Java executor thread 的完成事件不直接取得 connection ownership。completion publication 必須只攜帶 process-local token／識別，C router 再依 request ownership 將事件交給唯一 owner worker。任何通知 callback 或 polling path 都不得延長已結束 request 的生命週期。
+
+## 15. Cross-platform notification
+
+Linux candidate：eventfd + epoll；Windows candidate：IOCP + PostQueuedCompletionStatus。兩者都只作 wake-up／notification，completion queue 才是 request correctness 的來源。通知可 coalesce；不能把 wake-up 次數當成 completion 次數。

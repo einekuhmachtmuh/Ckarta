@@ -6,6 +6,7 @@
 typedef struct ck_config
 {
 	char *class_path;
+	int class_path_configured;
 } ck_config_t;
 
 typedef int (*ck_config_directive_handler_pt)(

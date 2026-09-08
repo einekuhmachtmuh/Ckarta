@@ -389,29 +389,6 @@ int ck_runtime_init(ck_runtime_t *runtime, const char *class_path)
 	return 0;
 }
 
-int ck_runtime_dispatch_async_smoke(ck_runtime_t *runtime,
-		ck_request_t *request)
-{
-	struct ck_worker_args worker;
-	int result;
-
-	if (runtime == NULL || request == NULL)
-	{
-		return -1;
-	}
-
-	memset(&worker, 0, sizeof(worker));
-	worker.runtime = runtime;
-	worker.request = request;
-
-	result = pthread_create(&runtime->worker_thread, NULL, ck_worker_main, &worker);
-	if (result != 0)
-	{
-		return result;
-	}
-
-	return pthread_join(runtime->worker_thread, NULL) == 0 ? 0 : -1;
-}
 int ck_runtime_shutdown(ck_runtime_t *runtime)
 {
 	pthread_mutex_lock(&runtime->lock);

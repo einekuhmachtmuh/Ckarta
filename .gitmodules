@@ -1,0 +1,6 @@
+[submodule "third_party/nginx"]
+	path = third_party/nginx
+	url = https://github.com/nginx/nginx.git
+[submodule "third_party/tomcat"]
+	path = third_party/tomcat
+	url = https://github.com/apache/tomcat.git

@@ -52,7 +52,9 @@ Nginx 與 Apache Tomcat 不直接複製進 Ckarta repository，而是以 Git sub
 - docs/GATEWAY_SERVLET_NATIVE_BRIDGE_RESEARCH.md：CGI／FastCGI／Tomcat Servlet／CGIServlet／OpenJDK HotSpot／Ckarta JNI 邊界研究。
 - docs/OPENJDK_21U_SOURCE_AUDIT.md：固定 JDK 21u tags 的 HotSpot source audit，核對 21.0.8 與 21.0.11 對 JNI 研究結論的實際影響。
 - docs/SERVLET_6_1_CRITIQUE.md：Servlet 6.1、Nginx、Tomcat 與 Web server 理論的中立技術批判及 Ckarta 相容性策略。
-- docs/CGI_FASTCGI_RESEARCH.md：CGI/1.1、FastCGI、PHP-FPM、Tomcat CGIServlet 與外部程式閘道可行性研究。
+- docs/CGI_FASTCGI_RESEARCH.md
+- docs/WIN32_PORTABILITY_AND_IO_RESEARCH.md
+- docs/COMPLETION_NOTIFICATION_RESEARCH.md：CGI/1.1、FastCGI、PHP-FPM、Tomcat CGIServlet 與外部程式閘道可行性研究。
 - docs/WEB_SERVER_THEORY_SERVLET_NGINX.md：Jakarta Servlet 6.1、Nginx、Tomcat 與 Web server 排隊／並行理論的架構比較。
 - docs/CANCELLATION_MODEL.md：連線、Servlet 非同步與 JNI 取消語意。
 - docs/JNI_ABI.md：JNI 邊界與所有權門檻。

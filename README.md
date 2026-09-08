@@ -45,6 +45,7 @@ Nginx 與 Apache Tomcat 不直接複製進 Ckarta repository，而是以 Git sub
 - docs/HTTP_FRAMING_POLICY.md：HTTP/1.1 framing（訊息框架）權威解析政策。
 - docs/CONCURRENCY_MODEL.md：C 事件並行與 Java Servlet 執行模型。
 - docs/THREAD_MODEL.md：C worker、JVM bootstrap、JNI bridge 與 Java executor 的 thread model（執行緒模型）研究基線。
+- docs/THREAD_BENCHMARK_PLAN.md：direct attach／JNI bridge／bridge pool 的可重現比較計畫。
 - docs/CANCELLATION_MODEL.md：連線、Servlet 非同步與 JNI 取消語意。
 - docs/JNI_ABI.md：JNI 邊界與所有權門檻。
 - docs/JNI_COST_MODEL.md：OpenJDK 21 JNI 跨語言成本模型與 C struct → Java object 策略。
@@ -53,6 +54,8 @@ Nginx 與 Apache Tomcat 不直接複製進 Ckarta repository，而是以 Git sub
 - docs/REFERENCE_SOURCES.md：參考原始碼版本、commit、授權與研究規則。
 - docs/WORKING_TREE.md：實際 repository 工作樹規劃。
 - docs/WORK_STATE.md：跨對話可接手的工程現況、已驗證事項與下一個工程閘門。
+
+`bench/jni/` 是獨立 JNI/thread microbenchmark（微基準測試）資產，不代表正式 Ckarta runtime 已實作。
 
 ## 參考原始碼版本
 

@@ -97,16 +97,18 @@ static int apply_class_path(void *data, size_t argc,
 
 int main(int argc, char **argv)
 {
-	const unsigned char body[] = "ckarta-jni-smoke";
+	const unsigned char body_one[] = "ckarta-jni-smoke-one";
+	const unsigned char body_two[] = "ckarta-jni-smoke-two";
 	const char *config_path = CKARTA_DEFAULT_CONFIG_PATH;
 	ck_config_t config;
-	ck_request_descriptor_t descriptor;
-	ck_request_t request;
+	ck_request_descriptor_t descriptors[2];
+	ck_request_t requests[2];
 	char config_error[512];
 	int test_only = 0;
 	int dump_config = 0;
 	int result;
 	int completion_result;
+	int completed_count = 0;
 
 	result = parse_arguments(argc, argv, &config_path,
 			&test_only, &dump_config);
@@ -161,20 +163,35 @@ int main(int argc, char **argv)
 		return EXIT_SUCCESS;
 	}
 
-	memset(&descriptor, 0, sizeof(descriptor));
-	descriptor.abi_version = CK_JNI_ABI_VERSION;
-	descriptor.struct_size = sizeof(descriptor);
-	descriptor.feature_flags = CK_REQUEST_FEATURE_DIRECT_BUFFER;
-	descriptor.ownership_flags = CK_REQUEST_OWNS_NATIVE_STORAGE |
-			CK_REQUEST_JAVA_BORROWS_BUFFER;
-	descriptor.owner_token = 1;
-	descriptor.lifetime_token = 1;
-	descriptor.request_id = UINT64_C(0xC4A7A);
-	descriptor.body = body;
-	descriptor.body_length = sizeof(body) - 1;
+	memset(descriptors, 0, sizeof(descriptors));
 
-	result = ck_request_init(&request, &descriptor);
-	if (check_result("REQUEST_INIT", result) != 0)
+	descriptors[0].abi_version = CK_JNI_ABI_VERSION;
+	descriptors[0].struct_size = sizeof(descriptors[0]);
+	descriptors[0].feature_flags = CK_REQUEST_FEATURE_DIRECT_BUFFER;
+	descriptors[0].ownership_flags = CK_REQUEST_OWNS_NATIVE_STORAGE |
+			CK_REQUEST_JAVA_BORROWS_BUFFER;
+	descriptors[0].owner_token = 1;
+	descriptors[0].lifetime_token = 11;
+	descriptors[0].request_id = UINT64_C(0xC4A7A);
+	descriptors[0].body = body_one;
+	descriptors[0].body_length = sizeof(body_one) - 1;
+
+	descriptors[1] = descriptors[0];
+	descriptors[1].owner_token = 2;
+	descriptors[1].lifetime_token = 22;
+	descriptors[1].request_id = UINT64_C(0xC4A7B);
+	descriptors[1].body = body_two;
+	descriptors[1].body_length = sizeof(body_two) - 1;
+
+	result = ck_request_init(&requests[0], &descriptors[0]);
+	if (check_result("REQUEST_INIT_1", result) != 0)
+	{
+		ck_config_destroy(&config);
+		return EXIT_FAILURE;
+	}
+
+	result = ck_request_init(&requests[1], &descriptors[1]);
+	if (check_result("REQUEST_INIT_2", result) != 0)
 	{
 		ck_config_destroy(&config);
 		return EXIT_FAILURE;
@@ -187,7 +204,7 @@ int main(int argc, char **argv)
 		return EXIT_FAILURE;
 	}
 
-	result = ck_runtime_dispatch_async_smoke(&runtime, &request);
+	result = ck_runtime_dispatch_async_smoke(&runtime, requests, 2);
 	if (check_result("DISPATCH_SUBMIT", result) != 0)
 	{
 		ck_runtime_shutdown(&runtime);
@@ -198,12 +215,16 @@ int main(int argc, char **argv)
 
 	do
 	{
-		completion_result = ck_runtime_poll_completion(&runtime, &request);
-		if (completion_result == 0)
+		completion_result = ck_runtime_poll_completion(&runtime, requests, 2);
+		if (completion_result == 1)
+		{
+			completed_count++;
+		}
+		else if (completion_result == 0)
 		{
 			sched_yield();
 		}
-	} while (completion_result == 0);
+	} while (completion_result == 0 || completed_count < 2);
 
 	result = completion_result == 1 ? 0 : -1;
 	if (check_result("DISPATCH", result) != 0)

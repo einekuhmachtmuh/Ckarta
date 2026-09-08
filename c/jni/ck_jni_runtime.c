@@ -257,7 +257,7 @@ int ck_runtime_poll_completion(ck_runtime_t *runtime, ck_request_t *request)
 	jclass runtime_class;
 	jmethodID method;
 	jobject output;
-	unsigned char storage[16];
+	unsigned char storage[20];
 	void *native_output;
 	jint poll_result;
 	jlong request_handle;

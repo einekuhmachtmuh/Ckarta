@@ -120,3 +120,10 @@ OpenJDK 21 成本基線與 API 比較見 docs/JNI_COST_MODEL.md；fixed-tag HotS
 thread model 的 direct-attach 與 JNI bridge 差異見 docs/THREAD_MODEL.md。
 
 該文件把 OpenJDK 21 原始碼分析、歷史 JNI benchmark 與本機 sanity test 分開；未完成 Ckarta 自有 benchmark 前，不得宣稱某 JNI API 或 thread topology 更快。
+
+
+## 15. Executor handoff slice
+
+目前 executable slice 的 dispatch 會先進入 Java ThreadPoolExecutor，再由 executor thread 建立 NativeRequest 並執行 smoke workload；C 端等待結果只是同步驗證方式，不得作為 production event-loop API。
+
+Java executor 必須使用有界容量；飽和時不得 fallback 到 C event-loop thread 執行 Servlet application。

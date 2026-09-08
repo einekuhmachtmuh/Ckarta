@@ -1,13 +1,24 @@
 package org.ckarta.bootstrap;
 
 import java.nio.ByteBuffer;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 
 import org.ckarta.connector.NativeRequest;
 
-/** Minimal Java-side bootstrap boundary used by the native startup smoke test. */
+/**
+ * Minimal Java-side bootstrap boundary used by the native startup smoke test.
+ */
 public final class CkartaRuntime
 {
-	private static volatile boolean running;
+	private static final Object EXECUTOR_LOCK = new Object();
+	private static final int EXECUTOR_QUEUE_CAPACITY = 16;
+
+	private static ThreadPoolExecutor executor;
 
 	private CkartaRuntime()
 	{
@@ -15,29 +26,114 @@ public final class CkartaRuntime
 
 	public static void start()
 	{
-		running = true;
+		synchronized (EXECUTOR_LOCK)
+		{
+			if (executor == null)
+			{
+				executor = new ThreadPoolExecutor(
+						1,
+						1,
+						0L,
+						TimeUnit.MILLISECONDS,
+						new ArrayBlockingQueue<>(EXECUTOR_QUEUE_CAPACITY),
+						new ThreadPoolExecutor.AbortPolicy());
+			}
+		}
 		System.out.println("CKARTA_JAVA_READY");
 	}
 
 	public static void stop()
 	{
-		running = false;
+		ThreadPoolExecutor currentExecutor;
+		synchronized (EXECUTOR_LOCK)
+		{
+			currentExecutor = executor;
+			executor = null;
+		}
+
+		if (currentExecutor != null)
+		{
+			currentExecutor.shutdown();
+			try
+			{
+				if (!currentExecutor.awaitTermination(5, TimeUnit.SECONDS))
+				{
+					currentExecutor.shutdownNow();
+				}
+			}
+			catch (InterruptedException exception)
+			{
+				currentExecutor.shutdownNow();
+				Thread.currentThread().interrupt();
+			}
+		}
 		System.out.println("CKARTA_JAVA_STOP");
 	}
 
 	public static long dispatch(long requestHandle, ByteBuffer data)
 	{
-		if (!running)
+		ThreadPoolExecutor currentExecutor;
+		synchronized (EXECUTOR_LOCK)
+		{
+			currentExecutor = executor;
+		}
+
+		if (currentExecutor == null)
 		{
 			throw new IllegalStateException("Ckarta runtime is not running");
 		}
 
-		NativeRequest request = new NativeRequest(requestHandle, data);
-		if (!request.data().isDirect())
+		final long callerThreadId = Thread.currentThread().getId();
+		final Future<Long> completion;
+		try
 		{
-			throw new IllegalArgumentException("native request data must be direct");
+			completion = currentExecutor.submit(() ->
+			{
+				if (Thread.currentThread().getId() == callerThreadId)
+				{
+					throw new IllegalStateException(
+							"Servlet execution remained on JNI caller thread");
+				}
+
+				NativeRequest request = new NativeRequest(requestHandle, data);
+				if (!request.data().isDirect())
+				{
+					throw new IllegalArgumentException(
+							"native request data must be direct");
+				}
+
+				return request.handle() + request.data().remaining();
+			});
+		}
+		catch (RejectedExecutionException exception)
+		{
+			throw new IllegalStateException("Java request executor is saturated",
+					exception);
 		}
 
-		return request.handle() + request.data().remaining();
+		try
+		{
+			/*
+			 * This blocking wait is only part of the executable smoke slice.
+			 * The production C event loop must use a non-blocking completion path.
+			 */
+			return completion.get();
+		}
+		catch (InterruptedException exception)
+		{
+			completion.cancel(true);
+			Thread.currentThread().interrupt();
+			throw new IllegalStateException(
+					"Interrupted while awaiting Java request completion", exception);
+		}
+		catch (ExecutionException exception)
+		{
+			Throwable cause = exception.getCause();
+			if (cause instanceof RuntimeException runtimeException)
+			{
+				throw runtimeException;
+			}
+			throw new IllegalStateException("Java request execution failed", cause);
+		}
 	}
 }

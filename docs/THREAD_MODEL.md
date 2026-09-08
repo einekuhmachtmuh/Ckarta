@@ -242,3 +242,10 @@ https://github.com/openjdk/jdk21u/blob/jdk-21.0.8-ga/src/hotspot/share/runtime/j
 7. shutdown、cancellation、AsyncContext、connection ownership。
 
 任何「bridge 比 direct attach 快／慢」的結論，都必須以 Ckarta + OpenJDK 21 可重現 benchmark 證明。
+
+
+## 13. Servlet compatibility constraint
+
+Java executor thread 必須承擔 Servlet application execution；C event-loop thread 不得因 direct attach 而繞過 executor 直接執行 Servlet application。
+
+這是 Servlet-compatible architecture 的硬邊界，不是效能偏好。attached worker candidate 只可負責 JNI control／submission。

@@ -157,3 +157,10 @@ OpenJDK 21 Invocation API 規定 `DestroyJavaVM()` 會等待 non-daemon threads�
 來源：
 
 https://docs.oracle.com/en/java/javase/21/docs/specs/jni/invocation.html
+
+
+## 11. Servlet 6.1 implementation freedom
+
+Servlet 6.1 的 externally visible semantics 與 internal scheduling strategy 分離。Ckarta 可用 C event-driven scheduling 提供 input/output readiness，再由 Java executor 執行 Servlet application。
+
+不得為符合規格而把 HTTP socket readiness 或 native connection state 暴露給 Servlet application。

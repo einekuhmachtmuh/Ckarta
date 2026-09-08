@@ -459,3 +459,18 @@ https://doi.org/10.1145/502059.502057
 Little 定律 L = λW 顯示每個新增的跨層階段都可能增加服務時間與等待時間；因此 Ckarta 不以「把更多工作搬到 C」作為目標，而以最小化跨界次數、跨界資料量與有界排隊為目標。
 
 Servlet 6.1 的 AsyncContext 與 non-blocking I/O 使 Java application 可以把等待與 request execution 分離；因此 C 資料平面應負責高密度 I/O／connection scheduling，而 Java 保留 Servlet semantics。完整理論分析見 docs/WEB_SERVER_THEORY_SERVLET_NGINX.md。
+
+
+## 23. Servlet 6.1 中立批判後的相容性方向
+
+Ckarta 的 Servlet 6.1 目標不變，但規格只約束 application-facing API 與 container semantics，不應支配整個 Web server 的內部 execution architecture。
+
+允許的內部分離：
+
+C event-driven network data plane
+→ bounded semantic handoff
+→ Java Servlet semantic plane
+
+Servlet 6.1 的 Request／Response、Filter、Listener、Session、RequestDispatcher、AsyncContext 與 non-blocking I/O 語意必須保持；其 Java object model、blocking request style 與 callback 實作方式不必成為 C 資料平面的內部表示。
+
+完整批判研究見 docs/SERVLET_6_1_CRITIQUE.md。

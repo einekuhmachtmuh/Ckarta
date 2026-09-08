@@ -48,6 +48,7 @@ Nginx 與 Apache Tomcat 不直接複製進 Ckarta repository，而是以 Git sub
 - docs/THREAD_BENCHMARK_PLAN.md：direct attach／JNI bridge／bridge pool 的可重現比較計畫。
 - docs/GATEWAY_SERVLET_NATIVE_BRIDGE_RESEARCH.md：CGI／FastCGI／Tomcat Servlet／CGIServlet／OpenJDK HotSpot／Ckarta JNI 邊界研究。
 - docs/OPENJDK_21U_SOURCE_AUDIT.md：固定 JDK 21u tags 的 HotSpot source audit，核對 21.0.8 與 21.0.11 對 JNI 研究結論的實際影響。
+- docs/WEB_SERVER_THEORY_SERVLET_NGINX.md：Jakarta Servlet 6.1、Nginx、Tomcat 與 Web server 排隊／並行理論的架構比較。
 - docs/CANCELLATION_MODEL.md：連線、Servlet 非同步與 JNI 取消語意。
 - docs/JNI_ABI.md：JNI 邊界與所有權門檻。
 - docs/JNI_COST_MODEL.md：OpenJDK 21 JNI 跨語言成本模型與 C struct → Java object 策略。
@@ -71,7 +72,7 @@ OpenJDK 21 JNI 研究基線：`jdk-21.0.8-ga`；另以 `jdk-21.0.11-ga` 做 fixe
 
 正式 Ckarta server 入口為 C `main()`；由受控的專用 bootstrap thread（啟動執行緒）透過 JNI Invocation API 建立 JVM，而不是直接在 primordial process thread（原始程序執行緒）上載入 JVM。
 
-第一階段 thread topology 維持可實測候選：stable C worker long-lived direct attach、worker-group JNI bridge、central JNI bridge pool。不能在沒有相同 workload benchmark 前宣稱其中任何一者較快。完整理由與研究見 `docs/THREAD_MODEL.md` 與 `docs/GATEWAY_SERVLET_NATIVE_BRIDGE_RESEARCH.md`。
+第一階段 thread topology 維持可實測候選：C worker attached submission、worker-group JNI bridge、central JNI bridge pool；attached worker 僅能做 JNI control／submission，不得執行 Servlet application。不能在沒有相同 workload benchmark 前宣稱其中任何一者較快。完整理由與研究見 `docs/THREAD_MODEL.md` 與 `docs/GATEWAY_SERVLET_NATIVE_BRIDGE_RESEARCH.md`。
 
 JNI request hot path 不採 C struct 逐欄映射為 Java object。初步採：
 

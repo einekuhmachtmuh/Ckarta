@@ -2,6 +2,10 @@ name: build-smoke
 
 on:
   push:
+    branches:
+      - main
+      - 'codex/**'
+  pull_request:
     branches: [main]
   workflow_dispatch:
 

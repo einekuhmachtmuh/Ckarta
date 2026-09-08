@@ -2,8 +2,6 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
-#include <unistd.h>
 
 static ck_runtime_t runtime;
 
@@ -35,6 +33,7 @@ int main(int argc, char **argv)
 	result = ck_runtime_init(&runtime, class_path);
 	if (check_result("INIT", result) != 0)
 	{
+		ck_runtime_destroy(&runtime);
 		return EXIT_FAILURE;
 	}
 
@@ -42,6 +41,7 @@ int main(int argc, char **argv)
 			sizeof(body) - 1);
 	if (check_result("DISPATCH", result) != 0)
 	{
+		ck_runtime_shutdown(&runtime);
 		ck_runtime_destroy(&runtime);
 		return EXIT_FAILURE;
 	}

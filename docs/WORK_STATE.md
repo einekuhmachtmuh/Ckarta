@@ -24,6 +24,7 @@
 - `docs/THREAD_BENCHMARK_PLAN.md`：thread topology 與 JNI bridge/direct-attach 實驗定義。
 - `bench/jni/`：獨立 JNI thread benchmark harness。
 - `docs/GATEWAY_SERVLET_NATIVE_BRIDGE_RESEARCH.md`：CGI／FastCGI／Tomcat Servlet／CGIServlet／OpenJDK HotSpot／Ckarta JNI 邊界研究。
+- `docs/OPENJDK_21U_SOURCE_AUDIT.md`：JDK 21.0.8 與 21.0.11 fixed-tag HotSpot source audit。
 - `docs/JNI_ABI.md`：JNI 邊界與 ownership。
 - `docs/JNI_COST_MODEL.md`：OpenJDK 21 JNI 成本研究。
 - `docs/CONNECTION_OWNERSHIP.md`：C connection、Java facade、buffer lifetime。
@@ -111,9 +112,34 @@ Codex 本機測試環境：
 1. `WORKING_RULES.md`
 2. 本文件
 3. `docs/GATEWAY_SERVLET_NATIVE_BRIDGE_RESEARCH.md`
-4. `docs/THREAD_MODEL.md`
-5. `docs/THREAD_BENCHMARK_PLAN.md`
-6. 與當前任務直接相關的架構／JNI／lifecycle 文件
-7. 必要時重新核對固定版本 Nginx、Tomcat、OpenJDK 與學術來源
+4. `docs/OPENJDK_21U_SOURCE_AUDIT.md`
+5. `docs/THREAD_MODEL.md`
+6. `docs/THREAD_BENCHMARK_PLAN.md`
+7. 與當前任務直接相關的架構／JNI／lifecycle 文件
+8. 必要時重新核對固定版本 Nginx、Tomcat、OpenJDK 與學術來源
 
-任何只存在聊天上下文、尚未進 repository 的重要決策，不應視為已持久化工程狀態。
+## 9. 本次 OpenJDK 21u 版本稽核結果
+
+固定 `jdk-21.0.8-ga` 與 `jdk-21.0.11-ga` 後，核心 `runtime/javaCalls.cpp` blob SHA 相同，確認 JNI method invocation 所依賴的 `JavaCalls::call` machinery 在這兩個 update 間沒有變更。
+
+`prims/jni.cpp` 的 compare 只有 6 行 change：copyright 年份及一處不可達 lint-noise return；未改動本專案所依賴的 JNI invocation、object construction、DirectByteBuffer 相關路徑。
+
+因此「OpenJDK update 版本不同導致 architecture claim 無法定案」可以解除；現在僅剩 implementation-specific absolute performance 必須以實際 exact build benchmark 定量。
+
+權威稽核見 `docs/OPENJDK_21U_SOURCE_AUDIT.md`。
+
+## 10. 本次 executable vertical slice
+
+已建立 PR `#1`（branch `codex/bootstrap-jdk21-audit`），包含最小可執行：
+
+- C `main()`。
+- JVM bootstrap pthread。
+- `JNI_CreateJavaVM()`。
+- C worker `AttachCurrentThread()`／`DetachCurrentThread()`。
+- `NewDirectByteBuffer()`。
+- one Java request facade。
+- Makefile、smoke test、GitHub Actions build smoke。
+
+此 slice 只驗證 topology A 的 lifecycle／JNI boundary，不代表 A 為最終 topology。真正 A/B/C benchmark 仍待接上 canonical request workload。
+
+目前 PR 尚未合併 `main`；CI 必須以實際 run 結果判定是否可進正式基線。

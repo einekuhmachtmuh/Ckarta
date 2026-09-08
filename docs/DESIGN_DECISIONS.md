@@ -125,3 +125,9 @@ Level 1 API、Level 2 semantics、Level 3 timing/concurrency semantics 必須遵
 ## 15. CGI／FastCGI gateway
 
 決策：CGI/1.1 可作 optional compatibility gateway；FastCGI 優先作 PHP integration。CGI child process 與 Servlet container 不共用 application semantics，也不得讓 child process execution 形成 C event-loop blocking point。完整證據見 docs/CGI_FASTCGI_RESEARCH.md。
+
+## 16. CGI／FastCGI 不進核心
+
+決策：CGI 與 FastCGI 為未來可掛接模組。核心 Web server 不依賴 CGI、FastCGI 或 PHP；PHP 優先以 FastCGI/PHP-FPM 整合。
+
+效能基線分三層：模組不存在、模組存在但未命中、模組 request 實際執行。只有最後一層包含 gateway execution cost。此決策保留核心 hot path 最小化與 optional functionality（可選功能）的隔離。

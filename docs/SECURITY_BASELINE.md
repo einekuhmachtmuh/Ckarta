@@ -186,3 +186,7 @@ Ckarta 只有在以下證據完成後，才能對外宣稱達到相應安全基�
 ## CGI／FastCGI 額外攻擊面
 
 若啟用 CGI／FastCGI，必須額外限制 executable allowlist、child process count、stdin/stdout/stderr buffer、CPU／wall-clock timeout、environment、working directory、client disconnect cancellation 與 child reaping。不得把 HTTP URI 或 query string 直接交給 shell interpretation（Shell 解譯）。完整方案見 docs/CGI_FASTCGI_RESEARCH.md。
+
+## CGI/FastCGI 模組化安全邊界
+
+CGI/FastCGI module 不屬核心安全邊界之外的「免費功能」；啟用後必須額外套用 executable／upstream allowlist、resource limit、timeout、environment、working-directory、client-disconnect cancellation 與 process／socket lifecycle 驗證。核心在未啟用時不得初始化不必要的 CGI execution state。

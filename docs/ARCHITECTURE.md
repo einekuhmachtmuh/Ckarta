@@ -129,7 +129,8 @@ C event loop：
 1. 收到可讀／可寫事件。
 2. 推進 connection state machine。
 3. 完成可以在 C 中快速完成的工作。
-4. 透過有界 semantic handoff 將 Servlet 工作提交 Java executor。
+4. 依 route 選擇 Servlet 或 optional application gateway module；未啟用／未命中 CGI/FastCGI 時不得建立其專用 request state。
+5. Servlet 工作透過有界 semantic handoff 提交 Java executor。
 5. 立即回到 event loop；不得等待 Servlet application code。
 6. Java completion／async lifecycle event 到達後再推進 C connection state。
 
@@ -480,3 +481,9 @@ Servlet 6.1 的 Request／Response、Filter、Listener、Session、RequestDispat
 CGI／FastCGI 可以作為獨立的 external application gateway（外部應用程式閘道），與 Java Servlet semantic plane 分離。純 CGI 走 OS process lifecycle；PHP 優先對接 FastCGI／PHP-FPM。CGI 不得阻塞 C event loop，child process 的 stdin／stdout／stderr、timeout、cancellation、reaping 與 resource limits 必須有獨立 state machine。
 
 完整研究見 docs/CGI_FASTCGI_RESEARCH.md。
+
+## 25. CGI／FastCGI 模組邊界
+
+CGI/1.1 與 FastCGI 定位為未來可掛接的 application gateway module，不屬於 Ckarta 核心 request execution path。核心只提供足以讓模組掛接的 handler／route 邊界，不硬編碼 CGI/FastCGI 語意。
+
+依 Nginx 1.30.4 的模組／phase 架構，模組存在、模組啟用但未命中、以及真正進入 FastCGI handler 是三種不同成本；因此 Ckarta benchmark 必須分別量測。完整研究見 docs/CGI_FASTCGI_RESEARCH.md。

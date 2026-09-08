@@ -97,3 +97,5 @@ Java：Jakarta Servlet 6.1、Servlet lifecycle、Filter、Listener、Session、S
 目前文件是架構與驗證基線，不代表 Ckarta 已完成 Servlet 6.1 相容性、已通過 TCK、已達到 Nginx 安全程度或已證明效能優越。
 
 所有「已實作」「已通過」「更快」「更安全」宣稱，都必須有 repository 測試或可重現測量證據。
+
+CGI/FastCGI 定位：未來可掛接 application gateway module，不屬核心 request execution；PHP 優先透過 FastCGI/PHP-FPM。完整效能與架構分析見 `docs/CGI_FASTCGI_RESEARCH.md`。

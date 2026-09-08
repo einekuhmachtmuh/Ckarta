@@ -1,6 +1,6 @@
 # Ckarta JNI ABI 基線
 
-本文件固定 JNI（Java Native Interface，Java 原生介面）邊界；完整成本研究見 docs/JNI_COST_MODEL.md。
+本文件固定 JNI（Java Native Interface，Java 原生介面）邊界；完整成本研究見 docs/JNI_COST_MODEL.md，thread ownership 見 docs/THREAD_MODEL.md。
 
 ## 1. 定位
 
@@ -47,7 +47,11 @@ NewDirectByteBuffer 可提供 native memory view，但不決定 Ckarta ownership
 
 ## 6. Thread rules
 
-JNIEnv pointer（JNI 環境指標）不得跨執行緒共享。native thread 使用 JNI 必須具有自己的 attachment／detach 生命週期。
+`JNIEnv*` 不得跨執行緒共享。第一階段不把所有 C worker 固定 attach JVM；C worker 以 request descriptor 經 bounded JNI queue 交由受控 JNI bridge thread／pool 執行跨 JVM dispatch。
+
+JNI bridge thread 必須具有自己的 attachment／detach 生命週期。需要保存的是 process-level `JavaVM*`，不是可跨 thread 傳遞的 `JNIEnv*`。
+
+具體 thread topology（執行緒拓撲）與 direct-attach alternative（直接附加替代方案）見 docs/THREAD_MODEL.md。
 
 ## 7. Exception
 
@@ -69,7 +73,7 @@ JNI 呼叫返回不等於 request 完成。Servlet AsyncContext 可以讓請求�
 
 ## 11. JNI crossing 策略
 
-優先：read buffer → parse → canonical descriptor → single JNI transition → Java processing。
+優先：read buffer → parse → canonical descriptor → bounded JNI queue → JNI bridge transition → Java processing → completion queue。
 
 避免每個 header、body chunk 或 write operation 都跨 JNI。
 
@@ -91,4 +95,6 @@ NewDirectByteBuffer／GetDirectBufferAddress：優先作大量 native bytes 視�
 
 OpenJDK 21 成本基線與 API 比較見 docs/JNI_COST_MODEL.md。
 
-該文件把 OpenJDK 21 原始碼分析與歷史 JNI benchmark 數值分開；未完成 Ckarta 自有 benchmark 前，不得宣稱某 JNI API 更快。
+thread model 的 direct-attach 與 JNI bridge 差異見 docs/THREAD_MODEL.md。
+
+該文件把 OpenJDK 21 原始碼分析、歷史 JNI benchmark 與本機 sanity test 分開；未完成 Ckarta 自有 benchmark 前，不得宣稱某 JNI API 或 thread topology 更快。

@@ -36,7 +36,7 @@ Connection owner 必須是唯一 authority。
 
 ## 4. C Request
 
-Request owner 是 connection，直到 request 被明確移交至 asynchronous owner。
+Request owner 是 connection，直到 request 被明確移交至 asynchronous owner。\n\n`owner_token` 與 `lifetime_token` 是驗證用識別，不取代實際 owner；native storage 的回收責任仍屬 owner。
 
 Request 包含：
 
@@ -143,7 +143,7 @@ ASYNC_WAIT
 
 取消必須具有 idempotent（冪等）語意。
 
-同一 operation 不能因兩個競爭 cancellation path 而 double free。
+同一 operation 不能因兩個競爭 cancellation path 而 double free；terminal transition 必須只由 owner 成功取得。
 
 ## 10. Error propagation
 
@@ -193,3 +193,7 @@ JNIEnv pointer（JNI 環境指標）不得跨執行緒共享。
 成本模型見：
 
 docs/JNI_COST_MODEL.md
+
+## 14. Executable lifecycle slice
+
+目前 `c/jni/ck_request.[ch]` 將 descriptor 與 atomic lifecycle state 分離。smoke path 的 descriptor 與 body 由 caller 擁有，worker 只借用；caller 在 `pthread_join()` 後才離開其生命週期，因此 worker 不會在 owner 已失效後讀取。此模式只適用同步 smoke path；正式 async request 必須使用明確長生命週期 owner。

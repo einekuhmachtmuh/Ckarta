@@ -2,6 +2,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 static ck_runtime_t runtime;
 
@@ -20,6 +21,8 @@ int main(int argc, char **argv)
 {
 	const char *class_path = getenv("CKARTA_CLASS_PATH");
 	const unsigned char body[] = "ckarta-jni-smoke";
+	ck_request_descriptor_t descriptor;
+	ck_request_t request;
 	int result;
 
 	(void)argc;
@@ -30,17 +33,37 @@ int main(int argc, char **argv)
 		class_path = "build/classes";
 	}
 
-	result = ck_runtime_init(&runtime, class_path);
-	if (check_result("INIT", result) != 0)
+	memset(&descriptor, 0, sizeof(descriptor));
+	descriptor.abi_version = CK_JNI_ABI_VERSION;
+	descriptor.struct_size = sizeof(descriptor);
+	descriptor.feature_flags = CK_REQUEST_FEATURE_DIRECT_BUFFER;
+	descriptor.ownership_flags = CK_REQUEST_OWNS_NATIVE_STORAGE |
+			CK_REQUEST_JAVA_BORROWS_BUFFER;
+	descriptor.owner_token = 1;
+	descriptor.lifetime_token = 1;
+	descriptor.request_id = UINT64_C(0xC4A7A);
+	descriptor.body = body;
+	descriptor.body_length = sizeof(body) - 1;
+
+	result = ck_request_init(&request, &descriptor);
+	if (check_result("REQUEST_INIT", result) != 0)
 	{
-		ck_runtime_destroy(&runtime);
 		return EXIT_FAILURE;
 	}
 
-	result = ck_runtime_dispatch_smoke(&runtime, (uintptr_t)0xC4A7A, body,
-			sizeof(body) - 1);
+	result = ck_runtime_init(&runtime, class_path);
+	if (check_result("INIT", result) != 0)
+	{
+		return EXIT_FAILURE;
+	}
+
+	result = ck_runtime_dispatch_smoke(&runtime, &request);
 	if (check_result("DISPATCH", result) != 0)
 	{
+		if (ck_request_state(&request) == CK_REQUEST_RUNNING)
+		{
+			(void)ck_request_cancel(&request);
+		}
 		ck_runtime_shutdown(&runtime);
 		ck_runtime_destroy(&runtime);
 		return EXIT_FAILURE;
@@ -54,6 +77,12 @@ int main(int argc, char **argv)
 	}
 
 	ck_runtime_destroy(&runtime);
+	if (ck_request_state(&request) != CK_REQUEST_COMPLETED)
+	{
+		fprintf(stderr, "CKARTA_REQUEST_STATE_ERROR=%d\n",
+				(int)ck_request_state(&request));
+		return EXIT_FAILURE;
+	}
 	printf("CKARTA_SMOKE_OK\n");
 	return EXIT_SUCCESS;
 }

@@ -1,5 +1,7 @@
 #include "ck_jni_runtime.h"
 
+#include "ck_request.h"
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -140,8 +142,7 @@ static void *ck_bootstrap_main(void *arg)
 	return NULL;
 }
 
-static int ck_call_dispatch(JNIEnv *env, uintptr_t request_handle,
-		const unsigned char *body, size_t body_length)
+static int ck_call_dispatch(JNIEnv *env, const ck_request_descriptor_t *descriptor)
 {
 	jclass runtime_class;
 	jmethodID method;
@@ -163,7 +164,8 @@ static int ck_call_dispatch(JNIEnv *env, uintptr_t request_handle,
 		return -1;
 	}
 
-	buffer = (*env)->NewDirectByteBuffer(env, (void *)body, (jlong)body_length);
+	buffer = (*env)->NewDirectByteBuffer(env, (void *)descriptor->body,
+			(jlong)descriptor->body_length);
 	if (buffer == NULL || ck_check_java_exception(env, "NewDirectByteBuffer") != 0)
 	{
 		(*env)->DeleteLocalRef(env, runtime_class);
@@ -171,7 +173,7 @@ static int ck_call_dispatch(JNIEnv *env, uintptr_t request_handle,
 	}
 
 	value = (*env)->CallStaticLongMethod(env, runtime_class, method,
-			(jlong)request_handle, buffer);
+			(jlong)descriptor->request_id, buffer);
 	if (ck_check_java_exception(env, "CallStaticLongMethod(dispatch)") != 0)
 	{
 		(*env)->DeleteLocalRef(env, buffer);
@@ -179,9 +181,10 @@ static int ck_call_dispatch(JNIEnv *env, uintptr_t request_handle,
 		return -1;
 	}
 
-	expected = (jlong)request_handle + (jlong)body_length;
-	printf("CKARTA_DISPATCH handle=%llu length=%zu result=%lld expected=%lld\n",
-			(unsigned long long)request_handle, body_length,
+	expected = (jlong)descriptor->request_id + (jlong)descriptor->body_length;
+	printf("CKARTA_DISPATCH handle=%llu length=%llu result=%lld expected=%lld\n",
+			(unsigned long long)descriptor->request_id,
+			(unsigned long long)descriptor->body_length,
 			(long long)value, (long long)expected);
 
 	(*env)->DeleteLocalRef(env, buffer);
@@ -192,9 +195,7 @@ static int ck_call_dispatch(JNIEnv *env, uintptr_t request_handle,
 struct ck_worker_args
 {
 	ck_runtime_t *runtime;
-	uintptr_t request_handle;
-	const unsigned char *body;
-	size_t body_length;
+	ck_request_t *request;
 	int result;
 };
 
@@ -203,21 +204,42 @@ static void *ck_worker_main(void *arg)
 	struct ck_worker_args *worker = arg;
 	JNIEnv *env = NULL;
 	jint result;
+	int finish_result;
+
+	if (ck_request_begin(worker->request) != 0)
+	{
+		worker->result = -1;
+		return NULL;
+	}
 
 	result = (*worker->runtime->vm)->AttachCurrentThread(worker->runtime->vm,
 			(void **)&env, NULL);
 	if (result != JNI_OK)
 	{
+		(void)ck_request_finish(worker->request, CK_REQUEST_FAILED);
 		worker->result = result;
 		return NULL;
 	}
 
-	worker->result = ck_call_dispatch(env, worker->request_handle,
-			worker->body, worker->body_length);
+	worker->result = ck_call_dispatch(env, &worker->request->descriptor);
+	if (worker->result == 0)
+	{
+		finish_result = ck_request_finish(worker->request, CK_REQUEST_COMPLETED);
+	}
+	else
+	{
+		finish_result = ck_request_finish(worker->request, CK_REQUEST_FAILED);
+	}
+
 	result = (*worker->runtime->vm)->DetachCurrentThread(worker->runtime->vm);
 	if (result != JNI_OK && worker->result == 0)
 	{
 		worker->result = result;
+	}
+
+	if (finish_result != 0 && worker->result == 0)
+	{
+		worker->result = -1;
 	}
 
 	return NULL;
@@ -267,17 +289,14 @@ int ck_runtime_init(ck_runtime_t *runtime, const char *class_path)
 	return 0;
 }
 
-int ck_runtime_dispatch_smoke(ck_runtime_t *runtime, uintptr_t request_handle,
-		const unsigned char *body, size_t body_length)
+int ck_runtime_dispatch_smoke(ck_runtime_t *runtime, ck_request_t *request)
 {
 	struct ck_worker_args worker;
 	int result;
 
 	memset(&worker, 0, sizeof(worker));
 	worker.runtime = runtime;
-	worker.request_handle = request_handle;
-	worker.body = body;
-	worker.body_length = body_length;
+	worker.request = request;
 
 	result = pthread_create(&runtime->worker_thread, NULL, ck_worker_main, &worker);
 	if (result != 0)

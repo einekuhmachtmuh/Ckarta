@@ -95,6 +95,8 @@ Ckarta：
 
 C event-driven network data plane
 +
+bounded semantic handoff
++
 Java Servlet executor／container
 +
 JNI in-process boundary
@@ -136,12 +138,13 @@ C event
 → HTTP framing validation
 → route
 → canonical request descriptor
-→ JNI
+→ semantic handoff
+→ Java executor
 → Java request facade
 → Container
 → Filter Chain
 → Servlet
-→ JNI response descriptor
+→ completion
 → C output pipeline
 → TLS
 → socket
@@ -271,3 +274,9 @@ DOI：https://doi.org/10.1016/S0140-3664(02)00221-9
 - direct attach／bridge topology benchmark
 
 以上每一項都必須以固定 upstream commit、OpenJDK baseline 與 Ckarta commit 為版本基準。
+
+## 12. 理論架構更新
+
+Ckarta 採「C event-driven network data plane + bounded semantic handoff + Java Servlet semantic plane」。這保留 Nginx 的 I/O scalability（輸入輸出可擴展性）與 Tomcat／Servlet 的 application semantics，同時避免把 C event-loop thread 誤用成 Servlet execution thread。
+
+理論依據與數學模型見 docs/WEB_SERVER_THEORY_SERVLET_NGINX.md。

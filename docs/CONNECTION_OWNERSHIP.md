@@ -315,7 +315,7 @@ epoll cookie
 
 ## 20. HTTP/1.1 keep-alive 與 response recycle
 
-HTTP/1.1 persistence 不使用 connection terminal state 表示。正常 request/response 完成後，只要目前 request 的 message framing 已完整、request 未要求 `Connection: close`、response transaction 已 `FINISHED`、response output writer 已完全 `DRAINED)，connection owner 才可以執行 HTTP recycle。
+HTTP/1.1 persistence 不使用 connection terminal state 表示。正常 request/response 完成後，只要目前 request 的 message framing 已完整、request 未要求 `Connection: close`、response transaction 已 `FINISHED`、response output writer 已完全 `DRAINED`，connection owner 才可以執行 HTTP recycle。
 
 目前 connection API 提供 `ck_connection_http_recycle()` 作為單一 recycle gate。成功後：
 

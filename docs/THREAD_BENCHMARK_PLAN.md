@@ -135,6 +135,12 @@ https://docs.oracle.com/en/java/javase/21/docs/specs/jni/functions.html
 
 測試不得跨 thread 傳遞 `JNIEnv*`。需要 JNI 的 native thread 必須使用自己的 attachment／detach 生命週期。
 
+## 10. Current harness boundary
+
+`bench/jni/` 目前是低階 harness，而非正式 Ckarta request benchmark。其 direct 模式測量已 attach native worker 直接呼叫固定 primitive Java method；bridge 模式測量 bounded C queue 加 bridge thread 的 JNI invocation。它沒有 Java Servlet executor、Servlet container、canonical request descriptor、DirectByteBuffer request facade、AsyncContext 或正式 completion routing。
+
+因此本 harness 只能回答低階的 JNI invocation／queue handoff／thread attachment 問題；它不能直接回答 A/B/C 哪種正式 Ckarta topology 最佳。正式 benchmark 必須在相同 canonical request workload 上加入 Java executor、request lifetime、completion routing、cancellation 與必要的 Servlet semantics。
+
 ## 10. 現況
 
 本文件只定義實驗；正式 thread topology 在可重現 benchmark 完成前維持暫定。

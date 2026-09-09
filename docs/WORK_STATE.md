@@ -381,3 +381,18 @@ Servlet 6.1 規格明確要求 `startAsync()` 受 asyncSupported、same-dispatch
 測試 `tests/java/CkartaServletRequestAsyncTest.java` 已加入 `make test`，驗證 original request/response、合法 wrapper rejection、async state 與 `getAsyncContext()` lifecycle。最新程式碼 commit `efe25c40064cbca3d3e93f1febee94b3571f9ab1` 的 GitHub Actions run `34343191270`、job `102438557460` 已完整通過 `make test`；runner 為 Ubuntu 24.04 / Temurin OpenJDK 21.0.12.1 / GCC 13.3.0。
 
 後續正式 integration gate：將此 adapter 與實際 Servlet request/response facade、Servlet mapping/container lifecycle、native connection correlation、timeout/error dispatch、AsyncListener cycle 與 TCK 逐項接合。不得把本 prototype 標示為 Servlet 6.1 相容。
+
+
+## 42. 2026-09-09 async cycle identity / native correlation boundary
+
+本輪完成下一個 async bridge primitive：CkartaAsyncCycleBinding 為每一 Servlet async cycle 產生唯一 cycleId，並將 requestId、ownerToken、lifetimeToken 與 cycle identity 綁在同一 Java semantic object 的 lifetime。cycle id 限制在 native connection 目前採用的 48-bit 可表示範圍內；binding 在 terminal publication 後失效。
+
+native ck_connection_t 現已把 cycle id 與 state/terminal event 一併編碼在單一 atomic 64-bit lifecycle word，新增 ck_connection_start_async_cycle() 與 ck_connection_validate_cycle()。這使同一 request/connection 未來在多 async cycle 中不會因只比較 request/owner/lifetime 三個欄位而誤接收 late completion。
+
+completion record 新增 cycle_id；JNI publisher 亦攜帶此欄位。現有 smoke path 暫以 cycle id 1，因正式 Servlet dispatch / 新 async cycle 還未進入 executable path。故這輪已建立 protocol foundation，但 Java binding 與 native connection 尚未透過 production JNI registry/handle 真正互相 lookup；不得宣稱 native correlation bridge 已完成。
+
+研究交叉核對固定 Tomcat 11.0.25 AsyncContextImpl 對 per-cycle state、recycle 與 concurrent use 的處理；Servlet 6.1 API 明確將每次 startAsync 視為可重新初始化的 async cycle，且 AsyncContext 可在 subsequent cycle reused。Nginx development guide 的 connection/event/timer/posted-event 分層則支持把 cycle identity 與 OS event notification 分離。學術 correctness 仍以 Herlihy/Wing linearizability 與 SEDA explicit queue/load conditioning 為基線。
+
+本輪測試另發現並修正 completion record 新增欄位後 test producer 未初始化 cycle_id；此類錯誤可由既有 WORKING_RULES 的變數／欄位生命週期規則直接預防，因此沒有新增工作守則。
+
+下一個正式閘門：建立 native connection registry/opaque binding handle 或等價受控 JNI boundary，使 startAsync 能把 Java cycle binding 真正註冊到正確 native connection owner；其後再做 AsyncContext.complete / timeout / error / client disconnect 的跨層 terminal arbitration。不得把 Java 與 native 各自存在的 correlation objects 視為已完成 bridge。

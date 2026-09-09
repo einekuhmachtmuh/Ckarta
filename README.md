@@ -65,6 +65,7 @@ Nginx 與 Apache Tomcat 不直接複製進 Ckarta repository，而是以 Git sub
 - docs/WEB_SERVER_THEORY_SERVLET_NGINX.md：Jakarta Servlet 6.1、Nginx、Tomcat 與 Web server 排隊／並行理論的架構比較。
 - docs/CANCELLATION_MODEL.md：連線、Servlet 非同步與 JNI 取消語意。
 - docs/JNI_ABI.md：JNI 邊界與所有權門檻。
+- docs/REQUEST_HANDOFF.md：canonical HTTP request → JNI → Java NativeRequest handoff 契約。
 - docs/JNI_COST_MODEL.md：OpenJDK 21 JNI 跨語言成本模型與 C struct → Java object 策略。
 - docs/SECURITY_BASELINE.md：安全模型與驗證門檻。
 - docs/TCK_INTEGRATION_PLAN.md：Jakarta Servlet 6.1 TCK 驗證計畫。
@@ -139,4 +140,6 @@ Linux `ck_event_loop` 已有獨立 executable baseline，並已完成 loopback T
 
 Native response transaction 現已加入第一個可執行 response transaction slice：`NEW → COMMITTED → FINISHED`，並有不可恢復的 `FAILED` 狀態；第一次 body write 觸發 implicit commit，固定大小 body staging buffer 與 Content-Length completion invariant 已有獨立 regression test。response header serialization 已有受限 final-response wire slice；另已加入 bounded non-blocking output writer，以 32 KiB writable work budget 處理 partial write、`EAGAIN` continuation 與 peer-close/error mapping；其 EPOLLOUT continuation、connection-owned writer 與 registry output pin 已有 regression test。這些仍不是完整 HTTP/1.1 response implementation 或 Servlet response facade。
 
-目前尚未完成：正式多 worker listener/accept ownership、完整 HTTP/1.1 request/response state machine、response header serialization、response filter pipeline、response ownership 與 Servlet facade、async dispatch、real timeout source、完整 client-disconnect policy、shutdown drain、TCK、sanitizer/fuzz、Windows IOCP 與其他平台 event backend。
+目前尚未完成：正式多 worker listener/accept ownership、完整 HTTP/1.1 request/response state machine、完整 response header field collection/validation、response filter pipeline、response ownership 與 Servlet facade、async dispatch、real timeout source、完整 client-disconnect policy、shutdown drain、TCK、sanitizer/fuzz、Windows IOCP 與其他平台 event backend。
+
+目前 request handoff 已具備第一個 executable canonical boundary：HTTP parser → ck_request_init_http() → versioned request descriptor → JNI 一次傳遞 compact metadata/body DirectByteBuffer views → Java NativeRequest。此 slice 目前只驗證 GET／HTTP/1.1 的薄 handoff，尚不是完整 HttpServletRequest。詳細契約見 docs/REQUEST_HANDOFF.md。

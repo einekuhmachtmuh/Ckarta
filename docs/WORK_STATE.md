@@ -328,3 +328,24 @@ Tomcat 11.0.25 `AsyncContextImpl` 明確處理 complete/timeout/error/onComplete
 ## 36. 2026-09-09 validation status
 
 目前 repository 變更已以最新 main head 進行 CI；`c/connection` 測試已接入 `make test`。本輪若 CI 尚未對最新 HEAD 完成，不得把舊 run 當成最新 connection implementation 的通過證據。
+
+
+## 37. 2026-09-09 Tomcat familiarity cost vs performance decision
+
+本輪確認 docs/TOMCAT_SERVLET_USER_COMPATIBILITY.md 的真正目的為降低既有 Tomcat/Servlet 開發者的 migration／learning cost，而不是複製 Tomcat internal architecture。
+
+工程決策採三層相容性：P0 application-visible Servlet 6.1 semantics；P1 operational familiarity；P2 Tomcat implementation similarity。P0 必須由 Servlet 6.1 規格與 TCK 驗證；P1 優先採熟悉概念但不要求相同 native backend；P2 不作 compatibility requirement。高效能治理不採「全部 C 化」，而採跨界成本預算模型，控制 JNI crossing、crossed bytes、queueing 與 async lifetime memory retention。
+
+此決策與 Nginx/Tomcat 的 abstraction boundary 及 SEDA stage/queue 思路一致：C 主要承擔高 I/O density、connection state 與 network scheduling；Java 保留 Servlet semantic density。不得把 eventfd、epoll、owner token、native connection state 或 JNI queue 暴露給 Servlet application 以降低學習成本。
+
+docs/TOMCAT_SERVLET_USER_COMPATIBILITY.md 為此研究與使用者相容性策略的唯一長篇權威文件；本文件只保存決策與狀態。
+
+## 38. 2026-09-09 Java async semantic core validation
+
+新增 java/org/ckarta/servlet/CkartaAsyncContext.java 與 tests/java/CkartaAsyncContextTest.java，建立正式 Jakarta Servlet API adapter 前的最小 Java async semantic core。它不宣稱實作 jakarta.servlet.AsyncContext，也不把 Tomcat private AsyncContextImpl 當 ABI。
+
+core 目前驗證 start(Runnable)、complete()、container-side timeout/error/disconnect/shutdown terminal injection、listener exactly-once、terminal race 與 recycle invalidation。ACTIVE → COMPLETING|TIMING_OUT|ERRORED 的 CAS 是 terminal ownership 的單一 linearization point。
+
+首版測試曾錯誤把 container-side timeout race 當成 application-facing exception，造成 CI failure；檢查後改為驗證 application complete() 重複呼叫會拒絕，而 internal timeout 輸掉 terminal race 時維持冪等。最新 main CI run 34340207263、job 102428964690、commit 44a785f4196fa6e3a413946f4bcdf74a7f7f3aec 已完整通過 make test。
+
+Makefile 現已將 Java async semantic test 納入 test target。後續真正 Jakarta Servlet 6.1 API adapter 仍需在 dependency／build/test 正式加入後實作並以 TCK 驗證。

@@ -253,7 +253,7 @@ int main(int argc, char **argv)
 				break;
 			}
 
-			if (ck_completion_queue_drain_notification(NULL) == -999)
+			if (ck_runtime_drain_completion_notification(&runtime) != 0)
 			{
 				break;
 			}

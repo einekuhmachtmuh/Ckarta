@@ -118,6 +118,7 @@ static void test_connection_close_prevents_recycle(void)
 	assert(parsed != NULL && parsed->connection_close_required == 1);
 	assert(ck_http_response_set_status(response, 200U) == 0);
 	assert(ck_http_response_set_connection_close(response, 1) == 0);
+	assert(ck_http_response_commit(response) == 0);
 	assert(ck_http_response_finish(response) == 0);
 	assert(ck_http_response_serialize_headers(
 			response, headers, sizeof(headers), &header_length) == 0);

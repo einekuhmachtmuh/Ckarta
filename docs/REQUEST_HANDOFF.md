@@ -101,3 +101,17 @@ The FIFO provides a fixed 64 KiB byte capacity and non-blocking read/write opera
 Until that transaction boundary is redesigned, the FIFO is only a lifetime-safe building block and is not claimed as the ServletInputStream implementation.
 
 The next body gate must make the parser/input layer transactional around body delivery, or otherwise establish an explicit consumed-byte handoff before a bounded Java-visible stream can be connected. Only then can `ServletInputStream.isReady()`, `ReadListener.onDataAvailable()` and backpressure be implemented without risking duplicate body delivery.
+## Concurrency research basis
+
+The bounded body FIFO is intentionally single-producer/single-consumer. The C event-loop/request-body producer and the Java-facing body consumer must each have a unique owner; the queue is not a general multi-producer/multi-consumer object and is not advertised as thread-safe beyond this contract.
+
+Research basis: Leslie Lamport, "Concurrent Reading and Writing", Communications of the ACM 20(11), 806–811 (1977), DOI 10.1145/359863.359878. The paper studies communication between asynchronous processes under explicit single-writer/single-reader assumptions and gives bounded communication techniques. Ckarta uses this as a concurrency reasoning baseline only; the actual C11 atomic implementation still requires repository tests and the C memory model.
+
+Source:
+https://doi.org/10.1145/359863.359878
+
+Servlet 6.1 requires `ServletInputStream.isReady()` to indicate whether a non-blocking read may proceed and uses `ReadListener.onDataAvailable()` / `onAllDataRead()` for asynchronous data availability. These semantics are the reason Ckarta cannot equate a filled native FIFO with completion of the HTTP request; request parsing, body availability, Java read readiness, and message completion remain separate states.
+
+Official source:
+https://jakarta.ee/specifications/servlet/6.1/apidocs/jakarta.servlet/jakarta/servlet/servletinputstream
+https://jakarta.ee/specifications/servlet/6.1/apidocs/jakarta.servlet/jakarta/servlet/readlistener

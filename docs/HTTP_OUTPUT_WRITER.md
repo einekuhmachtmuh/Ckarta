@@ -93,5 +93,7 @@ Matt Welsh、David Culler、Eric Brewer, “SEDA: an architecture for well-condi
 - TLS output
 - Java ServletOutputStream／Writer integration
 - non-blocking Servlet `WriteListener` callback dispatch
-- connection-level response recycle
 - graceful shutdown output drain
+
+
+目前 response header serialization 已另由 `ck_http_response_serialize_headers()` 提供；本文件只定義 serialization 後的 byte transport，不把 header grammar 再定義一遍。response serializer 與 writer 之間的正式 connection lifecycle 整合仍待完成。

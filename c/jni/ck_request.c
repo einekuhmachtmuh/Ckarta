@@ -1,5 +1,8 @@
 #include "ck_request.h"
 
+#include <limits.h>
+#include <string.h>
+
 #include <stddef.h>
 #include <stdint.h>
 
@@ -20,7 +23,9 @@ static int ck_request_descriptor_valid(const ck_request_descriptor_t *descriptor
 		return 0;
 	}
 
-	if (descriptor->body == NULL
+	if ((descriptor->metadata == NULL && descriptor->metadata_length != 0)
+			|| descriptor->metadata_length > (uint64_t)INT32_MAX
+			|| (descriptor->body == NULL && descriptor->body_length != 0)
 			|| descriptor->body_length > (uint64_t)INT32_MAX)
 	{
 		return 0;
@@ -35,6 +40,88 @@ static int ck_request_descriptor_valid(const ck_request_descriptor_t *descriptor
 	}
 
 	return 1;
+}
+
+
+static void write_u32_be(unsigned char *output, uint32_t value)
+{
+	output[0] = (unsigned char)(value >> 24);
+	output[1] = (unsigned char)(value >> 16);
+	output[2] = (unsigned char)(value >> 8);
+	output[3] = (unsigned char)value;
+}
+
+int ck_request_init_http(ck_request_t *request,
+	const ck_http_request_t *http_request,
+	const unsigned char *body,
+	size_t body_length,
+	uint64_t request_id,
+	uint64_t owner_token,
+	uint64_t lifetime_token)
+{
+	ck_request_descriptor_t descriptor;
+	size_t offset = 12U;
+	size_t metadata_length;
+
+	if (request == NULL || http_request == NULL
+			|| http_request->method.data == NULL
+			|| http_request->target.data == NULL
+			|| http_request->version.data == NULL
+			|| http_request->method.length > CK_HTTP_MAX_METHOD_BYTES
+			|| http_request->target.length > CK_HTTP_MAX_TARGET_BYTES
+			|| http_request->version.length > CK_HTTP_MAX_VERSION_BYTES
+			|| (body == NULL && body_length != 0)
+			|| body_length > (size_t)INT32_MAX)
+	{
+		return -1;
+	}
+
+	metadata_length = offset + http_request->method.length
+			+ http_request->target.length + http_request->version.length + 1U;
+	if (metadata_length > sizeof(request->metadata_storage)
+			|| metadata_length > (size_t)INT32_MAX)
+	{
+		return -1;
+	}
+
+	memset(request, 0, sizeof(*request));
+	write_u32_be(request->metadata_storage,
+			(uint32_t)http_request->method.length);
+	write_u32_be(request->metadata_storage + 4U,
+			(uint32_t)http_request->target.length);
+	write_u32_be(request->metadata_storage + 8U,
+			(uint32_t)http_request->version.length);
+
+	memcpy(request->metadata_storage + offset,
+			http_request->method.data, http_request->method.length);
+	offset += http_request->method.length;
+	memcpy(request->metadata_storage + offset,
+			http_request->target.data, http_request->target.length);
+	offset += http_request->target.length;
+	memcpy(request->metadata_storage + offset,
+			http_request->version.data, http_request->version.length);
+	offset += http_request->version.length;
+	request->metadata_storage[offset] =
+			(unsigned char)http_request->connection_close_required;
+
+	memset(&descriptor, 0, sizeof(descriptor));
+	descriptor.abi_version = CK_JNI_ABI_VERSION;
+	descriptor.struct_size = sizeof(descriptor);
+	descriptor.feature_flags =
+			CK_REQUEST_FEATURE_DIRECT_BUFFER
+			| CK_REQUEST_FEATURE_METADATA_BUFFER;
+	descriptor.ownership_flags =
+			CK_REQUEST_OWNS_NATIVE_STORAGE
+			| CK_REQUEST_JAVA_BORROWS_BUFFER;
+	descriptor.owner_token = owner_token;
+	descriptor.lifetime_token = lifetime_token;
+	descriptor.request_id = request_id;
+	descriptor.metadata = request->metadata_storage;
+	descriptor.metadata_length = (uint64_t)metadata_length;
+	descriptor.body = body;
+	descriptor.body_length = (uint64_t)body_length;
+
+	return ck_request_init(request, &descriptor);
 }
 
 int ck_request_init(ck_request_t *request,

@@ -135,7 +135,13 @@ poll completion output 使用固定 36 bytes：8 + 8 + 8 + 8 + 4，並以 native
 7. error response、diagnostic logging、metrics 與 lifecycle state 是不同輸出，不得互相替代。
 8. smoke-only function 名稱／API 不得被 production architecture 文件寫成正式 runtime API。
 
-## 11. Current gaps
+## 11. Completion queue / notification contract
+
+`c/completion/ck_completion_queue.[ch]` 是 bounded multi-producer / single-consumer-oriented process-local completion queue：producer 以 mutex 保護 ring state，record 與 notification signal 在同一 critical section 內完成；若 notification backend 回報明確 failure，剛加入的 record rollback。queue overflow 回傳 1，closed queue 回傳 2。`c/event/ck_completion_notification.[ch]` 將 OS-specific notification backend 隔離；目前實作為 Linux `eventfd(EFD_CLOEXEC | EFD_NONBLOCK)`，fd 可交由 epoll 等待。
+
+這個 native primitive 尚未取代 `CkartaRuntime` 現有 Java `ArrayBlockingQueue`，也尚未透過 JNI 接成 production producer path；它目前是下一階段整合的正式候選基線。若未來建立 Windows backend，必須映射到同一 queue/notification contract，而不能修改 request/error/cancellation semantics。
+
+## 12. Current gaps
 
 目前尚未實作：
 

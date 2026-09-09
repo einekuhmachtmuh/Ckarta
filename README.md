@@ -24,7 +24,8 @@ JVM／Java Servlet 容器
 ├── docs/
 ├── third_party/
 │   ├── nginx/        # Git submodule，固定 upstream commit
-│   └── tomcat/       # Git submodule，固定 upstream commit
+│   ├── tomcat/       # Git submodule，固定 upstream commit
+│   └── httpd/        # Git submodule，固定 upstream commit
 ├── c/
 ├── java/
 ├── tests/
@@ -53,6 +54,8 @@ Nginx 與 Apache Tomcat 不直接複製進 Ckarta repository，而是以 Git sub
 - docs/OPENJDK_21U_SOURCE_AUDIT.md：固定 JDK 21u tags 的 HotSpot source audit，核對 21.0.8 與 21.0.11 對 JNI 研究結論的實際影響。
 - docs/SERVLET_6_1_CRITIQUE.md：Servlet 6.1、Nginx、Tomcat 與 Web server 理論的中立技術批判及 Ckarta 相容性策略。
 - docs/CGI_FASTCGI_RESEARCH.md：CGI/1.1、FastCGI、PHP-FPM、Tomcat CGIServlet 與外部程式閘道可行性研究。
+- docs/WIN32_LINUX_PLATFORM_RESEARCH.md：Win32／Linux 平台層、編譯巨集、IOCP／epoll 與 native API 策略。
+- docs/COMPLETION_NOTIFICATION_RESEARCH.md：Java completion 與 Linux eventfd／Windows IOCP 通知方案研究。
 - docs/WEB_SERVER_THEORY_SERVLET_NGINX.md：Jakarta Servlet 6.1、Nginx、Tomcat 與 Web server 排隊／並行理論的架構比較。
 - docs/CANCELLATION_MODEL.md：連線、Servlet 非同步與 JNI 取消語意。
 - docs/JNI_ABI.md：JNI 邊界與所有權門檻。
@@ -70,6 +73,8 @@ Nginx 與 Apache Tomcat 不直接複製進 Ckarta repository，而是以 Git sub
 Nginx：stable 1.30.4，commit `017cf98dcce217946572a896f0992370475e189f`。
 
 Apache Tomcat：11.0.25，commit `cbe6e15ee81e2fc6232954292a80cca5d1e84009`。
+
+Apache HTTP Server：2.4.68，commit `736bb657405eb73fd68a64772c3a908807bdb887`；主要用於啟動、MPM、模組與 Win32 平台交叉研究，不作 C data plane 主模板。
 
 OpenJDK 21 JNI 研究基線：`jdk-21.0.8-ga`；另以 `jdk-21.0.11-ga` 做 fixed-tag implementation audit。完整結果見 `docs/OPENJDK_21U_SOURCE_AUDIT.md`。
 

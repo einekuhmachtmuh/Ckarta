@@ -194,3 +194,11 @@ Native module 暫定為 load-at-start、ABI/version/signature 驗證、dependenc
 ## 22. 多請求 completion smoke
 
 2026-09-09：多請求 completion routing 已完成第一個可執行 smoke slice。兩個 C request 可在同一 Java executor completion queue 完成，completion 帶 request_id、owner_token、lifetime_token、result、status，C 不依賴完成順序進行 routing。此 slice 仍由 smoke worker 建立後 join，未代表正式 event-loop 非阻塞 producer，也未使用高效率事件通知原語。
+
+
+## Branch status
+
+- Purpose: multi-request completion routing executable slice
+- Lifecycle status: CLOSED / SUPERSEDED
+- Relation to main: PR #12 closed;有效 routing contract 已進入 main。
+- This file is branch-specific state and must not be treated as main canonical state.

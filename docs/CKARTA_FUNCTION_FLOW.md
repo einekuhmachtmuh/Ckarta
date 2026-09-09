@@ -114,7 +114,7 @@ native tokens `request_id`、`owner_token`、`lifetime_token` 只作 correlation
 - body memory 的 lifetime 覆蓋 Java borrow
 - Java 只能 read/borrow，不負責 native free
 
-completion record 為固定 value-only layout：request id、owner token、lifetime token、result、status；資料與 notification state 分離。
+completion record 為固定 value-only layout：request id、owner token、lifetime token、cycle id、result、status；資料與 notification state 分離。`cycle_id` 用來區分同一 request/connection 在不同 async cycle 的 completion，避免 future async dispatch 後的 late completion 命中新 cycle。
 
 ## 7. Runtime lifecycle
 

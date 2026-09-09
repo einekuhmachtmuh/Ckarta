@@ -41,13 +41,17 @@ public final class CkartaAsyncContextTest
 			boolean rejected = false;
 			try
 			{
-				context.timeout();
+				context.complete();
 			}
 			catch (IllegalStateException expected)
 			{
 				rejected = true;
 			}
 			assert rejected;
+
+			context.timeout();
+			assert terminalCount.get() == 1;
+			assert listenerCount.get() == 1;
 		}
 		finally
 		{
@@ -72,7 +76,16 @@ public final class CkartaAsyncContextTest
 			context.addListener((terminalEvent, error) ->
 					listenerCount.incrementAndGet());
 
-			Thread completeThread = new Thread(context::complete);
+			Thread completeThread = new Thread(() ->
+			{
+				try
+				{
+					context.complete();
+				}
+				catch (IllegalStateException ignored)
+				{
+				}
+			});
 			Thread timeoutThread = new Thread(context::timeout);
 			completeThread.start();
 			timeoutThread.start();

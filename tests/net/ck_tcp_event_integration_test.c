@@ -38,6 +38,7 @@ int main(void)
 	ck_connection_handle_t handle;
 	ck_connection_handle_t reused_handle;
 	const char payload[] = "GET / HTTP/1.1\r\nHost: localhost\r\n\r\n";
+	const size_t payload_length = sizeof(payload) - 1U;
 	char request[sizeof(payload)];
 	int client_fd;
 	int accepted_fd;
@@ -66,7 +67,7 @@ int main(void)
 	assert(ck_event_loop_add(&loop, accepted_fd, handle,
 		CK_EVENT_READ | CK_EVENT_RDHUP | CK_EVENT_ERROR) == 0);
 
-	assert(send(client_fd, payload, sizeof(payload), 0) == (ssize_t)sizeof(payload));
+	assert(send(client_fd, payload, payload_length, 0) == (ssize_t)payload_length);
 	count = ck_event_loop_wait(&loop, notifications, 4, 1000);
 	assert(count == 1);
 	assert(notifications[0].cookie == handle);
@@ -75,8 +76,8 @@ int main(void)
 	assert(ck_connection_registry_socket_fd(&registry, notifications[0].cookie,
 		UINT64_C(2001), UINT64_C(3001), UINT64_C(4001)) == accepted_fd);
 	assert(recv(accepted_fd, request, sizeof(request), MSG_DONTWAIT)
-			== (ssize_t)sizeof(payload));
-	assert(memcmp(request, payload, sizeof(payload)) == 0);
+			== (ssize_t)payload_length);
+	assert(memcmp(request, payload, payload_length) == 0);
 	assert(recv(accepted_fd, request, sizeof(request), MSG_DONTWAIT) == -1);
 	assert(errno == EAGAIN || errno == EWOULDBLOCK);
 

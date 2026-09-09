@@ -98,6 +98,7 @@ public final class CkartaServletAsyncContext implements AsyncContext
 			throws ServletException
 	{
 		Objects.requireNonNull(clazz, "clazz");
+		checkActive();
 
 		try
 		{

@@ -76,6 +76,30 @@ static void test_invalid_status(void)
 	assert(ck_http_response_state(&response) == CK_HTTP_RESPONSE_COMMITTED);
 }
 
+static void test_header_serialization(void)
+{
+	static const unsigned char body[] = "hello";
+	static const char expected[] =
+		"HTTP/1.1 201\r\n"
+		"Content-Length: 5\r\n"
+		"Connection: close\r\n"
+		"\r\n";
+	ck_http_response_t response;
+	unsigned char output[CK_HTTP_RESPONSE_HEADER_BUFFER_BYTES];
+	size_t output_length = 0;
+
+	ck_http_response_init(&response);
+	assert(ck_http_response_set_status(&response, 201U) == 0);
+	assert(ck_http_response_set_content_length(&response, sizeof(body) - 1U) == 0);
+	assert(ck_http_response_set_connection_close(&response, 1) == 0);
+	assert(ck_http_response_write_body(&response, body, sizeof(body) - 1U) == 0);
+	assert(ck_http_response_finish(&response) == 0);
+	assert(ck_http_response_serialize_headers(&response,
+			output, sizeof(output), &output_length) == 0);
+	assert(output_length == sizeof(expected) - 1U);
+	assert(memcmp(output, expected, output_length) == 0);
+}
+
 int main(void)
 {
 	test_response_lifecycle();
@@ -83,5 +107,6 @@ int main(void)
 	test_content_length_mismatch();
 	test_body_buffer_bound();
 	test_invalid_status();
+	test_header_serialization();
 	return 0;
 }

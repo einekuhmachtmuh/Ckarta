@@ -24,14 +24,14 @@ static void *terminal_thread(void *arg)
 static void test_http_keepalive_recycle(void)
 {
 	static const char requests[] =
-			"GET /one HTTP/1.1\\r\\nHost: x\\r\\n\\r\\n"
-			"GET /two HTTP/1.1\\r\\nHost: x\\r\\n\\r\\n";
+			"GET /one HTTP/1.1\r\nHost: x\r\n\r\n"
+			"GET /two HTTP/1.1\r\nHost: x\r\n\r\n";
 	ck_connection_t connection;
 	const ck_http_request_t *request;
 	ck_http_connection_reader_t *reader;
 	ck_http_response_t *response;
 	ck_http_output_writer_t *writer;
-		int sockets[2];
+	int sockets[2];
 	ck_http_connection_read_result_t read_result;
 
 	assert(socketpair(AF_UNIX, SOCK_STREAM, 0, sockets) == 0);
@@ -92,8 +92,8 @@ static void test_http_keepalive_recycle(void)
 static void test_connection_close_prevents_recycle(void)
 {
 	static const char request[] =
-			"GET / HTTP/1.1\\r\\nHost: x\\r\\n"
-			"Connection: close\\r\\n\\r\\n";
+			"GET / HTTP/1.1\r\nHost: x\r\n"
+			"Connection: close\r\n\r\n";
 	ck_connection_t connection;
 	ck_http_connection_reader_t *reader;
 	ck_http_response_t *response;

@@ -245,3 +245,12 @@ Tomcat 11.0.25 `AsyncContextImpl` 顯示真正 async lifecycle 還包含 `start(
 https://github.com/apache/tomcat/blob/cbe6e15ee81e2fc6232954292a80cca5d1e84009/java/org/apache/catalina/core/AsyncContextImpl.java
 
 學術 correctness 基線：Herlihy/Wing 的 linearizability。來源：https://doi.org/10.1145/78969.78972
+
+
+## 15. Async semantic core boundary
+
+Java side currently has a CkartaAsyncContext semantic core, but not yet the public Jakarta Servlet AsyncContext implementation. Its terminal events are mapped conceptually to the native connection terminal candidates without sharing the native connection pointer with application code.
+
+The next integration must establish an explicit correlation binding between AsyncContext cycle and the native connection owner. The binding must carry request_id/owner_token/lifetime_token or an equivalent validated opaque identity, and must remain valid until the async cycle reaches exactly-once terminal publication and the response/native buffers are no longer borrowed.
+
+The Java semantic core is deliberately not treated as the owner of native memory. The native connection owner remains responsible for native resource release; Java only requests a terminal transition through the controlled bridge.

@@ -90,7 +90,7 @@ poll completion output 使用固定 36 bytes：8 + 8 + 8 + 8 + 4，並以 native
 
 `ck_runtime_init()` 成功表示 bootstrap JVM 與 Java runtime start 已成功；此時 runtime mutex/condition、bootstrap thread、JavaVM 均處於 owned state。
 
-`ck_runtime_shutdown()` 是 lifecycle owner 的操作：設定 shutdown request → wake bootstrap thread → join → 取得 shutdown status。重複 shutdown 在第一次完成後回傳已保存 shutdown status；不得在 destroy 後再次使用 runtime。
+`ck_runtime_shutdown()` 是 lifecycle owner 的操作：設定 shutdown request → wake bootstrap thread → join → 取得 shutdown status。重複 shutdown 在第一次完成後回傳已保存 shutdown status；目前 runtime lifecycle API 不允許與 dispatch/poll 同時競合操作；不得在 destroy 後再次使用 runtime。
 
 `ck_runtime_destroy()` 只允許在 shutdown completed 後銷毀 runtime synchronization primitives。
 

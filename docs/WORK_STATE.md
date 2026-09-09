@@ -202,3 +202,13 @@ Native module 暫定為 load-at-start、ABI/version/signature 驗證、dependenc
 同日：Apache HTTP Server 2.4.68（commit 736bb657405eb73fd68a64772c3a908807bdb887）正式加入 third_party/httpd 作為 reference source。其主要用途是啟動配置、MPM、模組／hook、Windows 平台策略比較；Nginx 仍是 C data plane 主要架構參考，Tomcat 仍是 Servlet container 主要參考。
 
 同日：完成 completion notification primitive 研究；Linux 候選為 epoll + eventfd，Windows 候選為 IOCP + PostQueuedCompletionStatus。尚未實作正式通知 backend。
+
+## 24. Win32/Linux 與 Apache reference 決策
+
+2026-09-09：完成 Win32/Linux 編譯與平台層研究。Win32 為正式目標平台；平台差異應集中在少數 backend。Linux 優先 epoll + eventfd，Windows 優先 IOCP + PostQueuedCompletionStatus。正式 source code 不應散落 compiler-specific platform macros；Linux raw syscall number 與 Windows undocumented syscall 不列為目前方案。
+
+Apache HTTP Server 2.4.68（commit 736bb657405eb73fd68a64772c3a908807bdb887）納入 third_party/httpd，主要供啟動、MPM、模組／hook 與 Win32 平台研究；Nginx 仍是 C data plane 主要參考，Tomcat 仍是 Servlet container 主要參考。
+
+## 25. 下一個 completion 閘門
+
+completion notification 候選已研究：Linux epoll + eventfd；Windows IOCP + PostQueuedCompletionStatus。正式實作尚未開始，下一步先做 notification latency、batching、wake-up、shutdown/cancellation 與多 worker 壓力 benchmark，再選 platform backend。

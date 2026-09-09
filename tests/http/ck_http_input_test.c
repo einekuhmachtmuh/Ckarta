@@ -62,6 +62,7 @@ static void test_content_length_fragmented_and_eof(void)
 	const unsigned char *body;
 	size_t body_length;
 	size_t consumed;
+	size_t body_consumed;
 	ck_http_input_result_t result;
 
 	ck_http_input_init(&input);

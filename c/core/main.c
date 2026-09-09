@@ -1,7 +1,9 @@
 #include "../config/ck_config.h"
 #include "../jni/ck_jni_runtime.h"
 
-#include <sched.h>
+#include <errno.h>
+#include <sys/epoll.h>
+#include <unistd.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -213,22 +215,65 @@ int main(int argc, char **argv)
 		return EXIT_FAILURE;
 	}
 
-	do
 	{
-		completion_result = ck_runtime_poll_completion(&runtime, requests, 2);
-		if (completion_result == 1)
+		int epoll_fd;
+		struct epoll_event event;
+		int wait_result;
+
+		epoll_fd = epoll_create1(EPOLL_CLOEXEC);
+		if (epoll_fd < 0)
 		{
-			completed_count++;
+			ck_runtime_shutdown(&runtime);
+			ck_runtime_destroy(&runtime);
+			ck_config_destroy(&config);
+			return EXIT_FAILURE;
 		}
-		else if (completion_result == 0)
+
+		event.events = EPOLLIN;
+		event.data.fd = ck_runtime_completion_fd(&runtime);
+		if (event.data.fd < 0
+				|| epoll_ctl(epoll_fd, EPOLL_CTL_ADD, event.data.fd, &event) != 0)
 		{
-			sched_yield();
+			close(epoll_fd);
+			ck_runtime_shutdown(&runtime);
+			ck_runtime_destroy(&runtime);
+			ck_config_destroy(&config);
+			return EXIT_FAILURE;
 		}
-		else
+
+		while (completed_count < 2)
 		{
-			break;
+			wait_result = epoll_wait(epoll_fd, &event, 1, -1);
+			if (wait_result < 0)
+			{
+				if (errno == EINTR)
+				{
+					continue;
+				}
+				break;
+			}
+
+			if (ck_completion_queue_drain_notification(NULL) == -999)
+			{
+				break;
+			}
+
+			while ((completion_result =
+					ck_runtime_poll_completion(&runtime, requests, 2)) > 0)
+			{
+				if (completion_result == 1)
+				{
+					completed_count++;
+				}
+			}
+			if (completion_result < 0)
+			{
+				break;
+			}
 		}
-	} while (completed_count < 2);
+
+		close(epoll_fd);
+	}
 
 	result = completed_count == 2 ? 0 : -1;
 	if (check_result("DISPATCH", result) != 0)

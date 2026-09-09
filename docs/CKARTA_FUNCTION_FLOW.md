@@ -170,6 +170,7 @@ completion record 為固定 value-only layout：request id、owner token、lifet
 - real Servlet container hierarchy / mapping
 - Servlet request/response facade
 - AsyncContext bridge
+- ServletRequest.startAsync binding（第一階段 prototype）
 - response descriptor/output pipeline
 - Windows IOCP notification backend
 - formal public module ABI

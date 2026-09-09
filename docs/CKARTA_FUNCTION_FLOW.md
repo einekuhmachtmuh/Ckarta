@@ -56,7 +56,7 @@ main
 
 ## 3. Request state machine
 
-`PENDING → RUNNING → COMPLETED`。
+`PENDING → RUNNING → COMPLETED`；failure：`RUNNING → FAILING → FAILED`。
 
 `PENDING | RUNNING → CANCELLING`；取消勝出後不得被 completion/failure 覆寫。
 

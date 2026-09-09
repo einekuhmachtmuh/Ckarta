@@ -297,6 +297,6 @@ No non-main branch currently has an open PR. Branch refs are retained only where
 
 學術 correctness 基線新增 Herlihy/Wing linearizability 與 Michael/Scott non-blocking queue references；目前不據此預設採 lock-free completion queue，因為 memory reclamation、overflow、shutdown drain 與 owner lifetime 仍需獨立證明。
 
-目前已建立第一個可執行 native completion primitive：bounded mutex-protected ring queue + Linux eventfd notification backend。queue 具有 producer rollback、capacity/closed semantics 與 epoll-compatible notification fd，並有 multi-producer/overflow/drain test。它尚未接到 Java JNI producer，因此尚未宣稱 production completion path 完成。
+目前已完成第一個完整的 executable native completion integration path：Java executor completion → registered JNI publisher → runtime-owned bounded native ring queue → Linux eventfd notification → C epoll wake → native dequeue / request terminal publication。queue 具 close-aware bounded backpressure、overflow/closed semantics、notification coalescing 與 epoll-compatible fd，並有 multi-producer/overflow/drain/close tests。它仍不是完整 Servlet connection data plane 或跨平台最終 backend。
 
 下一個正式閘門改為：JNI producer integration（Java completion → native queue）、owner/lifetime validation、queue shutdown drain、notification close ordering，以及之後的 AsyncContext ↔ C connection cancellation integration。

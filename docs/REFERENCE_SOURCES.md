@@ -144,3 +144,25 @@ Ckarta 不因使用 submodule 而取得修改或重新授權第三方程式碼�
 - 建置參數
 
 不得使用未固定的 upstream branch 作為正式 benchmark 基線。
+
+## 8. Linux io_uring research
+Linux io_uring 官方 API／UAPI：
+https://man7.org/linux/man-pages/man7/io_uring.7.html
+https://man7.org/linux/man-pages/man2/io_uring_setup.2.html
+https://man7.org/linux/man-pages/man2/io_uring_enter.2.html
+https://kernel.org/doc/html/latest/userspace-api/io_uring.html
+
+Kernel release lifecycle：
+https://www.kernel.org/releases.html
+
+學術來源：
+Constantin Pestka, Marcus Paradies, Matthias Pohl, "Asynchronous I/O -- With Great Power Comes Great Responsibility", arXiv:2411.16254.
+https://arxiv.org/abs/2411.16254
+
+Matthias Jasny, Muhammad El-Hindi, Tobias Ziegler, Viktor Leis, Carsten Binnig, "High-Performance DBMSs with io_uring: When and How to use it", PVLDB 19(9), 2317-2330 (2026), DOI 10.14778/3819518.3819553.
+https://doi.org/10.14778/3819518.3819553
+
+Nickolai Zeldovich, Alexander Yip, Frank Dabek, Robert T. Morris, David Mazières, Frans Kaashoek, "Multiprocessor Support for Event-Driven Programs", USENIX ATC 2003, pp. 239-252.
+https://www.usenix.org/conference/2003-usenix-annual-technical-conference/multiprocessor-support-event-driven-programs
+
+Ckarta io_uring research is architecture evidence only; performance claims require Ckarta-versioned benchmarks.

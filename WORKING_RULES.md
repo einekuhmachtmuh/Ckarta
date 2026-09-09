@@ -165,6 +165,8 @@ main/WORKING_RULES.md 是唯一有效的工作守則來源。若非 main branch 
 
 branch 結束、被 superseded 或成果已正式整合後，應刪除或關閉不再需要的 branch／PR；若 Git 平台或權限不允許刪除，至少必須關閉其待合併狀態並記錄 superseded／merged 理由。非 main branch 的 WORKING_RULES.md 應在 branch 建立後立即移除；若該檔案是整併前仍需比對的歷史資料，只能讀取與抽取有效規則，不得繼續作為執行準則。
 
+每次建立、重新啟用、修改或準備關閉任何 branch 時，必須同步在 main branch 的 `docs/WORK_STATE.md` 更新該 branch 的 branch status registry，至少記錄 branch 用途、目前生命週期狀態（例如 active、closed、merged、superseded）與其相對 main 的關係。branch 自身的 `docs/WORK_STATE.md` 同時必須保留同一 branch-specific 狀態的詳細版本；若兩者不一致，必須先重新核對 GitHub branch／PR 實際狀態，再修正文件，不能以文件內容反推 Git 狀態。
+
 ## 18. 平台 API 與 system call review
 
 平台特定的 documented OS API 可以直接由 Ckarta 使用，但必須集中在明確的 platform backend，portable core 不得散落平台條件分支。新增或修改平台 API 呼叫時，必須核對對應版本的官方文件／標頭宣告、完整引數與回傳契約、錯誤語意、handle／descriptor／OVERLAPPED ownership 與 lifetime，並沿成功、錯誤、取消、超時與 shutdown 路徑檢查。

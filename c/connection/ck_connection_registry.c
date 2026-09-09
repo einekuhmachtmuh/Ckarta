@@ -129,6 +129,85 @@ int ck_connection_registry_register(
 	return ENOSPC;
 }
 
+int ck_connection_registry_attach_socket(
+	ck_connection_registry_t *registry,
+		ck_connection_handle_t handle,
+		uint64_t request_id,
+		uint64_t owner_token,
+		uint64_t lifetime_token,
+		int socket_fd)
+{
+	ck_connection_registry_entry_t *entry;
+	int result;
+
+	if (registry == NULL || !registry->initialized || socket_fd < 0)
+	{
+		return -1;
+	}
+
+	if (pthread_mutex_lock(&registry->lock) != 0)
+	{
+		return -1;
+	}
+
+	entry = ck_connection_registry_find(registry, handle);
+	if (entry == NULL)
+	{
+		(void)pthread_mutex_unlock(&registry->lock);
+		return -2;
+	}
+
+	if (ck_connection_validate(&entry->connection,
+			request_id, owner_token, lifetime_token) != 0)
+	{
+		(void)pthread_mutex_unlock(&registry->lock);
+		return -3;
+	}
+
+	result = ck_connection_attach_socket(&entry->connection, socket_fd);
+	(void)pthread_mutex_unlock(&registry->lock);
+	return result;
+}
+
+int ck_connection_registry_socket_fd(
+	ck_connection_registry_t *registry,
+		ck_connection_handle_t handle,
+		uint64_t request_id,
+		uint64_t owner_token,
+		uint64_t lifetime_token)
+{
+	ck_connection_registry_entry_t *entry;
+	int result;
+
+	if (registry == NULL || !registry->initialized)
+	{
+		return -1;
+	}
+
+	if (pthread_mutex_lock(&registry->lock) != 0)
+	{
+		return -1;
+	}
+
+	entry = ck_connection_registry_find(registry, handle);
+	if (entry == NULL)
+	{
+		(void)pthread_mutex_unlock(&registry->lock);
+		return -2;
+	}
+
+	if (ck_connection_validate(&entry->connection,
+			request_id, owner_token, lifetime_token) != 0)
+	{
+		(void)pthread_mutex_unlock(&registry->lock);
+		return -3;
+	}
+
+	result = ck_connection_socket_fd(&entry->connection);
+	(void)pthread_mutex_unlock(&registry->lock);
+	return result;
+}
+
 int ck_connection_registry_start_async_cycle(
 	ck_connection_registry_t *registry,
 		ck_connection_handle_t handle,
@@ -283,7 +362,8 @@ int ck_connection_registry_retire(
 		return -3;
 	}
 
-	if (ck_connection_state(&entry->connection) != CK_CONNECTION_CLOSED)
+	if (ck_connection_state(&entry->connection) != CK_CONNECTION_CLOSED
+			|| ck_connection_socket_fd(&entry->connection) >= 0)
 	{
 		(void)pthread_mutex_unlock(&registry->lock);
 		return 1;

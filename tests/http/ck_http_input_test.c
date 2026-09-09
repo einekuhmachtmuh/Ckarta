@@ -34,8 +34,8 @@ static void test_content_length_body_and_pipeline(void)
 	assert(body_length == 5);
 	assert(ck_http_input_ack_body(&input, &body_consumed) == 0);
 	assert(body_consumed == 5);
-	assert(ck_http_input_ack_body(&input, &body_consumed) == -1);
 	consumed += body_consumed;
+	assert(ck_http_input_ack_body(&input, &body_consumed) == -1);
 	assert(memcmp(body, "hello", 5) == 0);
 	assert(ck_http_input_complete(&input));
 	assert(input.request.method.length == 4);

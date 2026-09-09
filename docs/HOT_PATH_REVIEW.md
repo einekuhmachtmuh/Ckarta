@@ -182,7 +182,7 @@ HTTP framing 必須只有一個權威語意。
 
 C memory ownership 必須可追蹤。
 
-Servlet AsyncContext 可在 Java 方法返回後繼續存在。
+Servlet AsyncContext 可在 Java 方法返回後繼續存在；目前 `CkartaServletAsyncContext` 只完成 API binding prototype，尚未完成 request/container startAsync integration。
 
 Servlet request lifetime 與 TCP connection lifetime 不假設一對一。
 

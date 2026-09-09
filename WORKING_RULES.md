@@ -155,52 +155,6 @@ retry 不得由「發生 exception」單獨觸發；任何 retry 都必須先證
 
 所有新增 error category、status、exception translation、fatal path 或 recovery transition，都必須同步檢查 docs/EXCEPTION_HANDLING_RESEARCH.md 及受影響的 architecture、JNI、lifecycle、security、test 文件；長篇研究只在該權威文件保存一套完整定義。
 
-## 20. 文件索引
-
-docs/EXCEPTION_HANDLING_RESEARCH.md
-docs/ERROR_STATE_MATRIX.md
-docs/ARCHITECTURE.md
-docs/HOT_PATH_REVIEW.md
-docs/FUNCTION_TRACE.md
-docs/CONNECTION_OWNERSHIP.md
-docs/DESIGN_DECISIONS.md
-docs/ENTRYPOINT_DESIGN.md
-docs/STARTUP_STATE_MACHINE.md
-docs/STARTUP_CONFIGURATION_RESEARCH.md
-docs/CORE_CONFIGURATION_CANDIDATES.md
-docs/MODULE_ARCHITECTURE_RESEARCH.md
-docs/HTTP_FRAMING_POLICY.md
-docs/CONCURRENCY_MODEL.md
-docs/CANCELLATION_MODEL.md
-docs/JNI_ABI.md
-docs/JNI_COST_MODEL.md
-docs/SERVLET_6_1_CRITIQUE.md
-docs/WEB_SERVER_THEORY_SERVLET_NGINX.md
-docs/OPENJDK_21U_SOURCE_AUDIT.md
-docs/GATEWAY_SERVLET_NATIVE_BRIDGE_RESEARCH.md
-docs/CGI_FASTCGI_RESEARCH.md
-docs/THREAD_MODEL.md
-docs/THREAD_BENCHMARK_PLAN.md
-docs/TCK_INTEGRATION_PLAN.md
-docs/SECURITY_BASELINE.md
-docs/REFERENCE_SOURCES.md
-docs/WORKING_TREE.md
-docs/WORK_STATE.md
-
-本文件是工程入口；長篇研究以 docs 對應文件為權威內容## 16. 例外與錯誤處理規則
-
-例外、error status、HTTP status、cancellation、timeout、client disconnect 與 process-fatal condition 不得混成單一錯誤通道；每一層必須有唯一主要 error authority，並明確定義 propagation、precedence、terminal transition 與 recovery 行為。跨層傳遞只能攜帶該層需要的 stable category/code/status 與有限診斷資訊，不得把另一層的私有 exception object、內部資料結構或錯誤字串格式變成 ABI。
-
-JNI 任何可能建立 pending Java exception 的操作，在進入下一個需要 JNI 狀態正確性的操作前，必須依 JDK 對應版本規格檢查 exception state；只有已明確決定由 native layer 接管時才可清除 pending exception。不得以無條件 ExceptionClear() 掩蓋錯誤，也不得把 ExceptionDescribe() 當成正式錯誤傳輸機制。Java Throwable 的 reference 若跨越 JNI、thread 或 queue 保存，必須遵守對應 JNI reference 類型的 ownership、scope、thread-affinity 與 lifetime 契約。
-
-任何 asynchronous error、completion 或 cancellation path 都必須定義 exactly-once terminal outcome，以及 late completion、duplicate completion、owner teardown、shutdown、timeout 與 cancellation race 的優先序；不得依 callback arrival order 或未定義 race 推測最終狀態。清理責任必須與 request／connection／buffer owner 綁定，且 error path 不得產生 use-after-free、double free、leak 或已失效 owner 上的 completion。
-
-client-visible error 與 internal diagnostic 必須分離。外部回應不得預設暴露 stack trace、server/build version、filesystem path、native pointer、credentials、TLS secret 或其他內部實作資訊；內部診斷則應使用 request／connection correlation identity 與 stable error code。錯誤回應不得直接把未驗證外部輸入拼入 log 或 dynamic error document。
-
-retry 不得由「發生 exception」單獨觸發；任何 retry 都必須先證明 operation semantics、idempotency、request replayability、bytes-sent state、timeout budget、upstream state 與 cancellation state 允許重試。非冪等請求不得因一般 exception/error path 自動 retry。
-
-所有新增 error category、status、exception translation、fatal path 或 recovery transition，都必須同步檢查 docs/EXCEPTION_HANDLING_RESEARCH.md 及受影響的 architecture、JNI、lifecycle、security、test 文件；長篇研究只在該權威文件保存一套完整定義。
-
 ## 17. Branch 建立、同步與工作守則來源
 
 若工作可以直接在 main 安全完成，優先直接使用 main，不得為了形式上的隔離而建立不必要的 branch。若因平行實驗、破壞性原型、需要保留未完成狀態或其他明確工程理由不得不建立 branch，建立 branch 的第一步必須盤點當時仍 active 的所有 branch／PR，檢查其 WORK_STATE.md、程式碼、研究文件、測試、CI、設定與其他相關 repository 內容，並以此作為 diff、精簡與整併的基線；不得只以 branch 名稱或 PR 描述判斷重複或獨有成果。
@@ -221,6 +175,7 @@ Linux 優先使用 libc 或正式 system-call wrapper；Windows 優先使用 doc
 
 docs/EXCEPTION_HANDLING_RESEARCH.md
 docs/ERROR_STATE_MATRIX.md
+docs/CKARTA_FUNCTION_FLOW.md
 docs/WIN32_LINUX_PLATFORM_RESEARCH.md
 docs/COMPLETION_NOTIFICATION_RESEARCH.md
 docs/ARCHITECTURE.md

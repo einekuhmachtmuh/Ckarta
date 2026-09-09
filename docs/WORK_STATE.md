@@ -201,7 +201,11 @@ Native module 暫定為 load-at-start、ABI/version/signature 驗證、dependenc
 
 `ck_error_t` 暫不直接嵌入 `ck_request_t`，以避免在 failure/cancellation race 下形成 error payload data race；正式 publication primitive 完成後再接 request/completion。這是刻意的 ownership/lifecycle 安全邊界，不是遺漏。
 
-## 25. 2026-09-09 repository audit
+## 25. 2026-09-09 error record implementation gate
+
+`c/error/ck_error.[ch]` 已建立 process-local error/outcome record 骨架，包含 category、stable code、HTTP status、flags、phase、request_id 與固定 layout assertion；`tests/error/ck_error_test.c` 已加入初始化、合法值與 bounds/flag validation。此 record 尚未接入 request/completion，因為 concurrent failure publication 與 request state 的同步語意尚需正式 terminal primitive。
+
+## 26. 2026-09-09 repository audit
 
 本輪依 `WORKING_RULES.md` 完成全 repository 結構、原始碼、研究文件、測試、CI、設定與固定 upstream gitlink 交叉檢查。已修正：
 

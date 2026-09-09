@@ -210,6 +210,8 @@ static void *ck_bootstrap_main(void *arg)
 
 	if (start_status == 0)
 	{
+		ck_runtime_sync_fatal("bootstrap.completion_queue_close",
+				ck_completion_queue_close(&runtime->completion_queue));
 		start_status = ck_call_stop(env);
 		runtime->shutdown_status = start_status == 0 ? 0 : -1;
 	}
@@ -475,9 +477,18 @@ int ck_runtime_init(ck_runtime_t *runtime, const char *class_path)
 
 	memset(runtime, 0, sizeof(*runtime));
 	runtime->class_path = class_path;
+	result = ck_completion_queue_init(&runtime->completion_queue);
+	if (result != 0)
+	{
+		return result;
+	}
+	runtime->completion_queue_initialized = 1;
+
 	result = pthread_mutex_init(&runtime->lock, NULL);
 	if (result != 0)
 	{
+		ck_completion_queue_destroy(&runtime->completion_queue);
+		runtime->completion_queue_initialized = 0;
 		return result;
 	}
 
@@ -485,6 +496,8 @@ int ck_runtime_init(ck_runtime_t *runtime, const char *class_path)
 	if (result != 0)
 	{
 		pthread_mutex_destroy(&runtime->lock);
+		ck_completion_queue_destroy(&runtime->completion_queue);
+		runtime->completion_queue_initialized = 0;
 		return result;
 	}
 
@@ -495,6 +508,8 @@ int ck_runtime_init(ck_runtime_t *runtime, const char *class_path)
 	{
 		pthread_cond_destroy(&runtime->condition);
 		pthread_mutex_destroy(&runtime->lock);
+		ck_completion_queue_destroy(&runtime->completion_queue);
+		runtime->completion_queue_initialized = 0;
 		runtime->sync_initialized = 0;
 		return result;
 	}
@@ -524,6 +539,8 @@ int ck_runtime_init(ck_runtime_t *runtime, const char *class_path)
 
 		pthread_cond_destroy(&runtime->condition);
 		pthread_mutex_destroy(&runtime->lock);
+		ck_completion_queue_destroy(&runtime->completion_queue);
+		runtime->completion_queue_initialized = 0;
 		memset(runtime, 0, sizeof(*runtime));
 		return -1;
 	}
@@ -556,6 +573,13 @@ int ck_runtime_shutdown(ck_runtime_t *runtime)
 	}
 
 	runtime->shutdown_requested = 1;
+	result = ck_completion_queue_close(&runtime->completion_queue);
+	if (result != 0 && result != 1)
+	{
+		(void)pthread_mutex_unlock(&runtime->lock);
+		return result;
+	}
+
 	result = pthread_cond_broadcast(&runtime->condition);
 	if (result != 0)
 	{
@@ -602,6 +626,11 @@ void ck_runtime_destroy(ck_runtime_t *runtime)
 
 	result = pthread_mutex_destroy(&runtime->lock);
 	ck_runtime_sync_fatal("runtime.destroy.mutex", result);
+
+	if (runtime->completion_queue_initialized)
+	{
+		ck_completion_queue_destroy(&runtime->completion_queue);
+	}
 
 	memset(runtime, 0, sizeof(*runtime));
 }

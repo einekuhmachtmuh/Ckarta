@@ -80,7 +80,7 @@ static void test_header_serialization(void)
 {
 	static const unsigned char body[] = "hello";
 	static const char expected[] =
-		"HTTP/1.1 201\r\n"
+		"HTTP/1.1 201 \r\n"
 		"Content-Length: 5\r\n"
 		"Connection: close\r\n"
 		"\r\n";

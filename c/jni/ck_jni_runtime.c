@@ -11,7 +11,7 @@ static void ck_runtime_sync_fatal(const char *operation, int result)
 {
 	if (result != 0)
 	{
-		fprintf(stderr, "CKARTA_SYNC_ERROR=%s:%d\\n", operation, result);
+		fprintf(stderr, "CKARTA_SYNC_ERROR=%s:%d\n", operation, result);
 		abort();
 	}
 }
@@ -133,7 +133,7 @@ static void *ck_bootstrap_main(void *arg)
 	}
 
 	runtime->vm = vm;
-	pthread_mutex_unlock(&runtime->lock);
+	ck_runtime_sync_fatal("bootstrap.mutex_unlock", pthread_mutex_unlock(&runtime->lock));
 
 	start_status = ck_call_start(env);
 

@@ -164,3 +164,11 @@ PR #2 已於 2026-09-08 squash-merge 至 `main`，merge commit `2638bc5017093b5f
 ## 16. CGI/FastCGI 模組化決策
 
 2026-09-08：CGI/FastCGI 正式定位為未來可掛接 application gateway module，不納入核心 request execution。效能研究已把「不存在／存在未命中／實際命中」三種成本分離；學術比較顯示 CGI 的 process creation 是結構性成本，FastCGI 將其移至長生命週期 application process。尚未實作 module loader、CGI process lifecycle 或 FastCGI client。
+
+
+## Branch status
+
+- Purpose: CGI module/function safety rules與可選 gateway研究
+- Lifecycle status: CLOSED / SUPERSEDED
+- Relation to main: PR #7 closed;有效規則已依 main 工作守則整併。
+- This file is branch-specific state and must not be treated as main canonical state.

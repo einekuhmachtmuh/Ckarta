@@ -49,7 +49,8 @@ Nginx 與 Apache Tomcat 不直接複製進 Ckarta repository，而是以 Git sub
 - docs/STARTUP_STATE_MACHINE.md：C main、JVM、Java container、network runtime 的啟動／停止狀態機。
 - docs/HTTP_FRAMING_POLICY.md：HTTP/1.1 framing（訊息框架）權威解析政策與目前 executable parser/decode boundary。
 - docs/HTTP_CONNECTION_READER.md：connection-owned HTTP input buffer、non-blocking read consumer、body sink、pipeline、request recycle、registry pin 與 bounded dispatch 契約。
-- docs/HTTP_RESPONSE_STATE.md：native HTTP response transaction state、ownership、Content-Length completion invariant 與後續 socket output 閘門。
+- docs/HTTP_RESPONSE_STATE.md：native HTTP response transaction state、ownership、Content-Length completion invariant 與 response lifecycle。
+- docs/HTTP_OUTPUT_WRITER.md：bounded non-blocking response output、partial write、EPOLLOUT continuation、ownership 與 fairness 契約。
 - docs/CONCURRENCY_MODEL.md：C 事件並行與 Java Servlet 執行模型。
 - docs/EXCEPTION_HANDLING_RESEARCH.md：C/Java/JNI 例外、錯誤傳播、恢復、資訊洩漏與 exactly-once terminal outcome 的唯一權威研究。
 - docs/ERROR_STATE_MATRIX.md：error category × request lifecycle × owner × HTTP outcome 的形式化矩陣與 `ck_error_t` 邊界。

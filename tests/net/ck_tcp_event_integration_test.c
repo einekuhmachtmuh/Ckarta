@@ -2,7 +2,7 @@
 
 #include "../../c/connection/ck_connection_registry.h"
 #include "../../c/event/ck_event_loop.h"
-#include "../../c/http/ck_http_input.h"
+#include "../../c/http/ck_http_connection_reader.h"
 #include "../../c/net/ck_tcp_listener.h"
 
 #include <assert.h>
@@ -12,6 +12,23 @@
 #include <string.h>
 #include <sys/socket.h>
 #include <unistd.h>
+
+struct body_capture
+{
+	char data[5];
+	size_t length;
+};
+
+static int capture_body(void *context, const unsigned char *data, size_t length)
+{
+	struct body_capture *capture = context;
+
+	assert(capture != NULL);
+	assert(capture->length + length <= sizeof(capture->data));
+	memcpy(capture->data + capture->length, data, length);
+	capture->length += length;
+	return 0;
+}
 
 static int connect_loopback(int port)
 {
@@ -35,9 +52,9 @@ int main(void)
 	ck_tcp_listener_t listener = {0};
 	ck_event_loop_t loop = {0};
 	ck_connection_registry_t registry = {0};
-	ck_http_input_t http_input;
-	ck_http_input_t next_input;
-	ck_http_input_result_t http_result;
+	ck_connection_registry_reader_pin_t pin = {0};
+	ck_http_connection_reader_result_t reader_result;
+	ck_http_connection_reader_t *reader;
 	ck_event_notification_t notifications[4] = {0};
 	ck_connection_handle_t handle;
 	ck_connection_handle_t reused_handle;
@@ -49,23 +66,13 @@ int main(void)
 		"hello"
 		"GET /next HTTP/1.1\r\n"
 		"Host: localhost\r\n\r\n";
+	const size_t payload_length = sizeof(payload) - 1U;
 	const char next_request[] =
 		"GET /next HTTP/1.1\r\nHost: localhost\r\n\r\n";
-	const size_t payload_length = sizeof(payload) - 1U;
-	char received[512];
-	char body_copy[5] = {0};
+	struct body_capture capture = {0};
 	int client_fd;
 	int accepted_fd;
 	int count;
-	size_t consumed = 0;
-	size_t body_length = 0;
-	size_t total_received = 0;
-	size_t body_copied = 0;
-	size_t first_request_end = 0;
-	const unsigned char *body = NULL;
-
-	ck_http_input_init(&http_input);
-	ck_http_input_init(&next_input);
 
 	assert(ck_tcp_listener_init(&listener, 0) == 0);
 	assert(ck_event_loop_init(&loop) == 0);
@@ -103,63 +110,41 @@ int main(void)
 			continue;
 		}
 
-		for (;;)
-		{
-			ssize_t received_now = recv(accepted_fd, received + total_received,
-				sizeof(received) - total_received, MSG_DONTWAIT);
-			if (received_now < 0)
-			{
-				assert(errno == EAGAIN || errno == EWOULDBLOCK);
-				break;
-			}
-			assert(received_now > 0);
-			{
-				size_t feed_offset = total_received;
-				http_result = ck_http_input_feed(&http_input,
-						received + feed_offset, (size_t)received_now,
-						&consumed, &body, &body_length);
-				assert(consumed <= (size_t)received_now);
-				if (body_length != 0)
-				{
-					assert(body_copied + body_length <= sizeof(body_copy));
-					memcpy(body_copy + body_copied, body, body_length);
-					body_copied += body_length;
-				}
-				total_received += (size_t)received_now;
-				if (http_result == CK_HTTP_INPUT_COMPLETE)
-				{
-					first_request_end = feed_offset + consumed;
-					break;
-				}
-				assert(http_result == CK_HTTP_INPUT_INCOMPLETE
-						|| http_result == CK_HTTP_INPUT_BODY);
-			}
-		}
-		if (first_request_end != 0)
+		assert(ck_connection_registry_reader_acquire(
+			&registry, handle, UINT64_C(2001), UINT64_C(3001),
+			UINT64_C(4001), &pin) == 0);
+		reader = pin.reader;
+		reader_result = ck_http_connection_reader_drive(reader,
+			accepted_fd, capture_body, &capture);
+		assert(reader_result == CK_HTTP_CONNECTION_READ_REQUEST_COMPLETE
+				|| reader_result == CK_HTTP_CONNECTION_READ_INCOMPLETE);
+		assert(ck_connection_registry_reader_release(&registry, &pin) == 0);
+		if (reader_result == CK_HTTP_CONNECTION_READ_REQUEST_COMPLETE)
 		{
 			break;
 		}
 	}
 
-	assert(first_request_end != 0);
-	assert(first_request_end < total_received);
-	assert(total_received <= payload_length);
-	assert(body_copied == sizeof(body_copy));
-	assert(memcmp(body_copy, "hello", sizeof(body_copy)) == 0);
-	assert(memcmp(received, payload, total_received) == 0);
-	assert(memcmp(received + first_request_end, next_request, strlen(next_request)) == 0);
+	assert(capture.length == sizeof(capture.data));
+	assert(memcmp(capture.data, "hello", sizeof(capture.data)) == 0);
+	assert(ck_connection_registry_reader_acquire(
+			&registry, handle, UINT64_C(2001), UINT64_C(3001),
+			UINT64_C(4001), &pin) == 0);
+		reader = pin.reader;
+	assert(ck_http_connection_reader_buffered_bytes(reader)
+			== strlen(next_request));
+	assert(memcmp(ck_http_connection_reader_buffer(reader),
+		next_request, strlen(next_request)) == 0);
+	assert(ck_http_connection_reader_next_request(reader) == 0);
+	reader_result = ck_http_connection_reader_drive(reader,
+		accepted_fd, NULL, NULL);
+	assert(reader_result == CK_HTTP_CONNECTION_READ_REQUEST_COMPLETE);
+	assert(ck_http_connection_reader_request(reader)->target.length == 5);
+	assert(memcmp(ck_http_connection_reader_request(reader)->target.data,
+		"/next", 5) == 0);
+	assert(ck_connection_registry_reader_release(&registry, &pin) == 0);
 
-	ck_http_input_next_request(&next_input);
-	http_result = ck_http_input_feed(&next_input,
-		received + first_request_end, total_received - first_request_end,
-		&consumed, &body, &body_length);
-	assert(http_result == CK_HTTP_INPUT_COMPLETE);
-	assert(consumed == total_received - first_request_end);
-	assert(body_length == 0);
-	assert(next_input.request.target.length == 5);
-	assert(memcmp(next_input.request.target.data, "/next", 5) == 0);
-
-	assert(recv(accepted_fd, received, sizeof(received), MSG_DONTWAIT) == -1);
+	assert(recv(accepted_fd, &capture.data[0], 1, MSG_DONTWAIT) == -1);
 	assert(errno == EAGAIN || errno == EWOULDBLOCK);
 
 	assert(close(client_fd) == 0);

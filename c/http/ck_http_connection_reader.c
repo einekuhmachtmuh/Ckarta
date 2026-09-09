@@ -4,6 +4,22 @@
 #include <string.h>
 #include <sys/socket.h>
 
+static int write_body_queue(void *context,
+	const unsigned char *data, size_t length)
+{
+	ck_http_request_body_t *queue = context;
+	size_t written = 0;
+	ck_http_request_body_write_result_t result;
+
+	result = ck_http_request_body_write(queue, data, length, &written);
+	if (result == CK_HTTP_REQUEST_BODY_WRITE_WOULD_BLOCK
+			|| (result == CK_HTTP_REQUEST_BODY_WRITE_OK && written != length))
+	{
+		return CK_HTTP_BODY_SINK_WOULD_BLOCK;
+	}
+	return result == CK_HTTP_REQUEST_BODY_WRITE_OK ? 0 : 1;
+}
+
 static ck_http_connection_read_result_t map_input_result(
 	ck_http_input_result_t result)
 {
@@ -33,6 +49,18 @@ void ck_http_connection_reader_init(ck_http_connection_reader_t *reader)
 	ck_http_input_init(&reader->input);
 	reader->begin = 0;
 	reader->end = 0;
+	reader->body_queue = NULL;
+}
+
+void ck_http_connection_reader_attach_body_queue(
+	ck_http_connection_reader_t *reader,
+	ck_http_request_body_t *body_queue)
+{
+	if (reader == NULL)
+	{
+		return;
+	}
+	reader->body_queue = body_queue;
 }
 
 ck_http_connection_read_result_t ck_http_connection_reader_drive(
@@ -82,9 +110,27 @@ ck_http_connection_read_result_t ck_http_connection_reader_drive(
 			if (body_length != 0)
 			{
 				size_t body_consumed = 0;
+				ck_http_body_sink_fn effective_sink = body_sink;
+				void *effective_context = body_sink_context;
+				int sink_result;
 
-				if (body_sink == NULL
-						|| body_sink(body_sink_context, body_data, body_length) != 0)
+				if (effective_sink == NULL && reader->body_queue != NULL)
+				{
+					effective_sink = write_body_queue;
+					effective_context = reader->body_queue;
+				}
+				if (effective_sink == NULL)
+				{
+					return CK_HTTP_CONNECTION_READ_SINK_ERROR;
+				}
+
+				sink_result = effective_sink(
+						effective_context, body_data, body_length);
+				if (sink_result == CK_HTTP_BODY_SINK_WOULD_BLOCK)
+				{
+					return CK_HTTP_CONNECTION_READ_BODY_BACKPRESSURE;
+				}
+				if (sink_result != 0)
 				{
 					return CK_HTTP_CONNECTION_READ_SINK_ERROR;
 				}
@@ -101,6 +147,10 @@ ck_http_connection_read_result_t ck_http_connection_reader_drive(
 
 			if (ck_http_input_complete(&reader->input))
 			{
+				if (reader->body_queue != NULL)
+				{
+					ck_http_request_body_mark_eof(reader->body_queue);
+				}
 				return CK_HTTP_CONNECTION_READ_REQUEST_COMPLETE;
 			}
 
@@ -169,6 +219,11 @@ ck_http_connection_read_result_t ck_http_connection_reader_drive(
 				size_t unused_body_length = 0;
 				ck_http_input_result_t eof_result = ck_http_input_eof(
 						&reader->input, &unused_body, &unused_body_length);
+				if (eof_result == CK_HTTP_INPUT_EOF_INCOMPLETE
+						&& reader->body_queue != NULL)
+				{
+					ck_http_request_body_mark_error(reader->body_queue);
+				}
 				return map_input_result(eof_result);
 			}
 			if (errno == EAGAIN || errno == EWOULDBLOCK)
@@ -202,6 +257,10 @@ int ck_http_connection_reader_next_request(
 	reader->begin = 0;
 	reader->end = remaining;
 	ck_http_input_next_request(&reader->input);
+	if (reader->body_queue != NULL)
+	{
+		ck_http_request_body_init(reader->body_queue);
+	}
 	return 0;
 }
 

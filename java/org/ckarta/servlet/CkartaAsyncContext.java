@@ -82,7 +82,7 @@ public final class CkartaAsyncContext
 	public void start(Runnable runnable)
 	{
 		Objects.requireNonNull(runnable, "runnable");
-		checkUsable();
+		checkActive();
 
 		try
 		{
@@ -217,11 +217,12 @@ public final class CkartaAsyncContext
 		}
 	}
 
-	private void checkUsable()
+	private void checkActive()
 	{
-		if (state.get() == State.RECYCLED)
+		if (state.get() != State.ACTIVE)
 		{
-			throw new IllegalStateException("async context has been recycled");
+			throw new IllegalStateException(
+					"async context is no longer active");
 		}
 	}
 }

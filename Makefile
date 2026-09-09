@@ -90,11 +90,11 @@ $(COMPLETION_QUEUE_TEST): tests/completion/ck_completion_queue_test.c c/completi
 	@mkdir -p $(BIN_DIR)
 	$(CC) $(CFLAGS) tests/completion/ck_completion_queue_test.c c/completion/ck_completion_queue.c c/event/ck_completion_notification.c -o $@
 
-$(CONNECTION_TEST): tests/connection/ck_connection_test.c c/connection/ck_connection.c c/connection/ck_connection.h c/http/ck_http_connection_reader.c c/http/ck_http_connection_reader.h c/http/ck_http_input.c c/http/ck_http_input.h c/http/ck_http_parser.c c/http/ck_http_parser.h c/http/ck_http_chunked.c c/http/ck_http_chunked.h
+$(CONNECTION_TEST): tests/connection/ck_connection_test.c c/connection/ck_connection.c c/connection/ck_connection.h c/output/ck_http_output_writer.c c/output/ck_http_output_writer.h c/http/ck_http_connection_reader.c c/http/ck_http_connection_reader.h c/http/ck_http_input.c c/http/ck_http_input.h c/http/ck_http_parser.c c/http/ck_http_parser.h c/http/ck_http_chunked.c c/http/ck_http_chunked.h
 	@mkdir -p $(BIN_DIR)
-	$(CC) $(CFLAGS) tests/connection/ck_connection_test.c c/connection/ck_connection.c c/http/ck_http_connection_reader.c c/http/ck_http_input.c c/http/ck_http_parser.c c/http/ck_http_chunked.c -o $@
+	$(CC) $(CFLAGS) tests/connection/ck_connection_test.c c/connection/ck_connection.c c/output/ck_http_output_writer.c c/output/ck_http_output_writer.h c/http/ck_http_connection_reader.c c/http/ck_http_input.c c/http/ck_http_parser.c c/http/ck_http_chunked.c -o $@
 
-$(CONNECTION_REGISTRY_TEST): tests/connection/ck_connection_registry_test.c c/connection/ck_connection_registry.c c/connection/ck_connection_registry.h c/connection/ck_connection.c c/connection/ck_connection.h c/http/ck_http_connection_reader.c c/http/ck_http_connection_reader.h c/http/ck_http_input.c c/http/ck_http_input.h c/http/ck_http_parser.c c/http/ck_http_parser.h c/http/ck_http_chunked.c c/http/ck_http_chunked.h
+$(CONNECTION_REGISTRY_TEST): tests/connection/ck_connection_registry_test.c c/connection/ck_connection_registry.c c/connection/ck_connection_registry.h c/connection/ck_connection.c c/connection/ck_connection.h c/output/ck_http_output_writer.c c/output/ck_http_output_writer.h c/http/ck_http_connection_reader.c c/http/ck_http_connection_reader.h c/http/ck_http_input.c c/http/ck_http_input.h c/http/ck_http_parser.c c/http/ck_http_parser.h c/http/ck_http_chunked.c c/http/ck_http_chunked.h
 	@mkdir -p $(BIN_DIR)
 	$(CC) $(CFLAGS) tests/connection/ck_connection_registry_test.c c/connection/ck_connection_registry.c c/connection/ck_connection.c c/http/ck_http_connection_reader.c c/http/ck_http_input.c c/http/ck_http_parser.c c/http/ck_http_chunked.c -o $@
 
@@ -102,7 +102,7 @@ $(EVENT_LOOP_TEST): tests/event/ck_event_loop_test.c c/event/ck_event_loop.c c/e
 	@mkdir -p $(BIN_DIR)
 	$(CC) $(CFLAGS) tests/event/ck_event_loop_test.c c/event/ck_event_loop.c -o $@
 
-$(TCP_EVENT_INTEGRATION_TEST): tests/net/ck_tcp_event_integration_test.c c/net/ck_tcp_listener.c c/net/ck_tcp_listener.h c/event/ck_event_loop.c c/event/ck_event_loop.h c/connection/ck_connection_registry.c c/connection/ck_connection_registry.h c/connection/ck_connection.c c/connection/ck_connection.h c/http/ck_http_connection_reader.c c/http/ck_http_connection_reader.h c/http/ck_http_input.c c/http/ck_http_input.h c/http/ck_http_parser.c c/http/ck_http_parser.h c/http/ck_http_chunked.c c/http/ck_http_chunked.h
+$(TCP_EVENT_INTEGRATION_TEST): tests/net/ck_tcp_event_integration_test.c c/net/ck_tcp_listener.c c/net/ck_tcp_listener.h c/event/ck_event_loop.c c/event/ck_event_loop.h c/connection/ck_connection_registry.c c/connection/ck_connection_registry.h c/connection/ck_connection.c c/connection/ck_connection.h c/output/ck_http_output_writer.c c/output/ck_http_output_writer.h c/http/ck_http_connection_reader.c c/http/ck_http_connection_reader.h c/http/ck_http_input.c c/http/ck_http_input.h c/http/ck_http_parser.c c/http/ck_http_parser.h c/http/ck_http_chunked.c c/http/ck_http_chunked.h
 	@mkdir -p $(BIN_DIR)
 	$(CC) $(CFLAGS) tests/net/ck_tcp_event_integration_test.c c/net/ck_tcp_listener.c c/event/ck_event_loop.c c/connection/ck_connection_registry.c c/connection/ck_connection.c c/http/ck_http_connection_reader.c c/http/ck_http_input.c c/http/ck_http_parser.c c/http/ck_http_chunked.c -o $@
 

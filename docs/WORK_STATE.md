@@ -458,3 +458,12 @@ commit `698da373de80a792f14b6a4d4299ea93a90409da` 的 GitHub Actions run `343461
 同一提交另因建立新 Git tree 時誤使用過期 base tree，使先前已移除的 `.gitkeep` 被重新加入；修正提交將以當前 HEAD tree 為 base 並再次移除這些非空 code/test 目錄的標記檔。此項屬 repository 整合錯誤，已在提交 diff 檢查階段發現，不能視為正常工作樹狀態。
 
 下一次 CI 必須重新驗證 production Java compile、C compile、registry unit test 與 C-driven JVM JNI integration test；在新 run 完成前，不得宣稱本閘門通過。
+
+
+## 47. 2026-09-09 correction of stale-tree test regression
+
+GitHub Actions run `34346260455`、job `102448450125` 對 commit `b07e087de5a5281752b0ae94beddaf8299a3ff65` 實際失敗。production Java source 已編譯通過，failure 發生在 `tests/java/CkartaServletRequestAsyncTest.java` compile：該檔被前一個錯誤 tree-base 整合帶回舊版本，仍呼叫只有 4 個主要參數的舊 constructor；目前 adapter 已要求 request/response/executor/terminal sink 加上 requestId、ownerToken、lifetimeToken，另有可選 native bridge overload。
+
+本輪以當前 main HEAD 的測試檔為基礎重新套用已核實的 7-argument constructor。這不是新的 API 設計，也不新增 WORKING_RULES 規則；屬於既有函式 signature／引用與版本一致性規則所涵蓋的整合錯誤。
+
+此後新的 CI 必須先通過舊 regression，才可取得 native registry/JNI integration test 的真正執行結果。

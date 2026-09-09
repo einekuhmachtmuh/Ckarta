@@ -3,6 +3,7 @@
 #include "../../c/http/ck_http_connection_reader.h"
 
 #include <assert.h>
+#include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
 #include <unistd.h>
@@ -22,6 +23,18 @@ static int capture_body(void *context, const unsigned char *data, size_t length)
 	memcpy(capture->data + capture->length, data, length);
 	capture->length += length;
 	return 0;
+}
+
+static void send_all(int socket_fd, const unsigned char *data, size_t length)
+{
+	size_t offset = 0;
+
+	while (offset < length)
+	{
+		ssize_t sent = send(socket_fd, data + offset, length - offset, 0);
+		assert(sent > 0);
+		offset += (size_t)sent;
+	}
 }
 
 static void test_content_length_pipeline(void)
@@ -58,7 +71,7 @@ static void test_content_length_pipeline(void)
 	assert(ck_http_connection_reader_buffered_bytes(&reader)
 			== strlen("GET /next HTTP/1.1\r\nHost: localhost\r\n\r\n"));
 
-	ck_http_connection_reader_next_request(&reader);
+	assert(ck_http_connection_reader_next_request(&reader) == 0);
 	capture.length = 0;
 	result = ck_http_connection_reader_drive(&reader, sockets[1],
 			capture_body, &capture);
@@ -160,6 +173,39 @@ static void test_chunked_split_crlf(void)
 	assert(close(sockets[1]) == 0);
 }
 
+static void test_read_batch_budget(void)
+{
+	static const char prefix[] =
+		"POST /large HTTP/1.1\r\n"
+		"Content-Length: 70000\r\n\r\n";
+	const size_t body_length = 70000U;
+	unsigned char *body;
+	ck_http_connection_reader_t reader;
+	int sockets[2];
+	ck_http_connection_read_result_t result;
+	size_t total = 0;
+
+	body = malloc(body_length);
+	assert(body != NULL);
+	for (size_t i = 0; i < body_length; i++)
+	{
+		body[i] = (unsigned char)('a' + (i % 26U));
+	}
+
+	assert(socketpair(AF_UNIX, SOCK_STREAM, 0, sockets) == 0);
+	ck_http_connection_reader_init(&reader);
+	send_all(sockets[0], (const unsigned char *)prefix, sizeof(prefix) - 1U);
+	send_all(sockets[0], body, body_length);
+
+	result = ck_http_connection_reader_drive(&reader, sockets[1],
+			NULL, NULL);
+	assert(result == CK_HTTP_CONNECTION_READ_SINK_ERROR);
+
+	free(body);
+	assert(close(sockets[0]) == 0);
+	assert(close(sockets[1]) == 0);
+}
+
 static void test_eof_incomplete_body(void)
 {
 	static const char header[] =
@@ -189,6 +235,7 @@ int main(void)
 	test_content_length_pipeline();
 	test_chunked_stream();
 	test_chunked_split_crlf();
+	test_read_batch_budget();
 	test_eof_incomplete_body();
 	return 0;
 }

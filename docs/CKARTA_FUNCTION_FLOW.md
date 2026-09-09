@@ -44,7 +44,7 @@ main
 | apply_class_path | config parser | directive semantic validation | 0 | -1 | config-owned path |
 | ck_request_init | main/dispatcher | validate/copy descriptor + initialize state | 0 | -1 | descriptor body remains caller-owned/borrowed |
 | ck_request_begin | worker | PENDING→RUNNING | 0 | 1/-1 | request owner retained |
-| ck_request_cancel | owner | acquire CANCELLING state | 0 | -1 | owner remains responsible |
+| ck_request_cancel | owner | acquire CANCELLING state | 0=本次取得取消 ownership；1=已由其他事件取得/完成或已取消 | -1 | owner remains responsible |
 | ck_error_init | error record owner | initialize fixed record | void | no-op on null | caller owns record |
 | ck_error_set | error record owner | validate and populate category/code/outcome | 0 | -1 | caller owns record |
 | ck_request_fail | failure publisher | RUNNING→FAILING→FAILED | 0 | 1/-1 | winner publishes error |

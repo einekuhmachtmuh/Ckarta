@@ -22,9 +22,9 @@ reader buffer 由 connection-side owner 擁有。body sink callback 只借用 bo
 
 `ck_http_request_t` 的 spans 受 `ck_http_input`／parser storage lifetime 約束。`ck_http_connection_reader_next_request()` 會 recycle current request state，因此 caller 不得在其後繼續使用舊 request span。
 
-registry 不直接暴露內部 `ck_connection_t *` 給未受控 caller；connection entry 的 lookup lifetime 仍由 registry mutex 保護。這避免以 reader integration 為由繞過 generation／entry lifetime contract。
+registry 不直接暴露內部 `ck_connection_t *` 給未受控 caller；connection entry 的 lookup lifetime 仍由 registry mutex 保護。正式 registry dispatch 使用 reader pin：`ck_connection_registry_reader_acquire()` 在 registry lock 內完成 handle/generation/identity validation 並增加 reader user count，然後 caller 可在不持有 registry lock 的情況下執行 non-blocking reader operation；`ck_connection_registry_reader_release()` 減少 user count。只要 reader pin 存在，registry 不允許 close 或 retire，以避免 reader 與 underlying connection entry 在使用期間被回收。
 
-reader access 目前遵循 connection owner single-owner contract：持有 borrow pointer 的期間，不得同時由另一執行緒執行 connection terminal close 或其他可能釋放 reader 的操作。這不是 reader 本身的 thread-safe guarantee；正式跨執行緒 dispatch 必須先建立 registry-safe lifetime guard。
+reader access 仍遵循 connection owner single-owner contract：同一時間只有受授權的 connection owner 應推進 reader state。reader pin 是 lifetime guard，不是 reader 本身的 general-purpose thread-safe guarantee。
 
 ## 3. Read contract
 
@@ -86,6 +86,7 @@ Ckarta reader 不重新解釋這些規則，只執行已由 framing layer 決定
 
 - bounded connection-owned receive buffer
 - `ck_connection_t` 持有 heap-backed reader owner pointer
+- registry-safe reader pin acquire/release contract
 - non-blocking `recv()` consumer
 - HTTP header/body framing composition
 - Content-Length streaming body sink
@@ -97,11 +98,12 @@ Ckarta reader 不重新解釋這些規則，只執行已由 framing layer 決定
 - fragmented chunk delimiter regression test
 - independent reader socketpair tests
 - connection close 後 reader lifetime invalidation test
+- registry close/retire 被 active reader pin 阻擋的測試
 
 尚未完成：
 
-- registry-safe production notification consumer 對 reader 的正式 dispatch API
 - production connection read-event state integration
+- loopback TCP integration 改用 registry-safe reader dispatch
 - read batching/fairness budget
 - request timeout／Slowloris timer source
 - true multi-worker accept ownership
@@ -123,4 +125,4 @@ SEDA：Matt Welsh、David Culler、Eric Brewer, “SEDA: an architecture for wel
 
 Herlihy/Wing：Maurice P. Herlihy、Jeannette M. Wing, “Linearizability: A Correctness Condition for Concurrent Objects”, ACM Transactions on Programming Languages and Systems 12(3), 463–492, 1990. DOI: https://doi.org/10.1145/78969.78972
 
-此處用作 concurrent ownership／terminal arbitration 的 correctness reasoning baseline；reader 本身目前由單一 connection owner 驅動，因此沒有將其標示為 thread-safe shared object。
+此處用作 concurrent ownership／terminal arbitration 與 lifetime guard 的 correctness reasoning baseline；reader 本身沒有因此被標示為 thread-safe shared object。

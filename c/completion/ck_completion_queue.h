@@ -5,6 +5,8 @@
 #include <stdint.h>
 #include <pthread.h>
 
+#include "../event/ck_completion_notification.h"
+
 #define CK_COMPLETION_QUEUE_ABI_VERSION 1u
 #define CK_COMPLETION_QUEUE_CAPACITY 64u
 
@@ -24,7 +26,7 @@ typedef struct ck_completion_queue
 	size_t head;
 	size_t tail;
 	size_t count;
-	int event_fd;
+	ck_completion_notification_t notification;
 	int initialized;
 	int closed;
 } ck_completion_queue_t;

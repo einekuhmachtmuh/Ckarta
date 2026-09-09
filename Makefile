@@ -93,15 +93,15 @@ $(CONNECTION_TEST): tests/connection/ck_connection_test.c c/connection/ck_connec
 
 $(CONNECTION_REGISTRY_TEST): tests/connection/ck_connection_registry_test.c c/connection/ck_connection_registry.c c/connection/ck_connection_registry.h c/connection/ck_connection.c c/connection/ck_connection.h
 	@mkdir -p $(BIN_DIR)
-	$(CC) $(CFLAGS) tests/connection/ck_connection_registry_test.c c/connection/ck_connection_registry.c c/connection/ck_connection.h c/connection/ck_connection.c -o $@
+	$(CC) $(CFLAGS) tests/connection/ck_connection_registry_test.c c/connection/ck_connection_registry.c c/connection/ck_connection.c -o $@
 
 $(EVENT_LOOP_TEST): tests/event/ck_event_loop_test.c c/event/ck_event_loop.c c/event/ck_event_loop.h
 	@mkdir -p $(BIN_DIR)
 	$(CC) $(CFLAGS) tests/event/ck_event_loop_test.c c/event/ck_event_loop.c -o $@
 
-$(TCP_EVENT_INTEGRATION_TEST): tests/net/ck_tcp_event_integration_test.c c/net/ck_tcp_listener.c c/net/ck_tcp_listener.h c/event/ck_event_loop.c c/event/ck_event_loop.h c/connection/ck_connection_registry.c c/connection/ck_connection_registry.h c/connection/ck_connection.c c/connection/ck_connection.h c/http/ck_http_parser.c c/http/ck_http_parser.h
+$(TCP_EVENT_INTEGRATION_TEST): tests/net/ck_tcp_event_integration_test.c c/net/ck_tcp_listener.c c/net/ck_tcp_listener.h c/event/ck_event_loop.c c/event/ck_event_loop.h c/connection/ck_connection_registry.c c/connection/ck_connection_registry.h c/connection/ck_connection.c c/connection/ck_connection.h c/http/ck_http_input.c c/http/ck_http_input.h c/http/ck_http_parser.c c/http/ck_http_parser.h c/http/ck_http_chunked.c c/http/ck_http_chunked.h
 	@mkdir -p $(BIN_DIR)
-	$(CC) $(CFLAGS) tests/net/ck_tcp_event_integration_test.c c/net/ck_tcp_listener.c c/event/ck_event_loop.c c/connection/ck_connection_registry.c c/connection/ck_connection.c c/http/ck_http_parser.c -o $@
+	$(CC) $(CFLAGS) tests/net/ck_tcp_event_integration_test.c c/net/ck_tcp_listener.c c/event/ck_event_loop.c c/connection/ck_connection_registry.c c/connection/ck_connection.c c/http/ck_http_input.c c/http/ck_http_parser.c c/http/ck_http_chunked.c -o $@
 
 $(HTTP_PARSER_TEST): tests/http/ck_http_parser_test.c c/http/ck_http_parser.c c/http/ck_http_parser.h
 	@mkdir -p $(BIN_DIR)

@@ -10,6 +10,7 @@ JAKARTA_SERVLET_API_SHA256 := 8a31f465f3593bf2351531a5c952014eb839da96a605b5825b
 TARGET := $(BIN_DIR)/ckarta-smoke
 JAVA_ASYNC_TEST := $(BIN_DIR)/ckarta-async-context-test
 JAVA_SERVLET_API_TEST := $(BIN_DIR)/ckarta-servlet-async-api-test
+JAVA_SERVLET_REQUEST_ASYNC_TEST := $(BIN_DIR)/ckarta-servlet-request-async-test
 ABI_TEST := $(BIN_DIR)/ckarta-request-lifecycle-test
 CONFIG_TEST := $(BIN_DIR)/ckarta-config-test
 ERROR_TEST := $(BIN_DIR)/ckarta-error-test
@@ -86,9 +87,10 @@ $(CONFIG_TEST): tests/config_load_test.c c/config/ck_config.c c/config/ck_config
 clean:
 	rm -rf $(BUILD_DIR)
 
-test: all $(JAVA_ASYNC_TEST) $(JAVA_SERVLET_API_TEST) $(ABI_TEST) $(CONFIG_TEST) $(ERROR_TEST) $(ERROR_RACE_TEST) $(TERMINAL_RACE_TEST) $(COMPLETION_QUEUE_TEST) $(CONNECTION_TEST)
+test: all $(JAVA_ASYNC_TEST) $(JAVA_SERVLET_API_TEST) $(JAVA_SERVLET_REQUEST_ASYNC_TEST) $(ABI_TEST) $(CONFIG_TEST) $(ERROR_TEST) $(ERROR_RACE_TEST) $(TERMINAL_RACE_TEST) $(COMPLETION_QUEUE_TEST) $(CONNECTION_TEST)
 	java -ea -cp $(BUILD_DIR)/java-test-classes org.ckarta.servlet.CkartaAsyncContextTest
 	java -ea -cp $(BUILD_DIR)/java-test-classes:$(JAKARTA_SERVLET_API_JAR) org.ckarta.servlet.CkartaServletAsyncContextTest
+	java -ea -cp $(BUILD_DIR)/java-test-classes:$(JAKARTA_SERVLET_API_JAR) org.ckarta.servlet.CkartaServletRequestAsyncTest
 	$(ABI_TEST)
 	$(CONFIG_TEST) tests/config/valid.conf
 	$(ERROR_TEST)

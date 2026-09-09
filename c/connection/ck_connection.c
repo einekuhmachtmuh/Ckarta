@@ -2,13 +2,19 @@
 
 #include <stddef.h>
 
-#define CK_CONNECTION_STATE_MASK UINT64_C(0xffffffff)
-#define CK_CONNECTION_EVENT_MASK UINT64_C(0xffffffff)
+#define CK_CONNECTION_STATE_MASK UINT64_C(0xff)
+#define CK_CONNECTION_EVENT_SHIFT 8u
+#define CK_CONNECTION_EVENT_MASK UINT64_C(0xff)
+#define CK_CONNECTION_CYCLE_SHIFT 16u
+#define CK_CONNECTION_CYCLE_MASK UINT64_C(0x0000ffffffffffff)
 
-static uint64_t ck_connection_pack(uint32_t state, int32_t event)
+static uint64_t ck_connection_pack(uint32_t state, int32_t event,
+		uint64_t cycle_id)
 {
-	uint64_t event_bits = event < 0 ? UINT32_MAX : (uint32_t)event;
-	return (event_bits << 32) | (uint64_t)state;
+	uint64_t event_bits = event < 0 ? UINT64_C(0xff) : (uint64_t)(uint32_t)event;
+	return ((cycle_id & CK_CONNECTION_CYCLE_MASK) << CK_CONNECTION_CYCLE_SHIFT)
+			| ((event_bits & CK_CONNECTION_EVENT_MASK) << CK_CONNECTION_EVENT_SHIFT)
+			| ((uint64_t)state & CK_CONNECTION_STATE_MASK);
 }
 
 static uint32_t ck_connection_unpack_state(uint64_t lifecycle)
@@ -18,13 +24,25 @@ static uint32_t ck_connection_unpack_state(uint64_t lifecycle)
 
 static int32_t ck_connection_unpack_event(uint64_t lifecycle)
 {
-	return (int32_t)(uint32_t)((lifecycle >> 32) & CK_CONNECTION_EVENT_MASK);
+	return (lifecycle & (CK_CONNECTION_EVENT_MASK << CK_CONNECTION_EVENT_SHIFT))
+			== (UINT64_C(0xff) << CK_CONNECTION_EVENT_SHIFT) ? -1
+			: (int32_t)((lifecycle >> CK_CONNECTION_EVENT_SHIFT) & CK_CONNECTION_EVENT_MASK);
+}
+
+static uint64_t ck_connection_unpack_cycle(uint64_t lifecycle)
+{
+	return (lifecycle >> CK_CONNECTION_CYCLE_SHIFT) & CK_CONNECTION_CYCLE_MASK;
 }
 
 static int ck_connection_valid_event(ck_connection_terminal_event_t event)
 {
 	return event >= CK_CONNECTION_TERMINAL_COMPLETE
 			&& event <= CK_CONNECTION_TERMINAL_SHUTDOWN;
+}
+
+static int ck_connection_valid_cycle_id(uint64_t cycle_id)
+{
+	return cycle_id != 0 && cycle_id <= CK_CONNECTION_CYCLE_MASK;
 }
 
 int ck_connection_init(ck_connection_t *connection,
@@ -43,25 +61,31 @@ int ck_connection_init(ck_connection_t *connection,
 	connection->owner_token = owner_token;
 	connection->lifetime_token = lifetime_token;
 	atomic_init(&connection->lifecycle,
-			ck_connection_pack(CK_CONNECTION_OPEN, -1));
+			ck_connection_pack(CK_CONNECTION_OPEN, -1, 0));
 	return 0;
 }
 
-int ck_connection_start_async(ck_connection_t *connection)
+int ck_connection_start_async_cycle(ck_connection_t *connection,
+		uint64_t cycle_id)
 {
 	uint64_t expected;
 	uint64_t desired;
 
-	if (connection == NULL)
+	if (connection == NULL || !ck_connection_valid_cycle_id(cycle_id))
 	{
 		return -1;
 	}
 
-	expected = ck_connection_pack(CK_CONNECTION_OPEN, -1);
-	desired = ck_connection_pack(CK_CONNECTION_ASYNC_WAIT, -1);
+	expected = ck_connection_pack(CK_CONNECTION_OPEN, -1, 0);
+	desired = ck_connection_pack(CK_CONNECTION_ASYNC_WAIT, -1, cycle_id);
 	return atomic_compare_exchange_strong_explicit(
 			&connection->lifecycle, &expected, desired,
 			memory_order_acq_rel, memory_order_acquire) ? 0 : 1;
+}
+
+int ck_connection_start_async(ck_connection_t *connection)
+{
+	return ck_connection_start_async_cycle(connection, UINT64_C(1));
 }
 
 int ck_connection_try_terminal(ck_connection_t *connection,
@@ -91,7 +115,8 @@ int ck_connection_try_terminal(ck_connection_t *connection,
 			return -1;
 		}
 
-		desired = ck_connection_pack(CK_CONNECTION_CLOSING, event);
+		desired = ck_connection_pack(CK_CONNECTION_CLOSING, event,
+				ck_connection_unpack_cycle(current));
 		if (atomic_compare_exchange_weak_explicit(
 				&connection->lifecycle, &current, desired,
 				memory_order_acq_rel, memory_order_acquire))
@@ -129,7 +154,8 @@ int ck_connection_close(ck_connection_t *connection)
 
 		expected = current;
 		desired = ck_connection_pack(CK_CONNECTION_CLOSED,
-				ck_connection_unpack_event(current));
+				ck_connection_unpack_event(current),
+				ck_connection_unpack_cycle(current));
 		if (atomic_compare_exchange_weak_explicit(
 				&connection->lifecycle, &expected, desired,
 				memory_order_acq_rel, memory_order_acquire))
@@ -179,4 +205,27 @@ ck_connection_terminal_event_t ck_connection_terminal_event(
 	event = ck_connection_unpack_event(atomic_load_explicit(
 			&connection->lifecycle, memory_order_acquire));
 	return (ck_connection_terminal_event_t)event;
+}
+
+int ck_connection_validate_cycle(const ck_connection_t *connection,
+		uint64_t request_id,
+		uint64_t owner_token,
+		uint64_t lifetime_token,
+		uint64_t cycle_id)
+{
+	if (connection == NULL || request_id == 0
+			|| !ck_connection_valid_cycle_id(cycle_id))
+	{
+		return -1;
+	}
+
+	if (connection->request_id != request_id
+			|| connection->owner_token != owner_token
+			|| connection->lifetime_token != lifetime_token)
+	{
+		return 1;
+	}
+
+	return ck_connection_unpack_cycle(atomic_load_explicit(
+			&connection->lifecycle, memory_order_acquire)) == cycle_id ? 0 : 1;
 }

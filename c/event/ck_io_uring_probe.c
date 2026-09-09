@@ -71,7 +71,6 @@ int ck_io_uring_probe(ck_io_uring_probe_result_t *result)
 		return -1;
 	}
 
-	probe->ops_len = CK_IO_URING_PROBE_OPS;
 	if (syscall(SYS_io_uring_register, fd, IORING_REGISTER_PROBE,
 			probe, CK_IO_URING_PROBE_OPS) == 0)
 	{
@@ -83,12 +82,14 @@ int ck_io_uring_probe(ck_io_uring_probe_result_t *result)
 	{
 		error = errno;
 		result->error_number = error;
+		result->available = 0;
 	}
 
 	free(probe);
 	if (close(fd) != 0 && result->error_number == 0)
 	{
 		result->error_number = errno;
+		result->available = 0;
 	}
 	return 0;
 }

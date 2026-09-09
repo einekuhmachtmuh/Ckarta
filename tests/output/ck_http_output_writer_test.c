@@ -21,7 +21,7 @@ static void test_response_to_socket(void)
 	const unsigned char *response_body;
 	size_t header_length = 0;
 	size_t expected_length;
-	size_t received_length;
+	size_t received_length = 0;
 	int sockets[2];
 	int count;
 	ck_http_output_write_result_t result;
@@ -51,7 +51,6 @@ static void test_response_to_socket(void)
 	assert(ck_http_output_writer_buffered_bytes(&writer)
 			== expected_length - CK_HTTP_OUTPUT_WRITE_BUDGET_BYTES);
 
-	received_length = 0;
 	while (received_length < CK_HTTP_OUTPUT_WRITE_BUDGET_BYTES)
 	{
 		ssize_t read_length = recv(sockets[1],
@@ -61,8 +60,6 @@ static void test_response_to_socket(void)
 		assert(read_length > 0);
 		received_length += (size_t)read_length;
 	}
-	assert(memcmp(received, headers, header_length) == 0
-		|| memcmp(received, headers, received_length) == 0);
 
 	assert(ck_event_loop_add(&loop, sockets[0], UINT64_C(0xbeef),
 			CK_EVENT_WRITE | CK_EVENT_ERROR | CK_EVENT_RDHUP) == 0);
@@ -75,16 +72,18 @@ static void test_response_to_socket(void)
 	assert(result == CK_HTTP_OUTPUT_WRITE_DRAINED);
 	assert(ck_http_output_writer_buffered_bytes(&writer) == 0);
 
-	received_length = CK_HTTP_OUTPUT_WRITE_BUDGET_BYTES;
 	while (received_length < expected_length)
 	{
 		ssize_t read_length = recv(sockets[1],
-				received + (received_length % sizeof(received)),
-			0,
+			received + received_length,
+			sizeof(received) - received_length,
 			0);
-		(void)read_length;
-		break;
+		assert(read_length > 0);
+		received_length += (size_t)read_length;
 	}
+	assert(received_length == expected_length);
+	assert(memcmp(received, headers, header_length) == 0);
+	assert(memcmp(received + header_length, body, sizeof(body)) == 0);
 
 	response_body = ck_http_response_body(&response);
 	assert(response_body[0] == 'r');

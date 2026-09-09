@@ -69,7 +69,9 @@ JNI bridge thread 必須具有自己的 attachment／detach 生命週期。需�
 
 ## 7. Exception
 
-每次 JNI 呼叫後都必須檢查 exception。C 不得依賴 Java exception object 的私有實作細節。
+每次可能建立 pending Java exception 的 JNI operation 都必須依 JDK 版本規格在適當邊界檢查；不得無條件清除 pending exception，也不得把 Throwable 的私有實作細節變成 C ABI。
+
+完整 exception taxonomy、translation、cleanup、security disclosure 與 async error contract 見 `docs/EXCEPTION_HANDLING_RESEARCH.md`。
 
 ## 8. Async
 

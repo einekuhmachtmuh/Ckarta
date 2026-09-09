@@ -3,6 +3,10 @@ BUILD_DIR := build
 CLASS_DIR := $(BUILD_DIR)/classes
 BIN_DIR := $(BUILD_DIR)/bin
 CLASS_STAMP := $(CLASS_DIR)/.stamp
+JAKARTA_SERVLET_API_VERSION := 6.1.0
+JAKARTA_SERVLET_API_JAR := $(BUILD_DIR)/deps/jakarta.servlet-api-$(JAKARTA_SERVLET_API_VERSION).jar
+JAKARTA_SERVLET_API_URL := https://repo1.maven.org/maven2/jakarta/servlet/jakarta.servlet-api/$(JAKARTA_SERVLET_API_VERSION)/jakarta.servlet-api-$(JAKARTA_SERVLET_API_VERSION).jar
+JAKARTA_SERVLET_API_SHA256 := 8a31f465f3593bf2351531a5c952014eb839da96a605b5825b93dd54714c48c4
 TARGET := $(BIN_DIR)/ckarta-smoke
 JAVA_ASYNC_TEST := $(BIN_DIR)/ckarta-async-context-test
 ABI_TEST := $(BIN_DIR)/ckarta-request-lifecycle-test
@@ -26,9 +30,15 @@ all: $(TARGET)
 
 classes: $(CLASS_STAMP)
 
-$(CLASS_STAMP): $(JAVA_SOURCES)
+$(JAKARTA_SERVLET_API_JAR):
+	@mkdir -p $(BUILD_DIR)/deps
+	curl --fail --location --silent --show-error $(JAKARTA_SERVLET_API_URL) -o $@.tmp
+	printf "%s  %s\n" "$(JAKARTA_SERVLET_API_SHA256)" "$@.tmp" | sha256sum --check --status -
+	mv $@.tmp $@
+
+$(CLASS_STAMP): $(JAVA_SOURCES) $(JAKARTA_SERVLET_API_JAR)
 	@mkdir -p $(CLASS_DIR)
-	javac --release 21 -d $(CLASS_DIR) $(JAVA_SOURCES)
+	javac --release 21 -cp $(JAKARTA_SERVLET_API_JAR) -d $(CLASS_DIR) $(JAVA_SOURCES)
 	@touch $@
 
 $(TARGET): c/core/main.c c/config/ck_config.c c/config/ck_config.h c/error/ck_error.c c/error/ck_error.h c/completion/ck_completion_queue.c c/completion/ck_completion_queue.h c/event/ck_completion_notification.c c/event/ck_completion_notification.h c/connection/ck_connection.c c/connection/ck_connection.h c/jni/ck_jni_runtime.c c/jni/ck_jni_runtime.h c/jni/ck_request.c c/jni/ck_request.h classes
@@ -37,7 +47,7 @@ $(TARGET): c/core/main.c c/config/ck_config.c c/config/ck_config.h c/error/ck_er
 
 $(JAVA_ASYNC_TEST): tests/java/CkartaAsyncContextTest.java java/org/ckarta/servlet/CkartaAsyncContext.java
 	@mkdir -p $(BUILD_DIR)/java-test-classes
-	javac --release 21 -d $(BUILD_DIR)/java-test-classes $^
+	javac --release 21 -cp $(JAKARTA_SERVLET_API_JAR) -d $(BUILD_DIR)/java-test-classes $^
 
 $(ABI_TEST): tests/request_lifecycle_test.c c/jni/ck_request.c c/jni/ck_request.h c/error/ck_error.c c/error/ck_error.h
 	@mkdir -p $(BIN_DIR)

@@ -1,6 +1,7 @@
 #include "ck_jni_runtime.h"
 
 #include "ck_request.h"
+#include "../error/ck_error.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -239,14 +240,28 @@ static void *ck_worker_main(void *arg)
 	worker->result = 0;
 	for (i = 0; i < worker->request_count; i++)
 	{
-		if (ck_request_begin(&worker->requests[i]) != 0 ||
-				ck_call_dispatch_async(env, &worker->requests[i].descriptor) != 0)
+		if (ck_request_begin(&worker->requests[i]) != 0)
 		{
-			if (ck_request_state(&worker->requests[i]) == CK_REQUEST_RUNNING)
+			worker->result = -1;
+			continue;
+		}
+
+		if (ck_call_dispatch_async(env,
+				&worker->requests[i].descriptor) != 0)
+		{
+			ck_error_t error;
+
+			ck_error_init(&error);
+			if (ck_error_set(&error, CK_ERROR_CATEGORY_JNI,
+					CK_ERROR_CODE_JNI_FAILURE, 500,
+					CK_ERROR_FLAG_CLIENT_VISIBLE, 1,
+					worker->requests[i].descriptor.request_id) != 0
+					|| ck_request_fail(&worker->requests[i], &error) != 0)
 			{
-				(void)ck_request_finish(&worker->requests[i],
-						CK_REQUEST_FAILED);
+				worker->result = -1;
+				continue;
 			}
+
 			worker->result = -1;
 		}
 	}
@@ -396,9 +411,49 @@ int ck_runtime_poll_completion(ck_runtime_t *runtime, ck_request_t *requests,
 						(long long)lifetime_token, (long long)result_value,
 						(int)status);
 
-				finish_result = ck_request_finish(&requests[i],
-						status == 0 ? CK_REQUEST_COMPLETED : CK_REQUEST_FAILED);
-				return finish_result == 0 && status == 0 ? 1 : -2;
+				if (status == 0)
+				{
+					finish_result = ck_request_finish(&requests[i],
+							CK_REQUEST_COMPLETED);
+					return finish_result == 0 ? 1 : -2;
+				}
+
+				{
+					ck_error_t error;
+					ck_error_category_t category;
+					ck_error_code_t code;
+					int32_t http_status;
+
+					if (status == -2)
+					{
+						category = CK_ERROR_CATEGORY_RESOURCE;
+						code = CK_ERROR_CODE_RESOURCE_EXHAUSTED;
+						http_status = 503;
+					}
+					else if (status == -1)
+					{
+						category = CK_ERROR_CATEGORY_APPLICATION;
+						code = CK_ERROR_CODE_APPLICATION_EXCEPTION;
+						http_status = 500;
+					}
+					else
+					{
+						category = CK_ERROR_CATEGORY_INTERNAL;
+						code = CK_ERROR_CODE_INTERNAL_INVARIANT;
+						http_status = 500;
+					}
+
+					ck_error_init(&error);
+					if (ck_error_set(&error, category, code, http_status,
+							CK_ERROR_FLAG_CLIENT_VISIBLE, 2,
+							requests[i].descriptor.request_id) != 0)
+					{
+						return -1;
+					}
+
+					finish_result = ck_request_fail(&requests[i], &error);
+					return finish_result == 0 ? -2 : -2;
+				}
 			}
 		}
 	}

@@ -348,4 +348,18 @@ core 目前驗證 start(Runnable)、complete()、container-side timeout/error/di
 
 首版測試曾錯誤把 container-side timeout race 當成 application-facing exception，造成 CI failure；檢查後改為驗證 application complete() 重複呼叫會拒絕，而 internal timeout 輸掉 terminal race 時維持冪等。最新 main CI run 34340207263、job 102428964690、commit 44a785f4196fa6e3a413946f4bcdf74a7f7f3aec 已完整通過 make test。
 
-Makefile 現已將 Java async semantic test 納入 test target。後續真正 Jakarta Servlet 6.1 API adapter 仍需在 dependency／build/test 正式加入後實作並以 TCK 驗證。
+Makefile 已固定 Jakarta Servlet 6.1 API dependency，並將 Java async semantic test 與 Jakarta API adapter test 納入 test target。完整 Servlet 6.1 API semantics 仍需 request.startAsync、dispatch、timeout、listener cycle、container lifecycle 與 TCK 驗證。
+
+## 39. 2026-09-09 Jakarta Servlet 6.1 API binding prototype
+
+完成第一階段正式 Jakarta API boundary：固定 Maven artifact `jakarta.servlet:jakarta.servlet-api:6.1.0`，SHA-256 `8a31f465f3593bf2351531a5c952014eb839da96a605b5825b93dd54714c48c4`，由 Makefile 下載並驗證後進入 Java compile/test classpath。Eclipse Jakarta Servlet 6.1 release record 明確列出此 Maven 座標與 Java SE 17+ 最低版本；Ckarta 目前以 OpenJDK 21 為基線。
+
+新增 `java/org/ckarta/servlet/CkartaServletAsyncContext.java`，實作 `jakarta.servlet.AsyncContext` 的薄 binding prototype：complete、start、request/response access、timeout、listener registration、listener creation 已連到 Ckarta async semantic core；dispatch 尚明確未實作，並未宣稱 Servlet 6.1 compatibility。`setTimeout(0)` 保持 Servlet 6.1 的 no-timeout semantics；terminal 後 request/response、timeout mutation 與其他 application operations 受 state guard 保護。
+
+新增 `tests/java/CkartaServletAsyncContextTest.java` 驗證 API 型別、request/response identity、timeout、listener completion、createListener 與 dispatch unsupported boundary。依 WORKING_RULES 的保留後整合原則，測試曾出現的 race-sensitive 假設已修正，不新增重複工作規則。
+
+本階段研究與實作重新交叉核對固定 Tomcat 11.0.25 `AsyncContextImpl`：application-facing method 先檢查 state，container-internal terminal path 與 recycle/error protection 分開；Ckarta 只採語意，不複製 Tomcat private class graph。Nginx 1.30.4 event guide 仍作為 native event/posted-event 與非阻塞執行模型的 reference。
+
+目前仍未完成：`ServletRequest.startAsync()` 真正建立 async context、`AsyncContext.dispatch()`、完整 `AsyncListener.onStartAsync` cycle、ServletContext/classloader binding、request/response facade、native connection correlation bridge 與 Servlet 6.1 TCK。故不得標示相容。
+
+最新 implementation/test commit `44a785f4196fa6e3a413946f4bcdf74a7f7f3aec` 的完整 `make test` 已通過；其後的 API/documentation commits 需要由最新 HEAD CI 再次驗證，不能沿用舊 run 作為最新 HEAD 證據。

@@ -21,6 +21,9 @@ struct ck_runtime
 	int bootstrap_status;
 	int shutdown_requested;
 	int shutdown_status;
+	int sync_initialized;
+	int bootstrap_thread_started;
+	int shutdown_complete;
 };
 
 typedef struct ck_runtime ck_runtime_t;

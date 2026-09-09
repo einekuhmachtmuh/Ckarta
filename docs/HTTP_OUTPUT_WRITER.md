@@ -39,7 +39,7 @@ caller 必須保證同一時間只有一個 owner 推進 writer state。writer �
 
 response transaction 的 `FINISHED` 不等於 socket bytes 已 drained。transaction completion、output drain、connection keep-alive recycle 是三個不同 boundary。
 
-目前 writer 只實作第二個 boundary 的 native slice；它不自行改變 `ck_http_response_t` state。
+目前 writer 實作第二個 boundary 的 native slice；它不自行改變 `ck_http_response_t` state。`ck_connection_t` 已開始擁有 writer，registry 另以 output pin 保護 writer lifetime。
 
 ## 6. Event loop integration
 
@@ -70,7 +70,11 @@ SEDA 的 staged event-driven architecture 提供 bounded resource 與 stage sepa
 
 Matt Welsh、David Culler、Eric Brewer, “SEDA: an architecture for well-conditioned, scalable internet services”, ACM SIGOPS Operating Systems Review 35(5), 230–243, 2001. DOI: https://doi.org/10.1145/502059.502057
 
-## 9. Current status
+## 9. Connection ownership integration
+
+`ck_connection_t` 現持有 heap-backed `ck_http_output_writer_t *`。socket attach 時 writer 綁定同一 descriptor，但 writer 不取得 close ownership。registry 的 `output_acquire()` 只在短臨界區完成 handle/generation/identity validation 與 pin；`send()`、HTTP serialization 與 output processing 不得持有 registry mutex。只要 output pin 尚未 release，connection 不得進入 resource-reclaim 的 close/retire 完成步驟。
+
+## 10. Current status
 
 已完成：
 
@@ -83,7 +87,6 @@ Matt Welsh、David Culler、Eric Brewer, “SEDA: an architecture for well-condi
 
 尚未完成：
 
-- HTTP status/header serialization
 - response filter chain
 - chunked response encoder
 - response-specific HEAD／204／304／CONNECT body rules

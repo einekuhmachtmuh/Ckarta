@@ -508,25 +508,18 @@ int ck_runtime_init(ck_runtime_t *runtime, const char *class_path)
 	runtime->bootstrap_thread_started = 1;
 
 	result = pthread_mutex_lock(&runtime->lock);
-	if (result != 0)
-	{
-		return result;
-	}
+	ck_runtime_sync_fatal("runtime.init.mutex_lock", result);
 
 	while (!runtime->bootstrap_done)
 	{
 		result = pthread_cond_wait(&runtime->condition, &runtime->lock);
 		if (result != 0)
 		{
-			(void)pthread_mutex_unlock(&runtime->lock);
-			return result;
+			ck_runtime_sync_fatal("runtime.init.cond_wait", result);
 		}
 	}
 	result = runtime->bootstrap_status;
-	if (pthread_mutex_unlock(&runtime->lock) != 0)
-	{
-		return -1;
-	}
+	ck_runtime_sync_fatal("runtime.init.mutex_unlock", pthread_mutex_unlock(&runtime->lock));
 
 	if (result != 0)
 	{
@@ -611,16 +604,10 @@ void ck_runtime_destroy(ck_runtime_t *runtime)
 	}
 
 	result = pthread_cond_destroy(&runtime->condition);
-	if (result != 0)
-	{
-		return;
-	}
+	ck_runtime_sync_fatal("runtime.destroy.cond", result);
 
 	result = pthread_mutex_destroy(&runtime->lock);
-	if (result != 0)
-	{
-		return;
-	}
+	ck_runtime_sync_fatal("runtime.destroy.mutex", result);
 
 	memset(runtime, 0, sizeof(*runtime));
 }

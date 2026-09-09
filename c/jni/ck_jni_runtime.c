@@ -158,6 +158,7 @@ static void *ck_bootstrap_main(void *arg)
 	int start_status;
 	int option_length;
 	int result;
+	int stop_status;
 
 
 	option_length = snprintf(option_string, sizeof(option_string),
@@ -218,8 +219,11 @@ static void *ck_bootstrap_main(void *arg)
 			start_status = result;
 		}
 
-		start_status = ck_call_stop(env);
-		runtime->shutdown_status = start_status == 0 ? 0 : -1;
+		stop_status = ck_call_stop(env);
+		if (stop_status != 0 && runtime->shutdown_status == 0)
+		{
+			runtime->shutdown_status = -1;
+		}
 	}
 	else
 	{

@@ -247,6 +247,14 @@ int main(int argc, char **argv)
 		return EXIT_FAILURE;
 	}
 
+	result = ck_runtime_shutdown(&runtime);
+	if (check_result("SHUTDOWN_AGAIN", result) != 0)
+	{
+		ck_runtime_destroy(&runtime);
+		ck_config_destroy(&config);
+		return EXIT_FAILURE;
+	}
+
 	ck_runtime_destroy(&runtime);
 	ck_config_destroy(&config);
 	printf("CKARTA_SMOKE_OK\n");

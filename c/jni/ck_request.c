@@ -25,6 +25,10 @@ static int ck_request_descriptor_valid(const ck_request_descriptor_t *descriptor
 
 	if ((descriptor->metadata == NULL && descriptor->metadata_length != 0)
 			|| descriptor->metadata_length > (uint64_t)INT32_MAX
+			|| ((descriptor->feature_flags & CK_REQUEST_FEATURE_METADATA_BUFFER) != 0
+				&& descriptor->metadata_length == 0)
+			|| ((descriptor->feature_flags & CK_REQUEST_FEATURE_METADATA_BUFFER) == 0
+				&& descriptor->metadata_length != 0)
 			|| (descriptor->body == NULL && descriptor->body_length != 0)
 			|| descriptor->body_length > (uint64_t)INT32_MAX)
 	{

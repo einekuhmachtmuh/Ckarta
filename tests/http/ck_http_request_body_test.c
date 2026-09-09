@@ -11,7 +11,6 @@ int main(void)
 	size_t written;
 	size_t read;
 	size_t first;
-	size_t second;
 
 	for (size_t i = 0; i < sizeof(source); i++)
 	{

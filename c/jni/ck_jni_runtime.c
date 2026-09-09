@@ -41,15 +41,18 @@ static jint ck_native_publish_completion(JNIEnv *env, jclass clazz,
 	(void)env;
 	(void)clazz;
 
-	if (queue_handle <= 0
-			|| request_id <= 0
-			|| owner_token < 0
-			|| lifetime_token < 0)
+	if (queue_handle <= 0 || request_id <= 0
+			|| owner_token < 0 || lifetime_token < 0)
 	{
 		return -1;
 	}
 
 	queue = (ck_completion_queue_t *)(uintptr_t)(uint64_t)queue_handle;
+	if (queue == NULL)
+	{
+		return -1;
+	}
+
 	record.request_id = (uint64_t)request_id;
 	record.owner_token = (uint64_t)owner_token;
 	record.lifetime_token = (uint64_t)lifetime_token;
@@ -59,14 +62,20 @@ static jint ck_native_publish_completion(JNIEnv *env, jclass clazz,
 	return (jint)ck_completion_queue_push_wait(queue, &record);
 }
 
-static int ck_register_native_methods(JNIEnv *env, jclass runtime_class,
-		ck_completion_queue_t *queue)
+static int ck_call_start(JNIEnv *env, ck_completion_queue_t *queue)
 {
+	jclass runtime_class;
+	jmethodID method;
 	static const JNINativeMethod methods[] = {
-		{ "publishCompletion", "(JJJJJI)V",
+		{ "publishCompletion", "(JJJJJI)I",
 				(void *)ck_native_publish_completion }
 	};
 	jlong queue_handle;
+
+	if (env == NULL || queue == NULL)
+	{
+		return -1;
+	}
 
 	_Static_assert(sizeof(uintptr_t) <= sizeof(jlong),
 			"runtime queue pointer must fit in jlong");
@@ -77,40 +86,28 @@ static int ck_register_native_methods(JNIEnv *env, jclass runtime_class,
 		return -1;
 	}
 
-	if ((*env)->RegisterNatives(env, runtime_class, methods,
-			(jint)(sizeof(methods) / sizeof(methods[0]))) != JNI_OK)
-	{
-		return -1;
-	}
-
-	return 0;
-}
-
-static int ck_call_start(JNIEnv *env, ck_completion_queue_t *queue)
-{
-	jclass runtime_class;
-	jmethodID method;
-
 	runtime_class = (*env)->FindClass(env, "org/ckarta/bootstrap/CkartaRuntime");
 	if (ck_check_java_exception(env, "FindClass") != 0 || runtime_class == NULL)
 	{
 		return -1;
 	}
 
-	if (ck_register_native_methods(env, runtime_class, queue) != 0)
+	if ((*env)->RegisterNatives(env, runtime_class, methods,
+			(jint)(sizeof(methods) / sizeof(methods[0]))) != JNI_OK)
 	{
+		ck_check_java_exception(env, "RegisterNatives");
 		(*env)->DeleteLocalRef(env, runtime_class);
 		return -1;
 	}
 
-	method = (*env)->GetStaticMethodID(env, runtime_class, "start", "()V");
+	method = (*env)->GetStaticMethodID(env, runtime_class, "start", "(J)V");
 	if (ck_check_java_exception(env, "GetStaticMethodID(start)") != 0 || method == NULL)
 	{
 		(*env)->DeleteLocalRef(env, runtime_class);
 		return -1;
 	}
 
-	(*env)->CallStaticVoidMethod(env, runtime_class, method);
+	(*env)->CallStaticVoidMethod(env, runtime_class, method, queue_handle);
 	if (ck_check_java_exception(env, "CallStaticVoidMethod(start)") != 0)
 	{
 		(*env)->DeleteLocalRef(env, runtime_class);
@@ -120,7 +117,6 @@ static int ck_call_start(JNIEnv *env, ck_completion_queue_t *queue)
 	(*env)->DeleteLocalRef(env, runtime_class);
 	return 0;
 }
-
 static int ck_call_stop(JNIEnv *env)
 {
 	jclass runtime_class;

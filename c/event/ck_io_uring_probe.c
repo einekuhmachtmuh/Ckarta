@@ -74,21 +74,6 @@ int ck_io_uring_probe(ck_io_uring_probe_result_t *result)
 		result->accept = opcode_supported(probe, IORING_OP_ACCEPT);
 		result->recv = opcode_supported(probe, IORING_OP_RECV);
 		result->send = opcode_supported(probe, IORING_OP_SEND);
-#ifdef IORING_ACCEPT_MULTISHOT
-		result->accept_multishot = result->accept;
-#else
-		result->accept_multishot = 0;
-#endif
-#ifdef IORING_RECV_MULTISHOT
-		result->recv_multishot = result->recv;
-#else
-		result->recv_multishot = 0;
-#endif
-#ifdef IORING_REGISTER_PBUF_RING
-		result->provided_buffer_ring = 1;
-#else
-		result->provided_buffer_ring = 0;
-#endif
 	}
 	else
 	{

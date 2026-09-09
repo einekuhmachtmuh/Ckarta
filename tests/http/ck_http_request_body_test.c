@@ -63,11 +63,35 @@ int main(void)
 	assert(read == 32u);
 	assert(memcmp(received, source + first, 32u) == 0);
 
+	ck_http_request_body_init(&body);
+	assert(ck_http_request_body_write(
+			&body, source, CK_HTTP_REQUEST_BODY_BUFFER_BYTES - 1u,
+			&written) == CK_HTTP_REQUEST_BODY_WRITE_OK);
+	assert(written == CK_HTTP_REQUEST_BODY_BUFFER_BYTES - 1u);
+	assert(ck_http_request_body_write(
+			&body, source + 16u, 2u, &written)
+			== CK_HTTP_REQUEST_BODY_WRITE_WOULD_BLOCK);
+	assert(written == 0);
+	assert(ck_http_request_body_available(&body)
+			== CK_HTTP_REQUEST_BODY_BUFFER_BYTES - 1u);
+	assert(ck_http_request_body_read(
+			&body, received, 1u, &read)
+			== CK_HTTP_REQUEST_BODY_READ_DATA);
+	assert(read == 1u);
+	assert(ck_http_request_body_write(
+			&body, source + 16u, 2u, &written)
+			== CK_HTTP_REQUEST_BODY_WRITE_OK);
+	assert(written == 2u);
+
 	ck_http_request_body_mark_eof(&body);
-	assert(ck_http_request_body_is_finished(&body));
+	assert(ck_http_request_body_read(
+			&body, received, sizeof(received), &read)
+			== CK_HTTP_REQUEST_BODY_READ_DATA);
+	assert(read == CK_HTTP_REQUEST_BODY_BUFFER_BYTES - 2u);
 	assert(ck_http_request_body_read(
 			&body, received, sizeof(received), &read)
 			== CK_HTTP_REQUEST_BODY_READ_EOF);
+	assert(ck_http_request_body_is_finished(&body));
 	assert(ck_http_request_body_write(
 			&body, source, 1, &written)
 			== CK_HTTP_REQUEST_BODY_WRITE_CLOSED);

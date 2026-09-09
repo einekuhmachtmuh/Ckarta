@@ -19,6 +19,122 @@ static void *terminal_thread(void *arg)
 	return NULL;
 }
 
+
+static void test_http_keepalive_recycle(void)
+{
+	static const char requests[] =
+			"GET /one HTTP/1.1\\r\\nHost: x\\r\\n\\r\\n"
+			"GET /two HTTP/1.1\\r\\nHost: x\\r\\n\\r\\n";
+	ck_connection_t connection;
+	const ck_http_request_t *request;
+	ck_http_connection_reader_t *reader;
+	ck_http_response_t *response;
+	ck_http_output_writer_t *writer;
+	const unsigned char *body;
+	size_t body_length;
+	size_t consumed;
+	int sockets[2];
+	ck_http_connection_read_result_t read_result;
+
+	assert(socketpair(AF_UNIX, SOCK_STREAM, 0, sockets) == 0);
+	assert(ck_connection_init(&connection, 3, 31, 32, 33) == 0);
+	assert(ck_connection_attach_socket(&connection, sockets[0]) == 0);
+	reader = ck_connection_http_reader(&connection);
+	response = ck_connection_http_response(&connection);
+	writer = ck_connection_http_writer(&connection);
+	assert(reader != NULL);
+	assert(response != NULL);
+	assert(writer != NULL);
+
+	assert(write(sockets[1], requests, sizeof(requests) - 1)
+			== (ssize_t)(sizeof(requests) - 1));
+	read_result = ck_http_connection_reader_drive(
+			reader, sockets[0], NULL, NULL);
+	assert(read_result == CK_HTTP_CONNECTION_READ_REQUEST_COMPLETE);
+	request = ck_http_connection_reader_request(reader);
+	assert(request != NULL);
+	assert(request->target.length == 4);
+	assert(memcmp(request->target.data, "/one", 4) == 0);
+	assert(request->connection_close_required == 0);
+
+	assert(ck_http_response_set_status(response, 200U) == 0);
+	assert(ck_http_response_write_body(response, "ok", 2) == 0);
+	assert(ck_http_response_finish(response) == 0);
+	{
+		unsigned char headers[CK_HTTP_RESPONSE_HEADER_BUFFER_BYTES];
+		size_t header_length = 0;
+		assert(ck_http_response_serialize_headers(
+				response, headers, sizeof(headers), &header_length) == 0);
+		assert(ck_http_output_writer_queue(
+				writer, headers, header_length) == 0);
+		assert(ck_http_output_writer_queue(writer, (const unsigned char *)"ok", 2) == 0);
+	}
+	assert(ck_http_output_writer_drive(writer)
+			== CK_HTTP_OUTPUT_WRITE_DRAINED);
+	assert(ck_connection_http_recycle(&connection) == 0);
+	assert(ck_connection_http_response(&connection) != NULL);
+	request = ck_http_connection_reader_request(reader);
+	assert(request == NULL);
+
+	read_result = ck_http_connection_reader_drive(
+			reader, sockets[0], NULL, NULL);
+	assert(read_result == CK_HTTP_CONNECTION_READ_REQUEST_COMPLETE);
+	request = ck_http_connection_reader_request(reader);
+	assert(request != NULL);
+	assert(request->target.length == 4);
+	assert(memcmp(request->target.data, "/two", 4) == 0);
+
+	assert(ck_connection_try_terminal(
+			&connection, CK_CONNECTION_TERMINAL_COMPLETE)
+			== CK_CONNECTION_TERMINAL_CLAIMED);
+	assert(ck_connection_close(&connection) == 0);
+	assert(close(sockets[1]) == 0);
+}
+
+static void test_connection_close_prevents_recycle(void)
+{
+	static const char request[] =
+			"GET / HTTP/1.1\\r\\nHost: x\\r\\n"
+			"Connection: close\\r\\n\\r\\n";
+	ck_connection_t connection;
+	ck_http_connection_reader_t *reader;
+	ck_http_response_t *response;
+	ck_http_output_writer_t *writer;
+	const ck_http_request_t *parsed;
+	unsigned char headers[CK_HTTP_RESPONSE_HEADER_BUFFER_BYTES];
+	size_t consumed;
+	size_t header_length = 0;
+	int sockets[2];
+
+	assert(socketpair(AF_UNIX, SOCK_STREAM, 0, sockets) == 0);
+	assert(ck_connection_init(&connection, 4, 41, 42, 43) == 0);
+	assert(ck_connection_attach_socket(&connection, sockets[0]) == 0);
+	reader = ck_connection_http_reader(&connection);
+	response = ck_connection_http_response(&connection);
+	writer = ck_connection_http_writer(&connection);
+	assert(write(sockets[1], request, sizeof(request) - 1)
+			== (ssize_t)(sizeof(request) - 1));
+	assert(ck_http_connection_reader_drive(
+			reader, sockets[0], NULL, NULL)
+			== CK_HTTP_CONNECTION_READ_REQUEST_COMPLETE);
+	parsed = ck_http_connection_reader_request(reader);
+	assert(parsed != NULL && parsed->connection_close_required == 1);
+	assert(ck_http_response_set_status(response, 200U) == 0);
+	assert(ck_http_response_finish(response) == 0);
+	assert(ck_http_response_serialize_headers(
+			response, headers, sizeof(headers), &header_length) == 0);
+	assert(ck_http_output_writer_queue(writer, headers, header_length) == 0);
+	assert(ck_http_output_writer_drive(writer)
+			== CK_HTTP_OUTPUT_WRITE_DRAINED);
+	assert(ck_connection_http_recycle(&connection) == 3);
+	assert(ck_connection_try_terminal(
+			&connection, CK_CONNECTION_TERMINAL_COMPLETE)
+			== CK_CONNECTION_TERMINAL_CLAIMED);
+	assert(ck_connection_close(&connection) == 0);
+	assert(close(sockets[1]) == 0);
+	(void)consumed;
+}
+
 int main(void)
 {
 	ck_connection_t connection;

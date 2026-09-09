@@ -170,3 +170,11 @@ PR #2 已於 2026-09-08 squash-merge 至 `main`，merge commit `2638bc5017093b5f
 CGI/FastCGI 已正式定位為未來可掛接 application gateway module，不進核心 request execution；完整效能比較見 docs/CGI_FASTCGI_RESEARCH.md。
 
 Java executor handoff 的 v2 smoke slice 使用 bounded Java completion queue，C 不再 Future.get() 阻塞。PR #8 的最新 CI 正在／尚待最終驗證；在 CI 成功前不得視為主線完成。
+
+
+## Branch status
+
+- Purpose: bounded Java executor + nonblocking completion v2
+- Lifecycle status: CLOSED / SUPERSEDED
+- Relation to main: PR #8 closed;後續 main 已吸收其有效成果。
+- This file is branch-specific state and must not be treated as main canonical state.

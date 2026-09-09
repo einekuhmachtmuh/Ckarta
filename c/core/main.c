@@ -219,6 +219,7 @@ int main(int argc, char **argv)
 		int epoll_fd;
 		struct epoll_event event;
 		int wait_result;
+		completion_result = -1;
 
 		epoll_fd = epoll_create1(EPOLL_CLOEXEC);
 		if (epoll_fd < 0)

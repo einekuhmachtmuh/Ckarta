@@ -112,4 +112,10 @@ The detailed diagnostic context remains in the owning layer and is correlated wi
 
 `ck_error_t` is required as a process-local error/outcome record, but it is not a Java exception hierarchy and it is not yet a public plugin ABI. It should first be used internally by C request/completion state. A future externally loadable module ABI, if any, must define a separately versioned compatibility contract.
 
+## 9. Concurrent-object correctness references
+
+Herlihy and Wing 的 *Linearizability: A Correctness Condition for Concurrent Objects* 提供 concurrent object operation 必須可對應到單一線性化點的 correctness framework；本專案的 terminal winner CAS 正以此作為概念上的驗證基線，而不宣稱它本身完成了形式化 proof。來源：https://doi.org/10.1145/78969.78972
+
+Michael and Scott 的 *Simple, Fast, and Practical Non-Blocking and Blocking Concurrent Queue Algorithms* 說明非阻塞 queue 可用 universal atomic primitive 建立並行 enqueue/dequeue，但其 memory reclamation 仍是獨立問題；因此 Ckarta 尚未因該研究而預設採 lock-free completion queue，未來必須另外證明 reclamation、overflow、shutdown drain 與 benchmark benefit。來源：https://doi.org/10.1145/248052.248106
+
 完整 exception semantics 見 `docs/EXCEPTION_HANDLING_RESEARCH.md`。

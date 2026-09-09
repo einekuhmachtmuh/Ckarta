@@ -114,7 +114,7 @@ poll completion output 使用固定 36 bytes：8 + 8 + 8 + 8 + 4，並以 native
 
 `CkartaRuntime.stop()` 先從 runtime registry 移除 executor/completion references，再 shutdown executor；現階段尚未實作真正 Servlet container lifecycle。
 
-`pollCompletion()` 只做 queue dequeue + fixed-layout buffer write，不把 Java object graph 直接暴露給 C。
+`ck_runtime_poll_completion()` 只做 native queue dequeue + request identity validation + terminal publication；不再 attach JVM，也不再輪詢 Java completion queue。
 
 ## 9. Configuration flow
 

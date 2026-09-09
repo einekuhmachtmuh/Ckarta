@@ -4,7 +4,7 @@
 
 `c/output/ck_http_response.[ch]` 是 Ckarta native HTTP response output path 的第一個可執行 ownership／lifecycle slice。
 
-本階段刻意只處理 response transaction state、body staging 與 Content-Length completion invariant，不直接擁有 socket、不執行 `send()`、不管理 TLS，也不直接實作 Servlet `Writer`／`ServletOutputStream`。這樣可先固定 response lifetime，再把 socket output 與 Java boundary 接上。
+本階段刻意只處理 response transaction state、body staging 與 Content-Length completion invariant，不直接管理 TLS，也不直接實作 Servlet `Writer`／`ServletOutputStream`。socket output 現已由獨立的 `ck_http_output_writer` slice 負責，以便先固定 response lifetime，再組合 serialization、socket output 與 Java boundary。
 
 ## 2. 狀態
 
@@ -71,22 +71,21 @@ Ckarta native slice 因目前尚未引入 writer/output-stream object identity�
 
 ## 7. Nginx/Tomcat cross-check
 
-Nginx 官方 development guide 將 HTTP response 描述為 response header 加 optional response body，兩者都可經過 filter chain，最後寫入 client socket。Ckarta 因而不把「response metadata」與「body production」視為單一無界 byte copy；目前先固定 transaction state，再接 filter／serializer／socket writer。
+Nginx 的 `ngx_http_write_filter()` 將尚未送出的 response chain 保留在 `r->out`，呼叫 connection 的 `send_chain()`；若仍有 output pending，回傳 `NGX_AGAIN`，並把未送出的 chain 留待後續處理。Ckarta 因而將 response transaction completion 與 socket output drain 分離，不把一次 native `finish()` 等同於網路資料已送完。
 
-來源：https://nginx.org/en/docs/dev/development_guide.html
+固定來源：
+https://github.com/nginx/nginx/blob/017cf98dcce217946572a896f0992370475e189f/src/http/ngx_http_write_filter_module.c
 
-Tomcat 11.0.25 的 `Http11OutputBuffer` 管理 response header composition、active output filters、socket output、`commit()`、`end()` 與 `nextRequest()`／`recycle()`。其 `doWrite()` 在 response 尚未 committed 時要求 connector 執行 commit；其 `end()` 結束 current response output；其 `nextRequest()` recycle filter／response state 並準備下一 request。
+Tomcat 11.0.25 的 `Http11OutputBuffer` 管理 response header composition、active output filters、socket output、`commit()`、`end()` 與 `nextRequest()`／`recycle()`；其 `isReady()`／`registerWriteInterest()` 另外處理 writable readiness。Ckarta 因而拆成 response transaction 與 output writer 兩個 native layer。
 
 固定來源：
 https://github.com/apache/tomcat/blob/cbe6e15ee81e2fc6232954292a80cca5d1e84009/java/org/apache/coyote/http11/Http11OutputBuffer.java
 
-Ckarta 目前只吸收「commit boundary、bounded output layer、finish/recycle lifecycle」這些可驗證概念，不複製 Tomcat Java object graph。
-
 ## 8. Event-driven fairness
 
-後續 native socket writer 應採與 reader 對稱的 bounded work policy：一次 writable dispatch 不得因某一 connection 的巨大 response 而無上限排空 output queue。
+native socket writer 採與 reader 對稱的 bounded work policy：一次 writable dispatch 最多處理 32 KiB，若尚有 pending bytes 則回傳 `NEED_WRITE`，由 event loop 在後續 writable readiness 繼續處理。
 
-此處的設計理由可與 SEDA 的 staged event-driven architecture 中 bounded resource／well-conditioned service 的架構思想對照，但 32 KiB reader budget 或任何未來 writer budget 都是 Ckarta 自己的工程參數，必須用實際 workload benchmark 驗證，不可由 SEDA 論文直接推出「最佳」數值。
+此處的 32 KiB 是 Ckarta 工程參數，不是由 Nginx、Tomcat 或 SEDA 推導出的最佳值；後續應以相同 workload benchmark 評估吞吐、尾延遲與 event-loop fairness。
 
 學術來源：Matt Welsh、David Culler、Eric Brewer, “SEDA: an architecture for well-conditioned, scalable internet services”, ACM SIGOPS Operating Systems Review 35(5), 230–243, 2001. DOI: https://doi.org/10.1145/502059.502057
 
@@ -102,6 +101,10 @@ Ckarta 目前只吸收「commit boundary、bounded output layer、finish/recycle
 - Content-Length completion validation
 - terminal FAILED state on response invariant violation
 - lifecycle regression tests
+- bounded non-blocking output writer
+- partial `send()` continuation
+- `EAGAIN`／`EINTR`／peer-close／socket-error handling
+- EPOLLOUT socketpair regression test
 
 尚未完成：
 
@@ -109,12 +112,12 @@ Ckarta 目前只吸收「commit boundary、bounded output layer、finish/recycle
 - response header validation and injection protection
 - chunked response encoder
 - HEAD／204／304／CONNECT response-specific body rules
-- socket non-blocking write queue
-- writable epoll integration
 - response output filter pipeline
 - TLS output integration
 - Servlet Writer／ServletOutputStream facade
-- async response completion handoff
+- non-blocking Servlet `WriteListener` callback dispatch
+- response ownership bound to production connection state
 - response recycle bound to production connection keep-alive loop
+- graceful shutdown output drain
 
-因此本文件的「已完成」只代表 native response transaction slice，不代表完整 HTTP response implementation 或 Servlet 6.1 response compatibility。
+因此本文件的「已完成」只代表 native response transaction + bounded socket writer slices，不代表完整 HTTP response implementation 或 Servlet 6.1 response compatibility。

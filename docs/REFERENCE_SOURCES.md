@@ -126,3 +126,7 @@ Ckarta 不因使用 submodule 而取得修改或重新授權第三方程式碼�
 - 建置參數
 
 不得使用未固定的 upstream branch 作為正式 benchmark 基線。
+
+## 8. 平台研究基線
+
+Win32／Linux 平台差異研究見 docs/WIN32_LINUX_PLATFORM_RESEARCH.md；不把 Linux raw syscall number 或 Windows undocumented syscall 納入正式參考實作。

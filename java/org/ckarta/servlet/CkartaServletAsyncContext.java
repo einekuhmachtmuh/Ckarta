@@ -22,11 +22,12 @@ import jakarta.servlet.ServletResponse;
  */
 public final class CkartaServletAsyncContext implements AsyncContext
 {
+	private static final long DEFAULT_TIMEOUT_MILLIS = 30_000L;
 	private final CkartaAsyncContext core;
 	private final ServletRequest request;
 	private final ServletResponse response;
 	private final boolean originalRequestAndResponse;
-	private final AtomicLong timeout = new AtomicLong(-1L);
+	private final AtomicLong timeout = new AtomicLong(DEFAULT_TIMEOUT_MILLIS);
 
 	public CkartaServletAsyncContext(
 			CkartaAsyncContext core,

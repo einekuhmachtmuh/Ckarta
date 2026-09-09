@@ -38,7 +38,7 @@ int main(void)
 	assert(ck_request_state(&request) == CK_REQUEST_RUNNING);
 
 	assert(ck_request_cancel(&request) == 0);
-	assert(ck_request_cancel(&request) == 0);
+	assert(ck_request_cancel(&request) == 1);
 	assert(ck_request_state(&request) == CK_REQUEST_CANCELLING);
 	assert(ck_request_finish(&request) == 1);
 	assert(ck_request_state(&request) == CK_REQUEST_CANCELLING);
@@ -65,7 +65,7 @@ int main(void)
 		assert(ck_request_finish(&request) == 1);
 	}
 	assert(ck_request_state(&request) == CK_REQUEST_FAILED);
-	assert(ck_request_cancel(&request) == 0);
+	assert(ck_request_cancel(&request) == 1);
 
 	return 0;
 }

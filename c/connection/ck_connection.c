@@ -59,6 +59,7 @@ int ck_connection_init(ck_connection_t *connection,
 		return -1;
 	}
 
+	connection->http_request_body = NULL;
 	connection->http_reader = malloc(sizeof(*connection->http_reader));
 	if (connection->http_reader == NULL)
 	{
@@ -67,6 +68,15 @@ int ck_connection_init(ck_connection_t *connection,
 	connection->http_writer = malloc(sizeof(*connection->http_writer));
 	if (connection->http_writer == NULL)
 	{
+		free(connection->http_reader);
+		connection->http_reader = NULL;
+		return -1;
+	}
+	connection->http_request_body = malloc(sizeof(*connection->http_request_body));
+	if (connection->http_request_body == NULL)
+	{
+		free(connection->http_writer);
+		connection->http_writer = NULL;
 		free(connection->http_reader);
 		connection->http_reader = NULL;
 		return -1;
@@ -87,6 +97,9 @@ int ck_connection_init(ck_connection_t *connection,
 	connection->lifetime_token = lifetime_token;
 	connection->socket_fd = -1;
 	ck_http_connection_reader_init(connection->http_reader);
+	ck_http_request_body_init(connection->http_request_body);
+	ck_http_connection_reader_attach_body_queue(
+			connection->http_reader, connection->http_request_body);
 	ck_http_output_writer_init(connection->http_writer);
 	ck_http_response_init(connection->http_response);
 	atomic_init(&connection->lifecycle,
@@ -141,6 +154,17 @@ ck_http_connection_reader_t *ck_connection_http_reader(ck_connection_t *connecti
 	return connection->http_reader;
 }
 
+ck_http_request_body_t *ck_connection_http_request_body(
+	ck_connection_t *connection)
+{
+	if (connection == NULL || connection->http_request_body == NULL
+			|| ck_connection_state(connection) == CK_CONNECTION_CLOSED)
+	{
+		return NULL;
+	}
+	return connection->http_request_body;
+}
+
 ck_http_output_writer_t *ck_connection_http_writer(
 	ck_connection_t *connection)
 {
@@ -188,6 +212,8 @@ int ck_connection_http_recycle(ck_connection_t *connection)
 			!= CK_HTTP_RESPONSE_FINISHED
 			|| ck_http_output_writer_buffered_bytes(
 				connection->http_writer) != 0
+			|| !ck_http_request_body_is_finished(
+				connection->http_request_body)
 			|| connection->http_response->connection_close)
 	{
 		return 3;
@@ -327,6 +353,8 @@ int ck_connection_close(ck_connection_t *connection)
 			connection->http_reader = NULL;
 			free(connection->http_writer);
 			connection->http_writer = NULL;
+			free(connection->http_request_body);
+			connection->http_request_body = NULL;
 			free(connection->http_response);
 			connection->http_response = NULL;
 			return close_result == 0 || socket_fd < 0 ? 0 : 2;

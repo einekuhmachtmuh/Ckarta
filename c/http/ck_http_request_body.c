@@ -57,14 +57,9 @@ ck_http_request_body_write_result_t ck_http_request_body_write(
 		return CK_HTTP_REQUEST_BODY_WRITE_INVALID;
 	}
 	available = CK_HTTP_REQUEST_BODY_BUFFER_BYTES - (size_t)used;
-	if (available == 0)
+	if (available < length)
 	{
 		return CK_HTTP_REQUEST_BODY_WRITE_WOULD_BLOCK;
-	}
-
-	if (length > available)
-	{
-		length = available;
 	}
 
 	first = CK_HTTP_REQUEST_BODY_BUFFER_BYTES

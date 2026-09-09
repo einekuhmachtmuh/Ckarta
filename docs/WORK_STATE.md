@@ -195,7 +195,13 @@ Native module 暫定為 load-at-start、ABI/version/signature 驗證、dependenc
 
 決策：exception、native error、HTTP status、cancellation、timeout 與 fatal state 分層；JNI pending exception 必須在明確邊界檢查與有責任地清除；異步 error/completion/cancellation 必須 exactly once；client-visible error 與 internal diagnostic 分離；retry 不得僅因 exception 觸發。
 
-## 24. 2026-09-09 repository audit
+## 24. 2026-09-09 error state matrix and ck_error decision
+
+依 exception taxonomy 與現有 `ck_request` / completion / cancellation 狀態重新逐狀態分析後，確定需要一個小型 process-local `ck_error_t`，因為單一 `CK_REQUEST_FAILED` 及現有 completion `status` 無法保留 failure source。`docs/ERROR_STATE_MATRIX.md` 已固定 lifecycle／owner／HTTP outcome matrix；已加入獨立 `c/error/ck_error.[ch]` 與 layout/validation test。
+
+`ck_error_t` 暫不直接嵌入 `ck_request_t`，以避免在 failure/cancellation race 下形成 error payload data race；正式 publication primitive 完成後再接 request/completion。這是刻意的 ownership/lifecycle 安全邊界，不是遺漏。
+
+## 25. 2026-09-09 repository audit
 
 本輪依 `WORKING_RULES.md` 完成全 repository 結構、原始碼、研究文件、測試、CI、設定與固定 upstream gitlink 交叉檢查。已修正：
 

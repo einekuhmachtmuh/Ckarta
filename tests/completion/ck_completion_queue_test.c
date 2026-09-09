@@ -104,6 +104,7 @@ int main(void)
 	}
 
 	assert(ck_completion_queue_close(&queue) == 0);
+	assert(ck_completion_queue_drain_notification(&queue) == 0);
 	assert(ck_completion_queue_close(&queue) == 1);
 	assert(ck_completion_queue_push(&queue, &record) == 2);
 

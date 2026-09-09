@@ -52,6 +52,12 @@ int main(void)
 		assert(http_request.descriptor.body_length == 0);
 		assert(http_request.descriptor.feature_flags
 				& CK_REQUEST_FEATURE_METADATA_BUFFER);
+
+		{
+			ck_request_descriptor_t invalid = http_request.descriptor;
+			invalid.feature_flags &= ~CK_REQUEST_FEATURE_METADATA_BUFFER;
+			assert(ck_request_init(&http_request, &invalid) == -1);
+		}
 	}
 	assert(ck_request_state(&request) == CK_REQUEST_PENDING);
 	assert(ck_request_state(NULL) == CK_REQUEST_STATE_INVALID);

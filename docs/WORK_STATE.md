@@ -206,3 +206,11 @@ Native module 暫定為 load-at-start、ABI/version/signature 驗證、dependenc
 2026-09-09：確認 Windows 支援在現有 C/Java 邊界下可行。Nginx 1.30.4 使用 IOCP event module 與 Overlapped Winsock I/O，Apache httpd 2.4.68 的 mpm_winnt 使用 Windows events／AcceptEx／threads，Tomcat 11.0.25 Nio2Endpoint 使用 Java NIO2 asynchronous channels。Ckarta 因而採 portable core + platform backend：Linux 以 epoll 為 primary candidate，Windows 以 IOCP + Overlapped Winsock I/O 為 primary candidate。
 
 Java→C completion notification：Linux 優先 eventfd + epoll，Windows 優先 PostQueuedCompletionStatus + IOCP；notification 只作 wake-up hint，completion queue 才是 correctness source。未實作任何 Windows backend 或正式 notification API。
+
+
+## Branch status
+
+- Purpose: Win32 portability與completion notification research
+- Lifecycle status: CLOSED / SUPERSEDED
+- Relation to main: PR #13 closed；有效研究後由 #14/current main 整理。
+- This file is branch-specific state and must not be treated as main canonical state.

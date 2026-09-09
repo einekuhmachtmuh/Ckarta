@@ -37,6 +37,7 @@ int ck_runtime_dispatch_async_smoke(ck_runtime_t *runtime, ck_request_t *request
 int ck_runtime_poll_completion(ck_runtime_t *runtime, ck_request_t *requests,
 		size_t request_count);
 int ck_runtime_completion_fd(const ck_runtime_t *runtime);
+int ck_runtime_drain_completion_notification(ck_runtime_t *runtime);
 int ck_runtime_shutdown(ck_runtime_t *runtime);
 void ck_runtime_destroy(ck_runtime_t *runtime);
 

@@ -185,3 +185,42 @@ GitHub Actions build-smoke 已在 Ubuntu 24.04、Temurin OpenJDK 21.0.12、GCC 1
 - 已完成 Windows IOCP 或 macOS/BSD kqueue。
 
 下一個網路實作閘門是把已驗證的 listener／accepted connection／epoll registration path 提升為正式 connection event consumer，再接入 HTTP/1.1 framing 與 bounded read/write state machine；stale notification 必須在 consumer 端以 generation/correlation identity 再驗證。
+
+
+## 12. Linux io_uring alternative backend
+
+Linux io_uring is a separate experimental backend candidate. It does not replace the epoll baseline at this stage.
+
+The io_uring path is completion-oriented rather than readiness-oriented. The backend will use Ckarta-defined completion records and connection ownership, while the platform implementation uses Linux UAPI and direct documented system calls without liburing.
+
+Initial direct system-call surface:
+
+- `io_uring_setup`
+- `io_uring_enter`
+- `io_uring_register`
+
+Required implementation constraints are defined by `WORKING_RULES.md` and `docs/IO_URING_BACKEND_RESEARCH.md`: no hard-coded syscall numbers, no liburing dependency, runtime feature/opcode probing, and epoll fallback whenever io_uring is unavailable or blocked.
+
+The first prototype must not require SQPOLL, IOPOLL, or ZCRX. Basic ACCEPT/RECV/SEND should be sufficient for the initial completion backend.
+
+The existing epoll backend remains the compatibility baseline until identical-workload benchmarks demonstrate a material end-to-end benefit.
+
+## 13. io_uring and connection semantics
+
+An io_uring CQE is not automatically a current connection event. A CQE may arrive after a connection has logically entered close/retire state.
+
+Therefore the consumer must validate:
+
+```
+CQE user_data
+→ generation/identity validation
+→ connection owner state
+→ operation lifetime
+→ completion result
+```
+
+before touching mutable connection state.
+
+At most one in-flight send operation for a given connection should be used by the initial implementation; the connection owner remains responsible for response byte ordering.
+
+Receive buffers must remain owned until the corresponding HTTP parsing/body-delivery contract releases them. io_uring does not change HTTP framing or Servlet semantics.

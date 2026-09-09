@@ -6,7 +6,8 @@
 #include "ck_http_input.h"
 
 #define CK_HTTP_CONNECTION_READ_BUFFER_BYTES 65536u
-#define CK_HTTP_CONNECTION_READ_BUDGET_BYTES 65536u
+#define CK_HTTP_CONNECTION_READ_BUDGET_BYTES 32768u
+#define CK_HTTP_CONNECTION_PROCESS_BUDGET_BYTES 32768u
 
 typedef enum ck_http_connection_read_result
 {

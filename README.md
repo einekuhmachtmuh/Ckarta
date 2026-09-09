@@ -127,10 +127,10 @@ CGI/FastCGI 定位：未來可掛接 application gateway module，不屬核心 r
 → terminal arbitration
 → Java AsyncContext semantic state`
 
-`ck_connection_t` 現已直接擁有 Linux/POSIX socket descriptor；C-driven JVM integration test 以 `socketpair()` 驗證 Java 不接觸 descriptor，terminal winner 之後由 native owner close socket，peer 收到 EOF，registry 再允許 retire。
+`ck_connection_t` 現已直接擁有 Linux/POSIX socket descriptor，並以 heap-backed reader owner 持有 65,536-byte HTTP connection input consumer；reader 在 `ck_connection_init()` 建立並於 connection terminal close 時釋放。C-driven JVM integration test 以 `socketpair()` 驗證 Java 不接觸 descriptor，terminal winner 之後由 native owner close socket，peer 收到 EOF，registry 再允許 retire。
 
 Linux `ck_event_loop` 已有獨立 executable baseline，並已完成 loopback TCP listener／accept integration smoke：event loop 擁有 epoll instance、connection owner 擁有 socket descriptor；notification 只攜帶 opaque `uint64_t` cookie，accepted socket 由 `accept4()` 以 nonblocking／close-on-exec 屬性建立。
 
-目前 HTTP path 已增加 bounded executable framing components：header parser 能處理 incremental request line/header block、Content-Length normalization、Transfer-Encoding framing decision；獨立 chunked decoder 能處理 chunk size、chunk data、chunk CRLF、last chunk 與 trailer syntax。另已建立 connection-owned 65,536-byte reader buffer 與 non-blocking `recv()` consumer，可將 Content-Length／chunked body 以同步 sink 分段消費，並在 request completion 後保留下一則 pipelined request；目前 reader 已有獨立 socketpair executable test，但 loopback TCP integration test 仍直接使用 `ck_http_input`，尚未把 reader 納入該 integration path。
+目前 HTTP path 已增加 bounded executable framing components：header parser 能處理 incremental request line/header block、Content-Length normalization、Transfer-Encoding framing decision；獨立 chunked decoder 能處理 chunk size、chunk data、chunk CRLF、last chunk 與 trailer syntax。reader 可將 Content-Length／chunked body 以同步 sink 分段消費，並在 request completion 後保留下一則 pipelined request；目前 reader 已有獨立 socketpair executable test 與 fragmented chunk delimiter regression coverage，但 loopback TCP integration test 仍直接使用 `ck_http_input`，尚未把 reader 納入該 integration path。
 
-目前尚未完成：正式多 worker listener/accept ownership、`ck_http_connection_reader_t` 直接納入 `ck_connection_t` 的正式 ownership wiring、完整 HTTP/1.1 request/response state machine、response ownership、async dispatch、real timeout source、完整 client-disconnect policy、shutdown drain、TCK、sanitizer/fuzz、Windows IOCP 與其他平台 event backend。
+目前尚未完成：正式多 worker listener/accept ownership、registry-safe reader dispatch API、production read-event state integration、read batching/fairness budget、完整 HTTP/1.1 request/response state machine、response ownership、async dispatch、real timeout source、完整 client-disconnect policy、shutdown drain、TCK、sanitizer/fuzz、Windows IOCP 與其他平台 event backend。

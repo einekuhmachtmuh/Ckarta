@@ -4,6 +4,8 @@
 #include <stdatomic.h>
 #include <stdint.h>
 
+#include "../http/ck_http_connection_reader.h"
+
 typedef enum ck_connection_state
 {
 	CK_CONNECTION_OPEN = 0,
@@ -36,6 +38,7 @@ typedef struct ck_connection
 	uint64_t owner_token;
 	uint64_t lifetime_token;
 	int socket_fd;
+	ck_http_connection_reader_t http_reader;
 	/* Low 8 bits are state; next 8 bits are terminal event; upper 48 bits are cycle id. */
 	_Atomic uint64_t lifecycle;
 } ck_connection_t;
@@ -47,6 +50,7 @@ int ck_connection_init(ck_connection_t *connection,
 		uint64_t lifetime_token);
 int ck_connection_attach_socket(ck_connection_t *connection, int socket_fd);
 int ck_connection_socket_fd(const ck_connection_t *connection);
+ck_http_connection_reader_t *ck_connection_http_reader(ck_connection_t *connection);
 int ck_connection_start_async(ck_connection_t *connection);
 int ck_connection_start_async_cycle(ck_connection_t *connection,
 		uint64_t cycle_id);

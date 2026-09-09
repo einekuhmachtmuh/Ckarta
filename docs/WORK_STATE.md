@@ -263,3 +263,29 @@ Native module 暫定為 load-at-start、ABI/version/signature 驗證、dependenc
 runtime shutdown 已加入 initialized/started/completed lifecycle guards 與 sequential idempotence；dispatch/poll 在 shutdown 開始後拒絕新操作。同步原語的內部 invariant failure 走明確 fatal path。
 
 目前下一個主要工程閘門仍是 production completion notification / AsyncContext cancellation / event backend；本輪沒有提前定案 Linux epoll/eventfd 或 Windows IOCP 為唯一正式實作，也沒有宣稱完整 Servlet runtime 已完成。
+
+## Branch status registry
+
+此章節是 main 對所有現存非-main branch 的 canonical 狀態索引；每個 branch 自身的 docs/WORK_STATE.md 仍是該 branch 的詳細 branch-specific state。
+
+| Branch | Purpose | Lifecycle status | Relation to main |
+|---|---|---|---|
+| codex/bootstrap-jdk21-audit | JVM bootstrap / OpenJDK 21u / JNI smoke | CLOSED / MERGED | PR #1 merged；僅保留 provenance |
+| codex/cgi-interface-research | CGI/FastCGI gateway research | CLOSED / SUPERSEDED | PR #5 closed；有效研究已在 main |
+| codex/cgi-nonblocking-completion | early nonblocking completion prototype | CLOSED / SUPERSEDED | 無 active PR；已被後續 completion model 取代 |
+| codex/completion-contract | multi-request completion contract research | CLOSED / SUPERSEDED | PR #10 closed；有效語意已在 main |
+| codex/completion-routing-impl | completion routing implementation prototype | CLOSED / SUPERSEDED | 無 active PR；後續 smoke/contract 已取代 |
+| codex/core-config-module-research | core configuration / native module research | CLOSED / SUPERSEDED | PR #11 closed；研究已在 main |
+| codex/jni-ownership-abi | JNI ownership / cancellation ABI | CLOSED / MERGED | PR #2 merged；僅保留 provenance |
+| codex/multi-request-completion | multi-request completion routing slice | CLOSED / SUPERSEDED | PR #12 closed；有效 routing contract 已在 main |
+| codex/nonblocking-completion | first nonblocking JNI completion slice | CLOSED / SUPERSEDED | PR #6 closed；後續模型已取代 |
+| codex/nonblocking-completion-v2 | bounded executor / nonblocking completion v2 | CLOSED / SUPERSEDED | PR #8 closed；有效成果已在 main |
+| codex/platform-apache-completion | Win32/Linux + Apache reference/completion research | CLOSED / SUPERSEDED | PR #14 closed；有效研究在 main，httpd submodule 未納入 |
+| codex/repo-audit-20260909 | repository audit / exception-error architecture | CLOSED / MERGED | PR #15 merged；僅保留 provenance |
+| codex/rules-cgi-module | CGI module/function safety rules | CLOSED / SUPERSEDED | PR #7 closed；有效規則已在 main |
+| codex/servlet-critique-executor-slice | Servlet critique / Java executor handoff | CLOSED / SUPERSEDED | PR #4 closed；有效成果已在 main |
+| codex/startup-config-loader | startup configuration parser / validation | CLOSED / SUPERSEDED | PR #9 closed；有效成果已在 main |
+| codex/web-server-theory-servlet-analysis | Web server / Servlet / Nginx / Tomcat theory | CLOSED / SUPERSEDED | PR #3 closed；研究已在 main |
+| codex/win32-research-notification | Win32 / completion notification research | CLOSED / SUPERSEDED | PR #13 closed；有效研究已後續整合 |
+
+No non-main branch currently has an open PR. Branch refs are retained only where useful for historical provenance; they are not active development baselines.

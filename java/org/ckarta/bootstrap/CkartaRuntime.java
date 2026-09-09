@@ -130,7 +130,7 @@ public final class CkartaRuntime
 		catch (RejectedExecutionException exception)
 		{
 			int publishStatus = publishCompletion(queueHandle,
-					requestHandle, ownerToken, lifetimeToken, 0L, -2);
+					requestHandle, ownerToken, lifetimeToken, 1L, 0L, -2);
 			if (publishStatus != 0 && publishStatus != 2)
 			{
 				throw new IllegalStateException(

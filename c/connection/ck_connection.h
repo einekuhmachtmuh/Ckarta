@@ -5,6 +5,7 @@
 #include <stdint.h>
 
 #include "../http/ck_http_connection_reader.h"
+#include "../http/ck_http_request_body.h"
 #include "../output/ck_http_output_writer.h"
 #include "../output/ck_http_response.h"
 
@@ -41,6 +42,7 @@ typedef struct ck_connection
 	uint64_t lifetime_token;
 	int socket_fd;
 	ck_http_connection_reader_t *http_reader;
+	ck_http_request_body_t *http_request_body;
 	ck_http_output_writer_t *http_writer;
 	ck_http_response_t *http_response;
 	/* Low 8 bits are state; next 8 bits are terminal event; upper 48 bits are cycle id. */
@@ -55,6 +57,7 @@ int ck_connection_init(ck_connection_t *connection,
 int ck_connection_attach_socket(ck_connection_t *connection, int socket_fd);
 int ck_connection_socket_fd(const ck_connection_t *connection);
 ck_http_connection_reader_t *ck_connection_http_reader(ck_connection_t *connection);
+ck_http_request_body_t *ck_connection_http_request_body(ck_connection_t *connection);
 ck_http_output_writer_t *ck_connection_http_writer(ck_connection_t *connection);
 ck_http_response_t *ck_connection_http_response(ck_connection_t *connection);
 int ck_connection_http_recycle(ck_connection_t *connection);

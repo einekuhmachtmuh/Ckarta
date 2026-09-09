@@ -179,7 +179,7 @@ IOCP + PostQueuedCompletionStatus + bounded completion queue
 
 ## 8. Current executable decision
 
-本階段已選擇 Linux `eventfd(EFD_CLOEXEC | EFD_NONBLOCK)` 作為第一個可執行 notification backend prototype；completion records 仍由獨立 bounded mutex-protected ring queue 保存。`eventfd` 只負責 wake-up/count，不攜帶 request identity。queue producer 先在同一 critical section 發布 record，再執行 nonblocking notification；若 notification 明確失敗，record 會 rollback，避免資料與通知出現半成功狀態。這是 Linux executable backend，不是跨平台最終選型，也尚未接入 Java JNI producer。
+本階段已選擇 Linux `eventfd(EFD_CLOEXEC | EFD_NONBLOCK)` 作為第一個可執行 notification backend；completion records 由 runtime-owned bounded mutex-protected ring queue 保存，Java executor 以 registered JNI publisher 直接寫入 native queue。`eventfd` 只負責 wake-up/count，不攜帶 request identity；通知可 coalesce。queue producer 在 queue lock 內完成 record publication 與 notification signal，Java producer 使用 close-aware `push_wait()` 進行 bounded backpressure。這是 Linux executable backend，不是跨平台最終選型。
 
 研究基線：Linux `eventfd(2)` 官方文件說明 eventfd 建立可供 user-space 使用的 file descriptor event notification 機制，並支援 `poll`/`epoll`；EFD_NONBLOCK 使 notification 操作不需阻塞 event loop。來源：https://man7.org/linux/man-pages/man2/eventfd.2.html
 

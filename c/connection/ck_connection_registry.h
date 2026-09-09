@@ -34,6 +34,19 @@ int ck_connection_registry_register(
 		uint64_t owner_token,
 		uint64_t lifetime_token,
 		ck_connection_handle_t *handle);
+int ck_connection_registry_attach_socket(
+		ck_connection_registry_t *registry,
+		ck_connection_handle_t handle,
+		uint64_t request_id,
+		uint64_t owner_token,
+		uint64_t lifetime_token,
+		int socket_fd);
+int ck_connection_registry_socket_fd(
+		ck_connection_registry_t *registry,
+		ck_connection_handle_t handle,
+		uint64_t request_id,
+		uint64_t owner_token,
+		uint64_t lifetime_token);
 int ck_connection_registry_start_async_cycle(
 		ck_connection_registry_t *registry,
 		ck_connection_handle_t handle,

@@ -23,6 +23,16 @@ int main(void)
 
 	assert(ck_request_init(&request, &descriptor) == 0);
 	assert(ck_request_state(&request) == CK_REQUEST_PENDING);
+
+	{
+		ck_request_descriptor_t invalid = descriptor;
+		invalid.body = NULL;
+		assert(ck_request_init(&request, &invalid) == -1);
+
+		invalid = descriptor;
+		invalid.body_length = (uint64_t)INT32_MAX + 1;
+		assert(ck_request_init(&request, &invalid) == -1);
+	}
 	assert(ck_request_begin(&request) == 0);
 	assert(ck_request_state(&request) == CK_REQUEST_RUNNING);
 

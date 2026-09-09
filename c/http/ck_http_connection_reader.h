@@ -17,13 +17,9 @@ typedef enum ck_http_connection_read_result
 	CK_HTTP_CONNECTION_READ_TOO_LARGE = 3,
 	CK_HTTP_CONNECTION_READ_EOF_INCOMPLETE = 4,
 	CK_HTTP_CONNECTION_READ_IO_ERROR = 5,
-	CK_HTTP_CONNECTION_READ_SINK_ERROR = 6,
-	CK_HTTP_CONNECTION_READ_BODY_BACKPRESSURE = 7
+	CK_HTTP_CONNECTION_READ_SINK_ERROR = 6
 } ck_http_connection_read_result_t;
 
-
-#define CK_HTTP_BODY_SINK_ERROR 1
-#define CK_HTTP_BODY_SINK_WOULD_BLOCK 2
 
 typedef int (*ck_http_body_sink_fn)(
 	void *context,

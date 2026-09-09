@@ -395,9 +395,8 @@ ck_http_parse_result_t ck_http_parser_feed(
 	size_t *consumed,
 	ck_http_request_t *request)
 {
-	const char *source = data;
-	size_t previous_length;
-	size_t header_end = 0;
+	const unsigned char *source = data;
+	size_t position = 0;
 	ck_http_parse_result_t result;
 
 	if (parser == NULL || consumed == NULL || request == NULL
@@ -411,39 +410,33 @@ ck_http_parse_result_t ck_http_parser_feed(
 	{
 		return CK_HTTP_PARSE_COMPLETE;
 	}
-	previous_length = parser->length;
-	if (length > CK_HTTP_MAX_HEADER_BYTES - previous_length)
-	{
-		return CK_HTTP_PARSE_HEADER_TOO_LARGE;
-	}
-	if (length != 0)
-	{
-		memcpy(parser->buffer + previous_length, source, length);
-		parser->length += length;
-	}
 
-	for (size_t i = 3; i < parser->length; i++)
+	while (position < length)
 	{
-		if (parser->buffer[i - 3] == '\r'
-				&& parser->buffer[i - 2] == '\n'
-				&& parser->buffer[i - 1] == '\r'
-				&& parser->buffer[i] == '\n')
+		if (parser->length >= CK_HTTP_MAX_HEADER_BYTES)
 		{
-			header_end = i + 1;
-			break;
+			return CK_HTTP_PARSE_HEADER_TOO_LARGE;
+		}
+
+		parser->buffer[parser->length++] = (char)source[position++];
+		if (parser->length >= 4U
+				&& parser->buffer[parser->length - 4] == '\r'
+				&& parser->buffer[parser->length - 3] == '\n'
+				&& parser->buffer[parser->length - 2] == '\r'
+				&& parser->buffer[parser->length - 1] == '\n')
+		{
+			result = parse_header_block(parser, parser->length, request);
+			if (result != CK_HTTP_PARSE_COMPLETE)
+			{
+				*consumed = position;
+				return result;
+			}
+			parser->complete = 1;
+			*consumed = position;
+			return CK_HTTP_PARSE_COMPLETE;
 		}
 	}
-	if (header_end == 0)
-	{
-		return CK_HTTP_PARSE_INCOMPLETE;
-	}
 
-	result = parse_header_block(parser, header_end, request);
-	if (result != CK_HTTP_PARSE_COMPLETE)
-	{
-		return result;
-	}
-	parser->complete = 1;
-	*consumed = header_end - previous_length;
-	return CK_HTTP_PARSE_COMPLETE;
+	*consumed = position;
+	return CK_HTTP_PARSE_INCOMPLETE;
 }

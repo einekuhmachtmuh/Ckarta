@@ -64,6 +64,13 @@ int ck_connection_init(ck_connection_t *connection,
 	{
 		return -1;
 	}
+	connection->http_writer = malloc(sizeof(*connection->http_writer));
+	if (connection->http_writer == NULL)
+	{
+		free(connection->http_reader);
+		connection->http_reader = NULL;
+		return -1;
+	}
 
 	connection->connection_id = connection_id;
 	connection->request_id = request_id;
@@ -71,6 +78,7 @@ int ck_connection_init(ck_connection_t *connection,
 	connection->lifetime_token = lifetime_token;
 	connection->socket_fd = -1;
 	ck_http_connection_reader_init(connection->http_reader);
+	ck_http_output_writer_init(connection->http_writer);
 	atomic_init(&connection->lifecycle,
 			ck_connection_pack(CK_CONNECTION_OPEN, -1, 0));
 	return 0;
@@ -94,6 +102,12 @@ int ck_connection_attach_socket(ck_connection_t *connection, int socket_fd)
 	}
 
 	connection->socket_fd = socket_fd;
+	if (ck_http_output_writer_attach_socket(
+			connection->http_writer, socket_fd) != 0)
+	{
+		connection->socket_fd = -1;
+		return -1;
+	}
 	return 0;
 }
 
@@ -115,6 +129,17 @@ ck_http_connection_reader_t *ck_connection_http_reader(ck_connection_t *connecti
 		return NULL;
 	}
 	return connection->http_reader;
+}
+
+ck_http_output_writer_t *ck_connection_http_writer(
+	ck_connection_t *connection)
+{
+	if (connection == NULL || connection->http_writer == NULL
+			|| ck_connection_state(connection) == CK_CONNECTION_CLOSED)
+	{
+		return NULL;
+	}
+	return connection->http_writer;
 }
 
 int ck_connection_start_async_cycle(ck_connection_t *connection,
@@ -231,6 +256,8 @@ int ck_connection_close(ck_connection_t *connection)
 					{
 						free(connection->http_reader);
 						connection->http_reader = NULL;
+						free(connection->http_writer);
+						connection->http_writer = NULL;
 						return -1;
 					}
 				}
@@ -238,6 +265,8 @@ int ck_connection_close(ck_connection_t *connection)
 
 			free(connection->http_reader);
 			connection->http_reader = NULL;
+			free(connection->http_writer);
+			connection->http_writer = NULL;
 			return close_result == 0 || socket_fd < 0 ? 0 : 2;
 		}
 		current = expected;

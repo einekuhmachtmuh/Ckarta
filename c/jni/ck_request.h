@@ -5,10 +5,13 @@
 #include <stdint.h>
 
 #include "../error/ck_error.h"
+#include "../http/ck_http_parser.h"
 
 #define CK_JNI_ABI_VERSION 1u
 
 #define CK_REQUEST_FEATURE_DIRECT_BUFFER (UINT64_C(1) << 0)
+#define CK_REQUEST_FEATURE_METADATA_BUFFER (UINT64_C(1) << 1)
+#define CK_REQUEST_METADATA_STORAGE_BYTES 8320u
 
 #define CK_REQUEST_OWNS_NATIVE_STORAGE (UINT64_C(1) << 0)
 #define CK_REQUEST_JAVA_BORROWS_BUFFER (UINT64_C(1) << 1)
@@ -34,6 +37,8 @@ typedef struct ck_request_descriptor
 	uint64_t owner_token;
 	uint64_t lifetime_token;
 	uint64_t request_id;
+	const unsigned char *metadata;
+	uint64_t metadata_length;
 	const unsigned char *body;
 	uint64_t body_length;
 } ck_request_descriptor_t;
@@ -44,10 +49,18 @@ typedef struct ck_request
 	ck_request_descriptor_t descriptor;
 	_Atomic uint32_t state;
 	ck_error_t error;
+	unsigned char metadata_storage[CK_REQUEST_METADATA_STORAGE_BYTES];
 } ck_request_t;
 
 int ck_request_init(ck_request_t *request,
 		const ck_request_descriptor_t *descriptor);
+int ck_request_init_http(ck_request_t *request,
+		const ck_http_request_t *http_request,
+		const unsigned char *body,
+		size_t body_length,
+		uint64_t request_id,
+		uint64_t owner_token,
+		uint64_t lifetime_token);
 int ck_request_begin(ck_request_t *request);
 int ck_request_cancel(ck_request_t *request);
 int ck_request_finish(ck_request_t *request);

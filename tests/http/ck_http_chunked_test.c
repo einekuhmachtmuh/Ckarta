@@ -12,15 +12,15 @@ static void feed_all_at_small_splits(const char *input, size_t length,
 
 	while (offset < length)
 	{
-		size_t feed_length = 1;
+		size_t feed_length = length - offset;
 		size_t consumed;
 		const unsigned char *body;
 		size_t body_length;
 		ck_http_chunked_result_t result;
 
-		if (feed_length > length - offset)
+		if (feed_length > 4)
 		{
-			feed_length = length - offset;
+			feed_length = 4;
 		}
 		result = ck_http_chunked_feed(decoder, input + offset, feed_length,
 			&consumed, &body, &body_length);
@@ -32,20 +32,43 @@ static void feed_all_at_small_splits(const char *input, size_t length,
 			memcpy(received + received_length, body, body_length);
 			received_length += body_length;
 		}
-		if (result == CK_HTTP_CHUNKED_BAD_REQUEST ||
-				result == CK_HTTP_CHUNKED_TOO_LARGE)
-		{
-			assert(0);
-		}
+		assert(result != CK_HTTP_CHUNKED_BAD_REQUEST);
+		assert(result != CK_HTTP_CHUNKED_TOO_LARGE);
 		if (consumed == 0)
 		{
-			feed_length = 1;
+			assert(feed_length < length - offset);
+			feed_length = length - offset;
+			result = ck_http_chunked_feed(decoder, input + offset, feed_length,
+				&consumed, &body, &body_length);
+			assert(consumed > 0);
+			assert(result != CK_HTTP_CHUNKED_BAD_REQUEST);
+			assert(result != CK_HTTP_CHUNKED_TOO_LARGE);
+			if (body_length != 0)
+			{
+				assert(body != NULL);
+				assert(received_length + body_length <= sizeof(received));
+				memcpy(received + received_length, body, body_length);
+				received_length += body_length;
+			}
 		}
 		offset += consumed;
 	}
 
+	if (ck_http_chunked_state(decoder) != CK_HTTP_CHUNKED_DONE)
+	{
+		size_t consumed;
+		const unsigned char *body;
+		size_t body_length;
+		ck_http_chunked_result_t result = ck_http_chunked_feed(
+				decoder, NULL, 0, &consumed, &body, &body_length);
+		assert(consumed == 0);
+		assert(body == NULL);
+		assert(body_length == 0);
+		assert(result == CK_HTTP_CHUNKED_INCOMPLETE);
+	}
+
 	assert(ck_http_chunked_state(decoder) == CK_HTTP_CHUNKED_DONE);
-	assert(received_length == strlen("Wikipedia");
+	assert(received_length == strlen("Wikipedia"));
 	assert(memcmp(received, "Wikipedia", received_length) == 0);
 	assert(ck_http_chunked_total_decoded(decoder) == received_length);
 }

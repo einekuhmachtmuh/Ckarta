@@ -38,7 +38,9 @@ reader access 仍遵循 connection owner single-owner contract：同一時間只
 
 reader 不在 `EAGAIN` 上阻塞，也不等待 Servlet application code。
 
-若 framing state 在目前 buffer 中合法地停在尚待後續 byte 的邊界，例如 chunked data 的 `CR` 已收到但 `LF` 尚未到達，reader 必須保留該 byte 並回報 `INCOMPLETE`，不可把 zero-progress feed 視為 I/O error。下一次 readiness 到達後再繼續 framing。
+為避免單一繁忙 connection 在 Linux level-triggered readiness 下長時間佔用 event-loop iteration，單次 `ck_http_connection_reader_drive()` 同時受兩個獨立 budget 約束：最多讀取 `32 KiB` socket bytes，以及最多處理 `32 KiB` 已緩衝 input bytes。任何一個 budget 耗盡且 request 尚未完成時，reader 回傳 `CK_HTTP_CONNECTION_READ_INCOMPLETE`；在後續 readiness/dispatch 再繼續。此 budget 是 Ckarta 的公平性與過載控制策略，不是 HTTP 語意限制。
+
+若 framing state 在目前 buffer 中合法地停在尚待後續 byte 的邊界，例如 chunked data 的 `CR` 已收到但 `LF` 尚未到達，reader 必須保留該 byte 並回報 `INCOMPLETE`，不可把 zero-progress feed 視為 I/O error。若 framing 在該 input slice 沒有消耗任何 byte，reader 會先停止目前 parse batch，再嘗試取得後續 socket bytes；不得在相同 buffer 上無限重試。
 
 ## 4. Input consumption
 
@@ -48,7 +50,7 @@ reader 只有在 sink callback 成功後才前移 `begin`。因此 sink failure 
 
 當 request 完成而 `begin < end` 時，剩餘 bytes 屬於同一 TCP connection 上尚未解析的下一則 request；reader 不丟棄這些 bytes。
 
-`ck_http_connection_reader_next_request()` 只有在 current request 已完成後才能呼叫。它將 leftover bytes compact 到 buffer 前端，再重設 `ck_http_input` parser/body state。
+`ck_http_connection_reader_next_request()` 只有在 current request 已完成後才能呼叫；成功回傳 `0`，無效 reader 或 current request 未完成則回傳 `-1`。它將 leftover bytes compact 到 buffer 前端，再重設 `ck_http_input` parser/body state。
 
 ## 5. Bounded memory
 
@@ -60,16 +62,18 @@ Header 或 chunk framing 若先觸發其自身 bound，reader 直接回傳 `TOO_
 
 ## 6. Nginx/Tomcat cross-check
 
-Nginx 1.30.4 fixed source 的 request-body path 使用 preread bytes、request-body filter、remaining body tracking，以及 request body 結束後保存 pipelined header 的設計；Ckarta reader 只採其「同一 connection buffer 中區分 current request 與 leftover input」的原則，不複製 Nginx private structures。
+Nginx 1.30.4 fixed source 的一般 read handler 可在 ready 狀態持續讀取直到 `EAGAIN`；其 HTTP request path 同時以 request/connection state、request buffer 與 request-body buffering 管理目前 request 與剩餘 input。Ckarta reader 因採 Linux level-triggered event backend，不直接複製 Nginx「單次 read handler 讀到 EAGAIN」的無上限 batch 行為，而是加上明確 per-dispatch work budget，同時保留 connection buffer 中 current request／leftover 分界的設計思想。
 
-Tomcat 11.0.25 fixed `Http11InputBuffer` 明確管理目前輸入 buffer、header/body boundary 與 `nextRequest()`／`recycle()` 生命周期；`nextRequest()` 保留 leftover bytes 並重設 current request parser state。Ckarta reader 因而將 `next_request()` 視為明確 lifecycle operation，而非自動隱式 recycle。
+Tomcat 11.0.25 fixed `NioEndpoint.Poller.processKey()` 將 readable event 交給 socket processor；`Http11InputBuffer` 另有目前輸入 buffer、request boundary 與 `nextRequest()`／recycle 生命周期。Ckarta reader 因而把「I/O readiness → bounded native processing → 明確 request recycle」拆成可驗證的 native contract，而不是將 Java Poller／processor 模型直接搬到 C。
 
 固定來源：
 
 Nginx 1.30.4
+https://github.com/nginx/nginx/blob/017cf98dcce217946572a896f0992370475e189f/src/http/ngx_http_request.c
 https://github.com/nginx/nginx/blob/017cf98dcce217946572a896f0992370475e189f/src/http/ngx_http_request_body.c
 
 Tomcat 11.0.25
+https://github.com/apache/tomcat/blob/cbe6e15ee81e2fc6232954292a80cca5d1e84009/java/org/apache/tomcat/util/net/NioEndpoint.java
 https://github.com/apache/tomcat/blob/cbe6e15ee81e2fc6232954292a80cca5d1e84009/java/org/apache/coyote/http11/Http11InputBuffer.java
 
 ## 7. HTTP authority
@@ -88,14 +92,17 @@ Ckarta reader 不重新解釋這些規則，只執行已由 framing layer 決定
 - `ck_connection_t` 持有 heap-backed reader owner pointer
 - registry-safe reader pin acquire/release contract
 - non-blocking `recv()` consumer
+- bounded per-dispatch read/process work budget
 - HTTP header/body framing composition
 - Content-Length streaming body sink
 - chunked streaming body sink
 - leftover/pipelined byte preservation
 - explicit request recycle
+- explicit request recycle return contract
 - EOF / EAGAIN / EINTR / socket-error mapping
 - body sink failure boundary
 - fragmented chunk delimiter regression test
+- bounded dispatch regression test
 - independent reader socketpair tests
 - connection close 後 reader lifetime invalidation test
 - registry close/retire 被 active reader pin 阻擋的測試
@@ -103,7 +110,6 @@ Ckarta reader 不重新解釋這些規則，只執行已由 framing layer 決定
 
 尚未完成：
 
-- read batching/fairness budget
 - request timeout／Slowloris timer source
 - true multi-worker accept ownership
 - production connection read-event state 的完整 lifecycle state machine
@@ -121,7 +127,7 @@ Ckarta reader 不重新解釋這些規則，只執行已由 framing layer 決定
 
 SEDA：Matt Welsh、David Culler、Eric Brewer, “SEDA: an architecture for well-conditioned, scalable internet services”, ACM SIGOPS Operating Systems Review 35(5), 230–243, 2001. DOI: https://doi.org/10.1145/502059.502057
 
-此處只採其 event-driven stage 與 bounded-resource control 的架構思想，不宣稱 reader 本身是 SEDA implementation。
+此處只採其 event-driven stage 與 bounded-resource control 的架構思想，不宣稱 reader 本身是 SEDA implementation；32 KiB budget 是 Ckarta 自己的工程參數，仍應透過 workload benchmark 驗證。
 
 Herlihy/Wing：Maurice P. Herlihy、Jeannette M. Wing, “Linearizability: A Correctness Condition for Concurrent Objects”, ACM Transactions on Programming Languages and Systems 12(3), 463–492, 1990. DOI: https://doi.org/10.1145/78969.78972
 

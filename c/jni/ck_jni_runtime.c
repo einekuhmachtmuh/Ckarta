@@ -33,7 +33,7 @@ static int ck_check_java_exception(JNIEnv *env, const char *operation)
 
 static jint ck_native_publish_completion(JNIEnv *env, jclass clazz,
 		jlong queue_handle, jlong request_id, jlong owner_token,
-		jlong lifetime_token, jlong result, jint status)
+		jlong lifetime_token, jlong cycle_id, jlong result, jint status)
 {
 	ck_completion_record_t record;
 	ck_completion_queue_t *queue;
@@ -42,7 +42,7 @@ static jint ck_native_publish_completion(JNIEnv *env, jclass clazz,
 	(void)clazz;
 
 	if (queue_handle <= 0 || request_id <= 0
-			|| owner_token < 0 || lifetime_token < 0)
+			|| owner_token < 0 || lifetime_token < 0 || cycle_id <= 0)
 	{
 		return -1;
 	}
@@ -56,6 +56,7 @@ static jint ck_native_publish_completion(JNIEnv *env, jclass clazz,
 	record.request_id = (uint64_t)request_id;
 	record.owner_token = (uint64_t)owner_token;
 	record.lifetime_token = (uint64_t)lifetime_token;
+	record.cycle_id = (uint64_t)cycle_id;
 	record.result = (int64_t)result;
 	record.status = (int32_t)status;
 
@@ -71,7 +72,7 @@ static int ck_call_start(JNIEnv *env, ck_completion_queue_t *queue)
 #pragma GCC diagnostic ignored "-Wpedantic"
 #endif
 	static const JNINativeMethod methods[] = {
-		{ "publishCompletion", "(JJJJJI)I",
+		{ "publishCompletion", "(JJJJJJI)I",
 				(void *)ck_native_publish_completion }
 	};
 #if defined(__GNUC__) || defined(__clang__)
@@ -416,7 +417,8 @@ int ck_runtime_poll_completion(ck_runtime_t *runtime, ck_request_t *requests,
 	{
 		if (completion.request_id == requests[i].descriptor.request_id
 				&& completion.owner_token == requests[i].descriptor.owner_token
-				&& completion.lifetime_token == requests[i].descriptor.lifetime_token)
+				&& completion.lifetime_token == requests[i].descriptor.lifetime_token
+				&& completion.cycle_id == 1U)
 		{
 			printf("CKARTA_DISPATCH handle=%llu owner=%llu lifetime=%llu result=%lld status=%d\\n",
 					(unsigned long long)completion.request_id,

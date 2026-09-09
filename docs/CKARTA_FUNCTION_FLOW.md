@@ -52,7 +52,7 @@ main
 | ck_request_state | observer | acquire state | valid enum | INVALID sentinel on null | no ownership change |
 | ck_runtime_init | process control | initialize sync + bootstrap JVM | 0 | nonzero | runtime owns initialized sync state |
 | ck_runtime_dispatch_async_smoke | C control | create temporary attached submission worker | 0 | nonzero | worker borrows request lifetime until join |
-| ck_runtime_poll_completion | C owner | dequeue Java completion and terminalize request | 1/0 | negative | completion values copied out before detach |
+| ck_runtime_poll_completion | C owner | dequeue Java completion and arbitrate request terminal outcome | 1=new terminal success, 0=none, 2=late/duplicate ignored | negative=runtime/identity error, -2=published failure | completion values copied out before detach |
 | ck_runtime_shutdown | process control | request Java stop + join bootstrap | shutdown status | error | sole runtime lifecycle owner |
 | ck_runtime_destroy | process control | destroy initialized sync state after shutdown | void | no-op when precondition absent | destroys runtime-owned sync primitives |
 

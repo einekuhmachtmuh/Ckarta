@@ -41,7 +41,8 @@ ck_http_connection_read_result_t ck_http_connection_reader_drive(
 	ck_http_body_sink_fn body_sink,
 	void *body_sink_context)
 {
-	size_t budget = CK_HTTP_CONNECTION_READ_BUDGET_BYTES;
+	size_t read_budget = CK_HTTP_CONNECTION_READ_BUDGET_BYTES;
+	size_t process_budget = CK_HTTP_CONNECTION_PROCESS_BUDGET_BYTES;
 
 	if (reader == NULL || socket_fd < 0)
 	{
@@ -60,12 +61,12 @@ ck_http_connection_read_result_t ck_http_connection_reader_drive(
 			ck_http_input_result_t input_result;
 			ck_http_connection_read_result_t read_result;
 
-			if (budget == 0)
+			if (process_budget == 0)
 			{
 				return CK_HTTP_CONNECTION_READ_INCOMPLETE;
 			}
 
-			feed_length = available < budget ? available : budget;
+			feed_length = available < process_budget ? available : process_budget;
 			input_result = ck_http_input_feed(
 					&reader->input,
 					reader->buffer + reader->begin,
@@ -87,7 +88,7 @@ ck_http_connection_read_result_t ck_http_connection_reader_drive(
 				}
 			}
 			reader->begin += consumed;
-			budget -= consumed;
+			process_budget -= consumed;
 
 			read_result = map_input_result(input_result);
 			if (read_result == CK_HTTP_CONNECTION_READ_REQUEST_COMPLETE
@@ -110,7 +111,7 @@ ck_http_connection_read_result_t ck_http_connection_reader_drive(
 			}
 		}
 
-		if (budget == 0)
+		if (reader->begin < reader->end && process_budget == 0)
 		{
 			return CK_HTTP_CONNECTION_READ_INCOMPLETE;
 		}
@@ -130,9 +131,14 @@ ck_http_connection_read_result_t ck_http_connection_reader_drive(
 			}
 		}
 
+		if (read_budget == 0)
+		{
+			return CK_HTTP_CONNECTION_READ_INCOMPLETE;
+		}
+
 		{
 			size_t available = sizeof(reader->buffer) - reader->end;
-			size_t receive_length = available < budget ? available : budget;
+			size_t receive_length = available < read_budget ? available : read_budget;
 			ssize_t received = recv(socket_fd,
 					reader->buffer + reader->end,
 					receive_length,
@@ -140,7 +146,7 @@ ck_http_connection_read_result_t ck_http_connection_reader_drive(
 			if (received > 0)
 			{
 				reader->end += (size_t)received;
-				budget -= (size_t)received;
+				read_budget -= (size_t)received;
 				continue;
 			}
 			if (received == 0)

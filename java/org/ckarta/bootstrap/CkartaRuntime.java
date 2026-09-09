@@ -16,6 +16,23 @@ public final class CkartaRuntime
 	private static final Object EXECUTOR_LOCK = new Object();
 	private static final int EXECUTOR_QUEUE_CAPACITY = 16;
 
+	private static boolean matchesAscii(ByteBuffer source, String expected)
+	{
+		ByteBuffer view = source.asReadOnlyBuffer();
+		if (view.remaining() != expected.length())
+		{
+			return false;
+		}
+		for (int i = 0; i < expected.length(); i++)
+		{
+			if ((view.get() & 0xff) != expected.charAt(i))
+			{
+				return false;
+			}
+		}
+		return true;
+	}
+
 	private static ThreadPoolExecutor executor;
 	private static long nativeQueueHandle;
 
@@ -110,13 +127,17 @@ public final class CkartaRuntime
 									? ByteBuffer.allocateDirect(0) : metadata,
 							data == null
 									? ByteBuffer.allocateDirect(0) : data);
-					if (request.metadata().remaining() != 0
-							&& (request.methodBytes().remaining() == 0
-								|| request.targetBytes().remaining() == 0
-								|| request.protocolBytes().remaining() == 0))
+					if (request.metadata().remaining() != 0)
 					{
-						throw new IllegalArgumentException(
-								"native request metadata is empty");
+						ByteBuffer target = request.targetBytes();
+						if (!matchesAscii(request.methodBytes(), "GET")
+								|| !matchesAscii(request.protocolBytes(), "HTTP/1.1")
+								|| target.remaining() < 1
+								|| request.connectionCloseRequired())
+						{
+							throw new IllegalArgumentException(
+									"invalid native HTTP request metadata");
+						}
 					}
 
 					result = request.handle() + request.data().remaining();

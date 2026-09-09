@@ -184,8 +184,10 @@ public final class CkartaServletAsyncContext implements AsyncContext
 		{
 			switch (event)
 			{
-				case COMPLETE, CLIENT_DISCONNECT, SHUTDOWN ->
-						listener.onComplete(asyncEvent);
+				case COMPLETE -> listener.onComplete(asyncEvent);
+				case CLIENT_DISCONNECT, SHUTDOWN ->
+					/* No Servlet AsyncListener terminal callback is defined for these native events. */
+					((Object) asyncEvent).getClass();
 				case TIMEOUT ->
 						listener.onTimeout(asyncEvent);
 				case ERROR ->

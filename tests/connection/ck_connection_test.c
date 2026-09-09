@@ -29,8 +29,11 @@ int main(void)
 	assert(ck_connection_init(&connection, 1, 11, 22, 33) == 0);
 	assert(ck_connection_validate(&connection, 11, 22, 33) == 0);
 	assert(ck_connection_validate(&connection, 11, 22, 34) == 1);
-	assert(ck_connection_start_async(&connection) == 0);
-	assert(ck_connection_start_async(&connection) == 1);
+	assert(ck_connection_start_async_cycle(&connection, 42) == 0);
+	assert(ck_connection_start_async_cycle(&connection, 42) == 1);
+	assert(ck_connection_validate_cycle(&connection, 11, 22, 33, 42) == 0);
+	assert(ck_connection_validate_cycle(&connection, 11, 22, 33, 43) == 1);
+	assert(ck_connection_validate_cycle(&connection, 11, 22, 34, 42) == 1);
 
 	complete.connection = &connection;
 	complete.event = CK_CONNECTION_TERMINAL_COMPLETE;

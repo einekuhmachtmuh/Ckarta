@@ -1,6 +1,8 @@
 # Ckarta Error × Lifecycle × Owner × HTTP Outcome Matrix
 
-本文件是 exception handling 與 request/completion state 對齊的唯一矩陣基線。它不取代 `docs/EXCEPTION_HANDLING_RESEARCH.md` 的長篇研究；本文件只固定 state transition、owner、error classification 與 protocol outcome 的對照。
+本文件是 exception handling 與 request/completion state 對齊的唯一矩陣基線。
+
+`FAILING` 是 C request 的 private error-publication state；它不對外表示 terminal outcome。它不取代 `docs/EXCEPTION_HANDLING_RESEARCH.md` 的長篇研究；本文件只固定 state transition、owner、error classification 與 protocol outcome 的對照。
 
 ## 1. 為什麼需要 error record
 

@@ -416,7 +416,13 @@ Ckarta 即使採用比 Tomcat 更低階的資料平面，也不能保證：
 
 這些不是額外裝飾，而是 C／Java 混合伺服器真正進入可驗證工程狀態所需的基礎。
 
-## 21. 主要證據
+## 21. Exception/error handling boundary
+
+例外與錯誤處理採分層模型：C native status、JNI pending exception、Java Servlet Throwable、HTTP response outcome、cancellation/timeout 與 process-fatal state 不得混成單一通道。跨層只傳遞穩定 category/code/status 與必要 correlation identity；exactly-once terminal transition 與 owner/lifetime cleanup 必須在 request/connection state machine 中可證明。
+
+完整研究與實作閘門見 `docs/EXCEPTION_HANDLING_RESEARCH.md`。
+
+## 22. 主要證據
 
 Jakarta Servlet 6.1：
 https://jakarta.ee/specifications/servlet/6.1/

@@ -123,7 +123,11 @@ static void *ck_bootstrap_main(void *arg)
 	}
 
 	runtime->vm = vm;
+	pthread_mutex_unlock(&runtime->lock);
+
 	start_status = ck_call_start(env);
+
+	pthread_mutex_lock(&runtime->lock);
 	runtime->bootstrap_status = start_status;
 	runtime->bootstrap_done = 1;
 	pthread_cond_broadcast(&runtime->condition);
@@ -398,6 +402,11 @@ int ck_runtime_init(ck_runtime_t *runtime, const char *class_path)
 {
 	int result;
 
+	if (runtime == NULL || class_path == NULL || class_path[0] == '\0')
+	{
+		return -1;
+	}
+
 	memset(runtime, 0, sizeof(*runtime));
 	runtime->class_path = class_path;
 	result = pthread_mutex_init(&runtime->lock, NULL);
@@ -431,7 +440,14 @@ int ck_runtime_init(ck_runtime_t *runtime, const char *class_path)
 
 	if (result != 0)
 	{
-		pthread_join(runtime->bootstrap_thread, NULL);
+		if (pthread_join(runtime->bootstrap_thread, NULL) != 0)
+		{
+			return -1;
+		}
+
+		pthread_cond_destroy(&runtime->condition);
+		pthread_mutex_destroy(&runtime->lock);
+		memset(runtime, 0, sizeof(*runtime));
 		return -1;
 	}
 

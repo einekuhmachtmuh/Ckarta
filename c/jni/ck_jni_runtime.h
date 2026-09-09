@@ -15,6 +15,7 @@ struct ck_runtime
 	pthread_t worker_thread;
 	pthread_mutex_t lock;
 	pthread_cond_t condition;
+	/* Borrowed; must remain valid until ck_runtime_shutdown() completes. */
 	const char *class_path;
 	int bootstrap_done;
 	int bootstrap_status;

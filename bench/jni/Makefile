@@ -11,7 +11,7 @@ build:
 	mkdir -p build/classes
 
 build/classes/org/ckarta/bench/BenchmarkTarget.class: BenchmarkTarget.java | build
-	javac -d build/classes BenchmarkTarget.java
+	javac --release 21 -d build/classes BenchmarkTarget.java
 
 build/ckarta-jni-thread-bench: jni_thread_benchmark.c | build
 	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ $< $(LDFLAGS) $(LDLIBS)

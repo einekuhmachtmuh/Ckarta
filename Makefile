@@ -6,6 +6,7 @@ CLASS_STAMP := $(CLASS_DIR)/.stamp
 TARGET := $(BIN_DIR)/ckarta-smoke
 ABI_TEST := $(BIN_DIR)/ckarta-request-lifecycle-test
 CONFIG_TEST := $(BIN_DIR)/ckarta-config-test
+ERROR_TEST := $(BIN_DIR)/ckarta-error-test
 
 CC ?= cc
 CFLAGS := -std=c11 -Wall -Wextra -Wpedantic -Werror -O2 -pthread
@@ -33,6 +34,10 @@ $(ABI_TEST): tests/request_lifecycle_test.c c/jni/ck_request.c c/jni/ck_request.
 	@mkdir -p $(BIN_DIR)
 	$(CC) $(CFLAGS) tests/request_lifecycle_test.c c/jni/ck_request.c -o $@
 
+$(ERROR_TEST): tests/error/ck_error_test.c c/error/ck_error.c c/error/ck_error.h
+	@mkdir -p $(BIN_DIR)
+	$(CC) $(CFLAGS) tests/error/ck_error_test.c c/error/ck_error.c -o $@
+
 $(CONFIG_TEST): tests/config_load_test.c c/config/ck_config.c c/config/ck_config.h
 	@mkdir -p $(BIN_DIR)
 	$(CC) $(CFLAGS) tests/config_load_test.c c/config/ck_config.c -o $@
@@ -40,8 +45,9 @@ $(CONFIG_TEST): tests/config_load_test.c c/config/ck_config.c c/config/ck_config
 clean:
 	rm -rf $(BUILD_DIR)
 
-test: all $(ABI_TEST) $(CONFIG_TEST)
+test: all $(ABI_TEST) $(CONFIG_TEST) $(ERROR_TEST)
 	$(ABI_TEST)
 	$(CONFIG_TEST) tests/config/valid.conf
+	$(ERROR_TEST)
 	! $(CONFIG_TEST) tests/config/invalid.conf
 	./tests/smoke_bootstrap.sh $(TARGET)

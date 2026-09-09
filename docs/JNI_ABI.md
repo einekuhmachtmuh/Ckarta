@@ -27,7 +27,7 @@ https://docs.oracle.com/en/java/javase/21/docs/specs/jni/invocation.html
 - `owner_token`：C owner 的邏輯識別。
 - `lifetime_token`：native storage 有效期間的識別。
 - `request_id`：request 邏輯識別。
-- `body`／`body_length`：C-owned native bytes。
+- `body`／`body_length`：C-owned native bytes；目前 DirectByteBuffer 路徑要求 `body != NULL` 且 `body_length <= INT32_MAX`，以符合 Java SE 21 `NewDirectByteBuffer` 的 address／capacity 前置條件。
 
 descriptor 不是 wire protocol；atomic lifecycle state 不放入 descriptor，避免把同步實作細節固定成 ABI。
 
@@ -69,7 +69,9 @@ JNI bridge thread 必須具有自己的 attachment／detach 生命週期。需�
 
 ## 7. Exception
 
-每次 JNI 呼叫後都必須檢查 exception。C 不得依賴 Java exception object 的私有實作細節。
+每次可能建立 pending Java exception 的 JNI operation 都必須依 JDK 版本規格在適當邊界檢查；不得無條件清除 pending exception，也不得把 Throwable 的私有實作細節變成 C ABI。
+
+完整 exception taxonomy、translation、cleanup、security disclosure 與 async error contract 見 `docs/EXCEPTION_HANDLING_RESEARCH.md`。
 
 ## 8. Async
 
@@ -113,7 +115,13 @@ Clarke、Potter、Noble 的 *Ownership Types for Flexible Alias Protection* 將 
 
 來源：https://doi.org/10.1145/286936.286947
 
-## 14. 研究與 benchmark
+## 14. Error record boundary
+
+`c/error/ck_error.[ch]` 已提供第一個 process-local structured error record 與 layout/validation test。它不是 Java Throwable ABI，也不是 runtime-loadable module ABI；正式 request/completion publication 前不得把可變 `ck_error_t` 直接寫入共享 request state 而未證明 atomic publication 或唯一 owner。
+
+完整 state matrix 見 `docs/ERROR_STATE_MATRIX.md`。
+
+## 15. 研究與 benchmark
 
 OpenJDK 21 成本基線與 API 比較見 docs/JNI_COST_MODEL.md；fixed-tag HotSpot audit 見 docs/OPENJDK_21U_SOURCE_AUDIT.md。
 
@@ -132,7 +140,7 @@ Java executor 必須使用有界容量；飽和時不得 fallback 到 C event-lo
 
 目前 executable slice 使用 Java-owned bounded completion queue（Java 所有的有界完成佇列）。C worker 提交 request 後即可 detach；C 以短 JNI poll 呼叫取得 completion。輸出 DirectByteBuffer 固定 36 bytes：request handle 8 bytes、owner token 8 bytes、lifetime token 8 bytes、result 8 bytes、status 4 bytes，並以 native byte order（原生位元組序）寫入。
 
-此設計只驗證非阻塞交接的生命週期；多請求 smoke 已能以 request_id + owner_token + lifetime_token 路由兩個完成事件，但仍不是最終多 worker completion queue。正式實作前仍需避免每次 poll attach/detach、定義多請求 routing 與 cancellation。
+此設計只驗證非阻塞交接的生命週期；多請求 smoke 已能以 request_id + owner_token + lifetime_token 路由兩個完成事件，但仍不是最終多 worker completion queue。正式實作前仍需避免每次 poll attach/detach，並完成 cancellation、shutdown drain 與通知機制。
 
 ## 17. 多請求 completion ownership
 

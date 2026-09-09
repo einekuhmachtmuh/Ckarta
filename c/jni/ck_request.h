@@ -4,6 +4,7 @@
 #include <stdatomic.h>
 #include <stdint.h>
 
+
 #define CK_JNI_ABI_VERSION 1u
 
 #define CK_REQUEST_FEATURE_DIRECT_BUFFER (UINT64_C(1) << 0)

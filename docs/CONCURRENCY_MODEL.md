@@ -168,7 +168,7 @@ Servlet 6.1 的 externally visible semantics 與 internal scheduling strategy �
 
 ## 12. Completion handoff
 
-Java executor completion 不得要求 C event-loop thread blocking 等待。smoke slice 以 Java 有界完成佇列 + C 非阻塞 poll 驗證此邊界；正式路徑仍待加入高效率通知機制與多請求 routing。
+Java executor completion 不得要求 C event-loop thread blocking 等待。smoke slice 以 Java 有界完成佇列 + C 非阻塞 poll 驗證此邊界；多請求 routing contract 已由 smoke slice 驗證，正式路徑仍待加入高效率通知機制並接入多 worker producer／owner routing。
 
 ## 13. 多請求 completion routing
 

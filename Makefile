@@ -27,6 +27,7 @@ HTTP_INPUT_TEST := $(BIN_DIR)/ckarta-http-input-test
 HTTP_CONNECTION_READER_TEST := $(BIN_DIR)/ckarta-http-connection-reader-test
 HTTP_RESPONSE_TEST := $(BIN_DIR)/ckarta-http-response-test
 HTTP_OUTPUT_WRITER_TEST := $(BIN_DIR)/ckarta-http-output-writer-test
+HTTP_REQUEST_BODY_TEST := $(BIN_DIR)/ckarta-http-request-body-test
 CONNECTION_OUTPUT_INTEGRATION_TEST := $(BIN_DIR)/ckarta-connection-output-integration-test
 NATIVE_ASYNC_BRIDGE_TEST := $(BIN_DIR)/ckarta-native-async-bridge-smoke
 JAVA_NATIVE_ASYNC_BRIDGE_TEST := $(BIN_DIR)/ckarta-native-async-bridge-test
@@ -150,7 +151,7 @@ $(CONFIG_TEST): tests/config_load_test.c c/config/ck_config.c c/config/ck_config
 clean:
 	rm -rf $(BUILD_DIR)
 
-test: all $(JAVA_ASYNC_TEST) $(JAVA_SERVLET_API_TEST) $(JAVA_SERVLET_REQUEST_ASYNC_TEST) $(JAVA_NATIVE_ASYNC_BRIDGE_TEST) $(ABI_TEST) $(CONFIG_TEST) $(ERROR_TEST) $(ERROR_RACE_TEST) $(TERMINAL_RACE_TEST) $(COMPLETION_QUEUE_TEST) $(CONNECTION_TEST) $(CONNECTION_REGISTRY_TEST) $(EVENT_LOOP_TEST) $(TCP_EVENT_INTEGRATION_TEST) $(HTTP_PARSER_TEST) $(HTTP_CHUNKED_TEST) $(HTTP_INPUT_TEST) $(HTTP_CONNECTION_READER_TEST) $(HTTP_RESPONSE_TEST) $(HTTP_OUTPUT_WRITER_TEST) $(CONNECTION_OUTPUT_INTEGRATION_TEST) $(NATIVE_ASYNC_BRIDGE_TEST)
+test: all $(JAVA_ASYNC_TEST) $(JAVA_SERVLET_API_TEST) $(JAVA_SERVLET_REQUEST_ASYNC_TEST) $(JAVA_NATIVE_ASYNC_BRIDGE_TEST) $(ABI_TEST) $(CONFIG_TEST) $(ERROR_TEST) $(ERROR_RACE_TEST) $(TERMINAL_RACE_TEST) $(COMPLETION_QUEUE_TEST) $(CONNECTION_TEST) $(CONNECTION_REGISTRY_TEST) $(EVENT_LOOP_TEST) $(TCP_EVENT_INTEGRATION_TEST) $(HTTP_PARSER_TEST) $(HTTP_CHUNKED_TEST) $(HTTP_INPUT_TEST) $(HTTP_CONNECTION_READER_TEST) $(HTTP_RESPONSE_TEST) $(HTTP_OUTPUT_WRITER_TEST) $(HTTP_REQUEST_BODY_TEST) $(CONNECTION_OUTPUT_INTEGRATION_TEST) $(NATIVE_ASYNC_BRIDGE_TEST)
 	java -ea -cp $(BUILD_DIR)/java-test-classes org.ckarta.servlet.CkartaAsyncContextTest
 	java -ea -cp $(BUILD_DIR)/java-test-classes:$(JAKARTA_SERVLET_API_JAR) org.ckarta.servlet.CkartaServletAsyncContextTest
 	java -ea -cp $(BUILD_DIR)/java-test-classes:$(JAKARTA_SERVLET_API_JAR) org.ckarta.servlet.CkartaServletRequestAsyncTest
@@ -170,7 +171,12 @@ test: all $(JAVA_ASYNC_TEST) $(JAVA_SERVLET_API_TEST) $(JAVA_SERVLET_REQUEST_ASY
 	$(HTTP_CONNECTION_READER_TEST)
 	$(HTTP_RESPONSE_TEST)
 	$(HTTP_OUTPUT_WRITER_TEST)
+	$(HTTP_REQUEST_BODY_TEST)
 	$(CONNECTION_OUTPUT_INTEGRATION_TEST)
 	$(NATIVE_ASYNC_BRIDGE_TEST)
 	! $(CONFIG_TEST) tests/config/invalid.conf
 	./tests/smoke_bootstrap.sh $(TARGET)
+
+$(HTTP_REQUEST_BODY_TEST): tests/http/ck_http_request_body_test.c c/http/ck_http_request_body.c c/http/ck_http_request_body.h
+	@mkdir -p $(BIN_DIR)
+	$(CC) $(CFLAGS) tests/http/ck_http_request_body_test.c c/http/ck_http_request_body.c -o $@

@@ -190,3 +190,102 @@ Ckarta 可以有 C event worker + Java executor；但 Servlet code 必須繼續�
 - StandardWrapper — https://github.com/apache/tomcat/blob/cbe6e15ee81e2fc6232954292a80cca5d1e84009/java/org/apache/catalina/core/StandardWrapper.java
 - AsyncContextImpl — https://github.com/apache/tomcat/blob/cbe6e15ee81e2fc6232954292a80cca5d1e84009/java/org/apache/catalina/core/AsyncContextImpl.java
 - Coyote Request API — https://tomcat.apache.org/tomcat-11.0-doc/api/org/apache/coyote/Request.html
+
+
+## 8. Tomcat 使用者熟悉成本與高效能目標的工程平衡
+
+本文件建立的初衷不是要求 Ckarta 複製 Tomcat，而是控制「既有 Tomcat 使用者重新學習一套完全不同 programming model」的遷移成本，同時保留 Ckarta 的高效能資料平面。
+
+### 8.1 相容性應優先落在 application-visible semantics，而不是 implementation familiarity
+
+對使用者而言，最昂貴的不是 container 是用 C 還是 Java，而是既有 Servlet application 是否需要改寫其基本假設。Servlet 6.1 把 Servlet、Request/Response、Filter、Session、AsyncContext 等 application-facing contract 分開定義；因此 Ckarta 應把「API／語意相容」視為硬需求，把「Tomcat private implementation 相似」視為非必要。
+
+建議採三層相容性：
+
+1. P0：application semantics compatibility — Servlet 6.1 API、Servlet lifecycle、mapping、FilterChain、Request/Response、Session、AsyncContext、Listener、exception/error semantics。這些直接影響 application 行為，必須以規格與 TCK 驗證。
+2. P1：operational familiarity — 既有 Tomcat configuration concepts、web application layout、deployment／logging／graceful shutdown 等可用熟悉名詞與文件解釋，但允許 Ckarta 的 native backend 有不同實作。
+3. P2：implementation compatibility — Coyote、Catalina、Valve、Tomcat thread topology、private class hierarchy 不作相容承諾；只在研究與診斷文件中用於 reference comparison。
+
+這個分層可以避免為了降低學習成本而把 Tomcat 私有架構整套搬進 Ckarta，也避免為了效能而要求 application developer 重新學 C event-loop programming。
+
+### 8.2 把差異集中在 container boundary，不要分散到 application code
+
+Ckarta 的學習成本最理想的形狀是：Tomcat developer 可以繼續寫熟悉的 Servlet code，而只需要知道少數 Ckarta-specific operational differences，例如 native listener、resource limits、performance tuning、diagnostics。application 不應需要知道 eventfd、epoll、owner token、native connection state 或 JNI queue。
+
+因此應採「熟悉 API + 明確差異」模式，而不是讓每一個 Ckarta feature 都新增一套 application-side primitive。
+
+### 8.3 不應為追求「像 Tomcat」而犧牲熱路徑；也不應為追求「像 Nginx」而犧牲 Servlet semantics
+
+Nginx 的價值主要在 connection/event/data-plane efficiency；Tomcat 的價值主要在 Servlet container semantics。兩者不在同一 abstraction level。
+
+建議保留：
+
+C event-driven I/O
+→ bounded semantic handoff
+→ Java Servlet semantics
+→ bounded completion
+→ C output
+
+而不是把 Tomcat API 與其所有 private implementation class 都在 C 中重新模擬。
+
+### 8.4 以「跨界成本預算」而不是「全 C 化」作為效能治理原則
+
+可把一個功能的跨 C/JVM 成本抽象為：
+
+C_cross = N_cross * C_call + B_cross * C_byte + Q_cross + M_retention
+
+其中 N_cross 是跨界次數、B_cross 是跨界資料量、Q_cross 是 bridge queue／executor 的排隊成本、M_retention 是為維持 request／async lifetime 而保留的 memory 成本。
+
+這不是硬體測量公式，而是 architecture decision model。它提醒我們：若把一個功能搬到 C，卻增加 JNI 次數、資料物件化、queueing 或 lifetime retention，整體 latency/throughput 可能反而惡化。
+
+### 8.5 對 Tomcat developer 最好的設計不是「看不到任何差異」，而是「差異少而且有意義」
+
+合理的 user migration target 應是：
+
+既有 Servlet application
+→ 最少或不需要修改 application semantics
+→ Ckarta container
+→ C native data plane 自動承擔 I/O、connection、backpressure
+
+使用者需要學習的應是 Ckarta 的部署、資源、觀測與調校模型，而不是重新學 socket programming。
+
+### 8.6 對高效能要求的具體建議
+
+第一，保留 hot path 上的 semantic boundary。HTTP parsing、connection state、TLS、static file、proxy、resource limiting 優先留在 C；Servlet routing、Filter、Session、AsyncContext 與 application lifecycle 留在 Java。
+
+第二，限制 JNI crossing budget。以「一個有意義工作單元一次 crossing」為目標，避免逐 header、逐 byte、逐 write crossing。
+
+第三，bounded queues 必須是 backpressure mechanism，而不是隱藏的 latency reservoir。SEDA 將 stage 間 explicit queue 與 load conditioning 視為可擴展 Internet service 的重要部分；Ckarta 應同時定義 queue capacity 與 overload behavior。來源：https://doi.org/10.1145/502059.502057
+
+第四，不要以單次 JNI call benchmark 決定 architecture。應測完整 request path，包括 C parsing、handoff、Java scheduling、Servlet execution、completion、output 與 memory retention。
+
+第五，AsyncContext 是降低 user-facing blocking 與 native/Java lifetime coupling 的關鍵協議，而不是額外 feature。Servlet 6.1 明確將 AsyncContext 定義為 asynchronous operation 的 execution context；request/response 在 async cycle 中維持有效直到合法終止點。來源：https://jakarta.ee/specifications/servlet/6.1/apidocs/jakarta.servlet/jakarta/servlet/asynccontext
+
+### 8.7 軟體工程上的最終決策
+
+建議 Ckarta 把 compatibility objective 定義為：
+
+「對既有 Tomcat／Servlet developer，維持熟悉的 Servlet application programming model；把高效能差異盡可能侷限在 container implementation 與 operational tuning，而不是轉嫁到 application code。」
+
+這比兩個極端更合理：
+
+- 完全 Tomcat clone：學習成本低，但會把大量 Tomcat implementation constraints 與 Java object/dispatch overhead 一併帶進 Ckarta，削弱建立 native data plane 的理由。
+- 完全 native re-design：內部自由度較大，但會迫使 Tomcat developer 理解新 programming model，並擴大 compatibility failure 的測試面積。
+
+推薦的中間方案是：semantic compatibility 高、implementation similarity 低、crossing 次數受控、native ownership 明確。
+
+### 8.8 本節對目前工程的直接影響
+
+本節不把「Tomcat 熟悉成本」轉化成新的 application API。它只改變優先級：
+
+1. 先完成 Servlet 6.1 application-visible semantics。
+2. 再以 benchmark 驗證哪些 implementation boundary 值得 native 化。
+3. 把 Ckarta-specific complexity 儘可能限制在 container、configuration、observability 與 performance tuning。
+4. 不以 Tomcat private class graph 作為 compatibility requirement。
+
+因此目前先建立 Ckarta 的 Java async semantic core，而不是偽造 jakarta.servlet.AsyncContext，也不直接複製 Tomcat private AsyncContextImpl。正式 Jakarta API adapter 要等 API artifact 正式進入 build/test dependency 後再建立薄適配層。
+
+### 8.9 學術基線
+
+- Matt Welsh, David Culler, Eric Brewer, “SEDA: An Architecture for Well-Conditioned, Scalable Internet Services”, ACM SIGOPS Operating Systems Review 35(5), 2001, pp. 230–243. DOI: https://doi.org/10.1145/502059.502057
+- Maurice Herlihy, Jeannette M. Wing, “Linearizability: A Correctness Condition for Concurrent Objects”, ACM Transactions on Programming Languages and Systems 12(3), 1990, pp. 463–492. DOI: https://doi.org/10.1145/78969.78972

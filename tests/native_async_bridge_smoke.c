@@ -6,8 +6,10 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <string.h>
+#include <sys/socket.h>
+#include <unistd.h>
 
-#define CKARTA_TEST_CLASSPATH 	"build/classes:build/java-test-classes:" 	"build/deps/jakarta.servlet-api-6.1.0.jar"
+#define CKARTA_TEST_CLASSPATH "build/classes:build/java-test-classes:build/deps/jakarta.servlet-api-6.1.0.jar"
 
 static int check_java_exception(JNIEnv *env, const char *operation)
 {
@@ -35,6 +37,9 @@ int main(void)
 	ck_connection_registry_t registry;
 	ck_connection_handle_t first_handle;
 	ck_connection_handle_t second_handle;
+	int first_socket_pair[2];
+	int second_socket_pair[2];
+	char byte;
 	int result;
 
 	_Static_assert(sizeof(uintptr_t) <= sizeof(jlong),
@@ -46,6 +51,16 @@ int main(void)
 			&registry, 1, 11, 22, 33, &first_handle) == 0);
 	assert(ck_connection_registry_register(
 			&registry, 2, 44, 55, 66, &second_handle) == 0);
+	assert(socketpair(AF_UNIX, SOCK_STREAM, 0, first_socket_pair) == 0);
+	assert(socketpair(AF_UNIX, SOCK_STREAM, 0, second_socket_pair) == 0);
+	assert(ck_connection_registry_attach_socket(
+			&registry, first_handle, 11, 22, 33, first_socket_pair[0]) == 0);
+	assert(ck_connection_registry_attach_socket(
+			&registry, second_handle, 44, 55, 66, second_socket_pair[0]) == 0);
+	assert(ck_connection_registry_socket_fd(
+			&registry, first_handle, 11, 22, 33) == first_socket_pair[0]);
+	assert(ck_connection_registry_socket_fd(
+			&registry, second_handle, 44, 55, 66) == second_socket_pair[0]);
 
 	result = snprintf(option_string, sizeof(option_string),
 			"-Djava.class.path=%s", CKARTA_TEST_CLASSPATH);
@@ -88,12 +103,22 @@ int main(void)
 
 	assert(ck_connection_registry_close(
 			&registry, first_handle, 11, 22, 33) == 0);
+	assert(ck_connection_registry_socket_fd(
+			&registry, first_handle, 11, 22, 33) == -1);
+	assert(recv(first_socket_pair[1], &byte, 1, 0) == 0);
+	assert(close(first_socket_pair[1]) == 0);
 	assert(ck_connection_registry_retire(
 			&registry, first_handle, 11, 22, 33) == 0);
+
 	assert(ck_connection_registry_close(
 			&registry, second_handle, 44, 55, 66) == 0);
+	assert(ck_connection_registry_socket_fd(
+			&registry, second_handle, 44, 55, 66) == -1);
+	assert(recv(second_socket_pair[1], &byte, 1, 0) == 0);
+	assert(close(second_socket_pair[1]) == 0);
 	assert(ck_connection_registry_retire(
 			&registry, second_handle, 44, 55, 66) == 0);
+
 	assert(ck_connection_registry_active_count(&registry) == 0);
 	assert(ck_connection_registry_destroy(&registry) == 0);
 

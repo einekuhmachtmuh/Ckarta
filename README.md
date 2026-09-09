@@ -40,6 +40,7 @@ Nginx 與 Apache Tomcat 不直接複製進 Ckarta repository，而是以 Git sub
 - docs/ARCHITECTURE.md：C/Java 邊界、資料流、並行模型、C 化決策與補充需求。
 - docs/HOT_PATH_REVIEW.md：Nginx／Tomcat hot path（熱路徑）與 whole path（完整路徑）基線。
 - docs/FUNCTION_TRACE.md：固定版本的逐函式 hot path 追蹤。
+- docs/EVENT_BACKEND.md：Linux `epoll` 原生事件後端的 ownership、cookie、thread 與驗證契約。
 - docs/CKARTA_FUNCTION_FLOW.md：Ckarta 自有函式呼叫流程、函式契約、ownership、error 與 lifecycle 實作規約。
 - docs/CONNECTION_OWNERSHIP.md：C 連線、Request、AsyncContext 與 JNI 所有權基線。
 - docs/DESIGN_DECISIONS.md：架構決策與證據矩陣。
@@ -104,7 +105,9 @@ Java：Jakarta Servlet 6.1、Servlet lifecycle、Filter、Listener、Session、S
 
 目前文件是架構與驗證基線，不代表 Ckarta 已完成 Servlet 6.1 相容性、已通過 TCK、已達到 Nginx 安全程度或已證明效能優越。
 
-所有「已實作」「已通過」「更快」「更安全」宣稱，都必須有 repository 測試或可重現測量證據。\n\n目前已驗證的 executable native completion path：C worker submission → Java bounded executor → registered JNI publisher → runtime-owned native completion queue → Linux eventfd notification → C epoll wake → native terminal publication。
+所有「已實作」「已通過」「更快」「更安全」宣稱，都必須有 repository 測試或可重現測量證據。
+
+目前已驗證的 executable native completion path：C worker submission → Java bounded executor → registered JNI publisher → runtime-owned native completion queue → Linux eventfd notification → C epoll wake → native terminal publication。
 
 Java application-facing API 已開始使用固定 `jakarta.servlet:jakarta.servlet-api:6.1.0` compile/test dependency，並有 AsyncContext binding prototype；這仍不是 Servlet 6.1 完整實作或 TCK compatibility claim。
 
@@ -125,4 +128,6 @@ CGI/FastCGI 定位：未來可掛接 application gateway module，不屬核心 r
 
 `ck_connection_t` 現已直接擁有 Linux/POSIX socket descriptor；C-driven JVM integration test 以 `socketpair()` 驗證 Java 不接觸 descriptor，terminal winner 之後由 native owner close socket，peer 收到 EOF，registry 再允許 retire。
 
-此功能仍不是完整 Servlet 6.1 runtime；HTTP socket event backend、真正 container request lifecycle、response ownership、async dispatch、real timeout/client-disconnect source、shutdown drain、TCK、sanitizer/fuzz 與 cross-platform IO backend 尚未完成。
+Linux `ck_event_loop` 也已有獨立 executable baseline：event loop 擁有 epoll instance、connection owner 擁有 socket descriptor；notification 只攜帶 opaque `uint64_t` cookie。這不是完整 TCP request path。
+
+目前尚未完成：TCP listener／accept、nonblocking HTTP read/write state machine、HTTP request framing integration、response ownership、async dispatch、real timeout/client-disconnect source、shutdown drain、TCK、sanitizer/fuzz、Windows IOCP 與其他平台 event backend。

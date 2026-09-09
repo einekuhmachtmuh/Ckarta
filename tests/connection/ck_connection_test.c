@@ -34,6 +34,7 @@ int main(void)
 	assert(ck_connection_init(&connection, 1, 11, 22, 33) == 0);
 	assert(ck_connection_socket_fd(&connection) == -1);
 	assert(ck_connection_http_reader(&connection) != NULL);
+	assert(ck_connection_http_writer(&connection) != NULL);
 	assert(ck_http_connection_reader_buffered_bytes(
 			ck_connection_http_reader(&connection)) == 0);
 	assert(ck_connection_attach_socket(&connection, socket_pair[0]) == 0);

@@ -130,6 +130,8 @@ Session 語意由 Java Servlet container 管理；C 不建立第二套 Session a
 
 faster、lower latency、less memory、higher throughput 等宣稱必須有可重現 benchmark，並記錄硬體、OS、kernel、compiler、JDK、TLS、concurrency、request／response size、keep-alive、cache state、版本與 commit。
 
+epoll 與 io_uring 的 benchmark 額外必須記錄 Linux kernel exact release、io_uring runtime probe result（features/opcodes）、ring entries、CQ/SQ configuration、SQPOLL/other special flags、registered/provided buffer configuration、CPU affinity 與 fallback status。不得以不同 kernel capability 或不同 backend fallback 狀態的結果直接比較。
+
 ## 14. 第三方來源
 
 Nginx 與 Apache Tomcat 以 Git submodule（Git 子模組）固定於 third_party/nginx 與 third_party/tomcat；目前版本：Nginx 1.30.4 commit 017cf98dcce217946572a896f0992370475e189f；Tomcat 11.0.25 commit cbe6e15ee81e2fc6232954292a80cca5d1e84009。

@@ -30,6 +30,8 @@
 
 預設後續 Codex 工作可能在不了解工作現況的情況下開始，因此任何新的工作階段都必須以 repository 中已持久化的規則、文件、程式碼、測試、commit 與研究紀錄為主要現況來源；不得假設新工作階段會自動知道上一個對話的未持久化內容。`docs/WORK_STATE.md` 用於保存跨對話的重要工程現況，但不得取代各專題的權威文件。
 
+`docs/WORK_STATE.md` 不是 Git changelog。Git commit history、closed PR 與 branch provenance 是歷史變更的主要來源；WORK_STATE 只保存目前有效的工程狀態、已驗證 gate、仍有效的決策與限制、branch status registry、當前 CI 狀態、下一個工程閘門，以及通往權威文件的索引。不得把已由 Git history 明確保存的逐 commit 日期、commit message、PR 編號、CI failure chronology 或已 supersede 的歷史狀態再次逐條複製到 WORK_STATE；若某歷史資訊直接構成目前仍有效的 invariant，僅保留必要摘要與對應 commit/document reference。
+
 每次整併、修改 MD 或修改程式碼都可能造成衝突（conflict／競合）或基於過期內容覆蓋較新成果；因此在每次寫入前，必須重新取得目標檔案的最新內容與版本識別，檢查同一路徑及其相關文件是否已被其他變更更新，並在寫入後檢查 diff／commit 結果與相關文件一致性。若發現版本不一致、競合、未知變更或無法確認寫入基礎，不得直接覆蓋，必須重新同步後再整併。對多檔案相關變更亦必須檢查其彼此引用、規則、索引、ABI 與實作描述是否衝突。
 
 修訂後必須重新檢查 README、架構、hot path（熱路徑）、JNI、lifecycle（生命週期）、測試與安全文件的一致性，並再次確認本次精簡沒有刪掉仍有效的規範、證據或限制。
@@ -171,7 +173,13 @@ branch 結束、被 superseded 或成果已正式整合後，應刪除或關閉�
 
 平台特定的 documented OS API 可以直接由 Ckarta 使用，但必須集中在明確的 platform backend，portable core 不得散落平台條件分支。新增或修改平台 API 呼叫時，必須核對對應版本的官方文件／標頭宣告、完整引數與回傳契約、錯誤語意、handle／descriptor／OVERLAPPED ownership 與 lifetime，並沿成功、錯誤、取消、超時與 shutdown 路徑檢查。
 
-Linux 優先使用 libc 或正式 system-call wrapper；Windows 優先使用 documented Win32／Winsock API。不得以 raw syscall number、未文件化 NT Native API 或其他不穩定內核介面作一般 runtime ABI。平台最佳化不得改變 portable protocol、request／response、ownership、JNI 或 cancellation semantics；不同平台的 primitive programming model 應在 backend 內映射為共同的 Ckarta event／completion contract。
+Linux 優先使用 libc 或正式 system-call wrapper；Windows 優先使用 documented Win32／Winsock API。不得以 hard-coded raw syscall number、未文件化 NT Native API 或其他不穩定內核介面作一般 runtime ABI。
+
+Linux io_uring 為本條的受控例外：若建立 Linux event backend，允許在明確 platform backend 中直接使用 <linux/io_uring.h> UAPI、libc syscall() wrapper，以及 kernel documented io_uring_setup、io_uring_enter、io_uring_register system calls；不得硬編碼 syscall number，不得把 liburing 變成核心 runtime dependency，也不得複製其 library-private implementation 作為 Ckarta ABI。
+
+io_uring backend 必須以實際 runtime feature/opcode probe 決定是否啟用，不得只以 kernel version string 判定。至少應核對 ring setup、required opcode support 與必要 feature flags；若 io_uring 被 kernel、container、seccomp 或其他安全政策拒絕，必須能回退至既有 epoll backend。初始 backend 不得依賴尚未驗證的 advanced facility（例如 SQPOLL、IOPOLL、ZCRX）作為必要條件。
+
+平台最佳化不得改變 portable protocol、request／response、ownership、JNI 或 cancellation semantics；不同平台的 primitive programming model 應在 backend 內映射為共同的 Ckarta event／completion contract。
 
 ## 19. 文件索引
 
@@ -207,6 +215,8 @@ docs/TCK_INTEGRATION_PLAN.md
 docs/SECURITY_BASELINE.md
 docs/REFERENCE_SOURCES.md
 docs/WORKING_TREE.md
-docs/WORK_STATE.md
+
+
+本工作守則要求 WORK_STATE 保持為現況摘要，而不是 chronology；需要追溯何時與哪一個 commit/PR 修改時，直接回到 Git provenance。docs/WORK_STATE.md
 
 本文件是工程入口；長篇研究以 docs 對應文件為權威內容。

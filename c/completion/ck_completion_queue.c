@@ -25,9 +25,17 @@ int ck_completion_queue_init(ck_completion_queue_t *queue)
 		return result;
 	}
 
+	result = pthread_cond_init(&queue->not_full, NULL);
+	if (result != 0)
+	{
+		(void)pthread_mutex_destroy(&queue->lock);
+		return result;
+	}
+
 	result = ck_completion_notification_init(&queue->notification);
 	if (result != 0)
 	{
+		(void)pthread_cond_destroy(&queue->not_full);
 		(void)pthread_mutex_destroy(&queue->lock);
 		return result;
 	}
@@ -108,8 +116,65 @@ int ck_completion_queue_pop(ck_completion_queue_t *queue,
 	queue->head = (queue->head + 1U) % CK_COMPLETION_QUEUE_CAPACITY;
 	queue->count--;
 
+	result = pthread_cond_signal(&queue->not_full);
+	if (result != 0)
+	{
+		(void)pthread_mutex_unlock(&queue->lock);
+		return result;
+	}
+
 	result = pthread_mutex_unlock(&queue->lock);
 	return result == 0 ? 1 : result;
+}
+
+int ck_completion_queue_push_wait(ck_completion_queue_t *queue,
+		const ck_completion_record_t *record)
+{
+	int result;
+
+	if (queue == NULL || record == NULL || !queue->initialized)
+	{
+		return -1;
+	}
+
+	result = ck_completion_queue_lock(queue);
+	if (result != 0)
+	{
+		return result;
+	}
+
+	while (!queue->closed && queue->count == CK_COMPLETION_QUEUE_CAPACITY)
+	{
+		result = pthread_cond_wait(&queue->not_full, &queue->lock);
+		if (result != 0)
+		{
+			(void)pthread_mutex_unlock(&queue->lock);
+			return result;
+		}
+	}
+
+	if (queue->closed)
+	{
+		(void)pthread_mutex_unlock(&queue->lock);
+		return 2;
+	}
+
+	queue->entries[queue->tail] = *record;
+	queue->tail = (queue->tail + 1U) % CK_COMPLETION_QUEUE_CAPACITY;
+	queue->count++;
+
+	result = ck_completion_notification_signal(&queue->notification);
+	if (result != 0)
+	{
+		queue->tail = (queue->tail + CK_COMPLETION_QUEUE_CAPACITY - 1U)
+				% CK_COMPLETION_QUEUE_CAPACITY;
+		queue->count--;
+		(void)pthread_mutex_unlock(&queue->lock);
+		return result;
+	}
+
+	result = pthread_mutex_unlock(&queue->lock);
+	return result;
 }
 
 int ck_completion_queue_notify_fd(const ck_completion_queue_t *queue)
@@ -154,6 +219,13 @@ int ck_completion_queue_close(ck_completion_queue_t *queue)
 	}
 
 	queue->closed = 1;
+	result = pthread_cond_broadcast(&queue->not_full);
+	if (result != 0)
+	{
+		(void)pthread_mutex_unlock(&queue->lock);
+		return result;
+	}
+
 	result = ck_completion_notification_signal(&queue->notification);
 	if (result != 0)
 	{
@@ -173,6 +245,7 @@ void ck_completion_queue_destroy(ck_completion_queue_t *queue)
 
 	(void)ck_completion_queue_close(queue);
 	ck_completion_notification_destroy(&queue->notification);
+	(void)pthread_cond_destroy(&queue->not_full);
 	(void)pthread_mutex_destroy(&queue->lock);
 	queue->initialized = 0;
 }

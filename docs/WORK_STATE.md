@@ -4,7 +4,7 @@
 
 ## 1. 目前 repository 狀態
 
-截至 2026-09-08，`main` 最新提交應以 GitHub 為準；本文件目前已隨 gateway／Servlet／native bridge 研究修訂一起提交。
+截至 2026-09-09，`main` 最新提交應以 GitHub 為準；本文件目前已隨 gateway／Servlet／native bridge 研究修訂一起提交。
 
 目前重要基線：
 
@@ -194,3 +194,11 @@ Native module 暫定為 load-at-start、ABI/version/signature 驗證、dependenc
 ## 22. 多請求 completion smoke
 
 2026-09-09：多請求 completion routing 已完成第一個可執行 smoke slice。兩個 C request 可在同一 Java executor completion queue 完成，completion 帶 request_id、owner_token、lifetime_token、result、status，C 不依賴完成順序進行 routing。此 slice 仍由 smoke worker 建立後 join，未代表正式 event-loop 非阻塞 producer，也未使用高效率事件通知原語。
+
+## 23. Win32/Linux 與 Apache reference 進度
+
+2026-09-09：完成 Win32／Linux 平台層與編譯條件研究。決策為：Win32 與 Linux 都是正式目標平台；平台差異集中於少數 backend，Linux 優先 epoll/eventfd，Windows 優先 IOCP/PostQueuedCompletionStatus；不採 Linux raw syscall number 或 Windows undocumented syscall。
+
+同日：Apache HTTP Server 2.4.68（commit 736bb657405eb73fd68a64772c3a908807bdb887）正式加入 third_party/httpd 作為 reference source。其主要用途是啟動配置、MPM、模組／hook、Windows 平台策略比較；Nginx 仍是 C data plane 主要架構參考，Tomcat 仍是 Servlet container 主要參考。
+
+同日：完成 completion notification primitive 研究；Linux 候選為 epoll + eventfd，Windows 候選為 IOCP + PostQueuedCompletionStatus。尚未實作正式通知 backend。

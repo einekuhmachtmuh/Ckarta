@@ -1,3 +1,5 @@
+#define _GNU_SOURCE
+
 #include "ck_io_uring_probe.h"
 
 #ifdef __linux__

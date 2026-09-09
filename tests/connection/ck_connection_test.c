@@ -102,7 +102,6 @@ static void test_connection_close_prevents_recycle(void)
 	ck_http_output_writer_t *writer;
 	const ck_http_request_t *parsed;
 	unsigned char headers[CK_HTTP_RESPONSE_HEADER_BUFFER_BYTES];
-	size_t consumed;
 	size_t header_length = 0;
 	int sockets[2];
 
@@ -120,6 +119,7 @@ static void test_connection_close_prevents_recycle(void)
 	parsed = ck_http_connection_reader_request(reader);
 	assert(parsed != NULL && parsed->connection_close_required == 1);
 	assert(ck_http_response_set_status(response, 200U) == 0);
+	assert(ck_http_response_set_connection_close(response, 1) == 0);
 	assert(ck_http_response_finish(response) == 0);
 	assert(ck_http_response_serialize_headers(
 			response, headers, sizeof(headers), &header_length) == 0);
@@ -132,7 +132,6 @@ static void test_connection_close_prevents_recycle(void)
 			== CK_CONNECTION_TERMINAL_CLAIMED);
 	assert(ck_connection_close(&connection) == 0);
 	assert(close(sockets[1]) == 0);
-	(void)consumed;
 }
 
 int main(void)

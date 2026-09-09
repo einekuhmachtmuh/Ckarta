@@ -180,3 +180,11 @@ Java executor handoff 的 v2 smoke slice 使用 bounded Java completion queue，
 2026-09-08：完成 Apache HTTP Server 2.4.68、Nginx 1.30.4、Tomcat 11.0.25 的啟動配置交叉研究。決策為：C main 先載入 native 主設定檔，語法／語意驗證通過後形成 C-owned configuration snapshot，再建立 JVM 與 network runtime；未來 reload 採新快照 prepare→switch→drain。完整研究見 docs/STARTUP_CONFIGURATION_RESEARCH.md。
 
 目前已加入最小設定載入器與預設 conf/ckarta.conf；支援 -c、-t、-T、-h 與 class_path 指令。啟動前配置載入已接到 C main → JVM bootstrap，並有 valid/invalid configuration test。此範圍尚未實作一般 network、TLS、worker、module loader 或 reload 設定。
+
+
+## Branch status
+
+- Purpose: startup configuration parser、validation與startup integration
+- Lifecycle status: CLOSED / SUPERSEDED
+- Relation to main: PR #9 closed;有效成果已在 main。
+- This file is branch-specific state and must not be treated as main canonical state.

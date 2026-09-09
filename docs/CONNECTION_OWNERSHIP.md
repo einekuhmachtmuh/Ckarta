@@ -141,21 +141,21 @@ Servlet invocation lifetime
 
 不得在 Java method return 後立即銷毀 C request state。
 
-預計 native correlation：
+目前 correlation path 為：
 
 ```text
 Servlet service()
         ↓ startAsync()
 connection OPEN → ASYNC_WAIT
         ↓
-AsyncContext.complete / error / timeout
+AsyncContext.complete / error / timeout / disconnect
         ↓
 native terminal candidate
         ↓
 CLOSING → CLOSED
 ```
 
-這是 bridge contract；目前已完成 Java cycle identity binding 與 native connection cycle validation primitive，但尚未完成真正 JNI/native connection lookup 與完整 Servlet AsyncContext implementation。
+真正的 Servlet API 行為仍以 Servlet 6.1 規格為準；上述圖只是 Ckarta native ownership contract，不代表完整 AsyncContext implementation。
 
 ## 9. Cancellation
 
@@ -224,39 +224,44 @@ JNIEnv pointer 不得跨執行緒共享。
 
 `c/jni/ck_request.[ch]` 將 descriptor 與 atomic lifecycle state 分離。同步 smoke path 的 descriptor/body 由 caller 擁有，worker 只借用；caller 在 `pthread_join()` 後才離開其生命週期。
 
-`c/connection/ck_connection.[ch]` 現在額外提供 native connection ownership state machine 與 token validation；它仍未管理真正 socket、TLS 或 Servlet request object。
+`c/connection/ck_connection.[ch]` 現在同時提供 native connection ownership state machine、token/cycle validation 與 Linux/POSIX socket descriptor ownership；它尚未管理 TLS 或 Servlet request object。
 
-## 15. AsyncContext bridge 尚待整合
+## 15. AsyncContext bridge integration
 
 Tomcat 11.0.25 `AsyncContextImpl` 顯示真正 async lifecycle 還包含 `start()`、`complete()`、`timeout()`、`onError()`、`onComplete()`、recycle 與 concurrent-use protection；其中 recycle 必須先建立不可再用的狀態標記，再清除 request/context 等欄位。Ckarta 因此不得只把 `startAsync()` 當成「把 request 放進背景 thread」。
 
-目前已完成第一個 Java API binding slice：CkartaServletRequestAdapter 可依 Servlet 6.1 的 asyncSupported／same-dispatch 規則建立 CkartaServletAsyncContext，並提供 isAsyncStarted()/getAsyncContext()。正式 bridge 尚需：
+目前已完成：
 
-1. native connection owner handoff。
-2. timeout/error/client-disconnect precedence。
-3. response/output ownership。
-4. cross-thread cancellation。
-5. post-recycle invalidation。
-6. async dispatch / new-cycle reinitialization。
-7. shutdown drain。
-8. Servlet 6.1 TCK compatibility tests。
+1. Java `CkartaServletRequestAdapter` 的 Servlet 6.1 `startAsync()` binding prototype。
+2. `CkartaAsyncCycleBinding` 的 per-cycle identity。
+3. generation-protected native connection registry／opaque handle。
+4. C→Java JNI native terminal bridge。
+5. native terminal result 的 CLAIMED／ALREADY_SAME／ALREADY_DIFFERENT 三分法。
+6. native connection object 的實際 Linux/POSIX socket descriptor ownership。
+7. C-driven JVM integration test 與 `socketpair()` EOF 驗證。
+
+仍待完成：
+
+1. timeout/error/client-disconnect 的真正 event source 與 Servlet precedence。
+2. response/output ownership。
+3. cross-thread cancellation。
+4. post-recycle invalidation 的完整 API semantics。
+5. async dispatch / new-cycle reinitialization。
+6. shutdown drain。
+7. Servlet 6.1 TCK compatibility tests。
 
 固定 Tomcat source：
 https://github.com/apache/tomcat/blob/cbe6e15ee81e2fc6232954292a80cca5d1e84009/java/org/apache/catalina/core/AsyncContextImpl.java
 
 學術 correctness 基線：Herlihy/Wing 的 linearizability。來源：https://doi.org/10.1145/78969.78972
 
+## 16. Async semantic core boundary
 
-## 15. Async semantic core boundary
+Java side currently has a CkartaAsyncContext semantic core，但尚未完成 public Jakarta Servlet AsyncContext 的全部 semantics。其 terminal events 透過受控 gate 進入 native connection，application code 不取得 native pointer。
 
-Java side currently has a CkartaAsyncContext semantic core, but not yet the public Jakarta Servlet AsyncContext implementation. Its terminal events are mapped conceptually to the native connection terminal candidates without sharing the native connection pointer with application code.
+Java semantic core 不擁有 native memory；native connection owner 負責 descriptor、buffer 與 connection resource release。Java 只提出 semantic terminal request。
 
-The next integration must establish an explicit correlation binding between AsyncContext cycle and the native connection owner. The binding must carry request_id/owner_token/lifetime_token or an equivalent validated opaque identity, and must remain valid until the async cycle reaches exactly-once terminal publication and the response/native buffers are no longer borrowed.
-
-The Java semantic core is deliberately not treated as the owner of native memory. The native connection owner remains responsible for native resource release; Java only requests a terminal transition through the controlled bridge.
-
-
-## 16. Native connection registry and opaque handle
+## 17. Native connection registry and opaque handle
 
 C connection object 現由 process-local registry 管理 lifecycle lookup。registry 是 connection capability 的唯一 lookup authority；Java 只保存 opaque generation handle，不取得 `ck_connection_t *`，也不取得 socket/TLS/native pool ownership。
 
@@ -264,14 +269,14 @@ handle layout 為低 32 bits slot identifier、高 32 bits generation。retire �
 
 跨層 terminal ordering 為：先 native registry terminal arbitration，再由 Java semantic core 更新 local async state。若 native 已先因相同 event 取得 terminal ownership，Java 後續收到同一 event 時可回傳 ALREADY_SAME 並正常完成 local publication；若不同 event 已先勝出，Java 不得建立第二個 terminal outcome；若 registry/identity 發生錯誤，必須走獨立 bridge error path。
 
-JNI integration test 已驗證 stale handle、capacity、cycle identity、complete winner、client-disconnect winner 與 delayed same-event notification。仍未接入真正 socket/TLS owner，也未證明完整 Servlet response lifetime。
+JNI integration test 已驗證 stale handle、capacity、cycle identity、complete winner、client-disconnect winner 與 delayed same-event notification。仍未接入真正 TLS owner，也未證明完整 Servlet response lifetime。
 
-## 17. Native socket descriptor ownership slice
+## 18. Native socket descriptor ownership slice
 
-本輪已將實際 Linux/POSIX socket descriptor ownership 接入 `ck_connection_t`。`socket_fd` 只屬 native connection owner；Java AsyncContext、cycle binding、JNI bridge 均不得直接取得或操作 fd。
+`ck_connection_t` 現已持有 Linux/POSIX `socket_fd`。`ck_connection_attach_socket()` 僅允許對仍為 `OPEN` 且尚未持有 descriptor 的 connection attach；registry 的對應 wrapper 會先執行 handle 與 request/owner/lifetime identity validation。
 
-`ck_connection_attach_socket()` 僅允許對仍為 `OPEN` 且尚未持有 descriptor 的 connection attach；registry 提供同樣受 identity validation 保護的 `attach_socket()` 與 read-only `socket_fd()` wrapper。terminal owner 成功把 lifecycle 推到 `CLOSED` 後，只有該 caller 進行 descriptor close，並立即將 native `socket_fd` 標記為無效，避免第二個 caller 再次 close。
+terminal owner 成功把 lifecycle 從 `CLOSING` 推至 `CLOSED` 後，只有該 caller 執行 descriptor close，並立即把 `socket_fd` 設為無效值。其他 caller 看到 `CLOSED` 只能得到 already-closed 結果，不會再次 close 同一 descriptor。registry retire 另外要求 connection 已 `CLOSED` 且 descriptor 已失效後才可釋放 entry。
 
-目前 descriptor close semantics 的 executable scope 是 Linux/POSIX baseline；尚未把 Windows `SOCKET`／IOCP abstraction 提前塞入 connection core。這不是 public ABI 決策，而是為下一階段 event backend 保留明確平台邊界。
+目前 executable scope 是 Linux/POSIX baseline；Windows `SOCKET`／IOCP 尚未提前塞入 connection core。這不是 public ABI 決策，而是後續 platform event backend 的獨立 gate。
 
-`tests/connection/ck_connection_test.c` 與 `tests/connection/ck_connection_registry_test.c` 使用 `socketpair(AF_UNIX, SOCK_STREAM, ...)` 實際驗證：attach ownership、wrong-token rejection、terminal close、descriptor becomes invalid、peer receives EOF、registry close/retire ordering。這證明目前 connection object 不再只是 abstract state machine，而已擁有一個可觀察的 native I/O resource lifetime。
+`tests/connection/ck_connection_test.c` 與 `tests/connection/ck_connection_registry_test.c` 使用 `socketpair(AF_UNIX, SOCK_STREAM, ...)` 驗證 attach ownership、wrong-token rejection、terminal close、descriptor invalidation、peer EOF 與 close/retire ordering。

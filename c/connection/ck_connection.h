@@ -28,7 +28,7 @@ typedef struct ck_connection
 	uint64_t request_id;
 	uint64_t owner_token;
 	uint64_t lifetime_token;
-	/* Low 32 bits are state; high 32 bits are terminal event. */
+	/* Low 8 bits are state; next 8 bits are terminal event; upper 48 bits are cycle id. */
 	_Atomic uint64_t lifecycle;
 } ck_connection_t;
 
@@ -38,6 +38,8 @@ int ck_connection_init(ck_connection_t *connection,
 		uint64_t owner_token,
 		uint64_t lifetime_token);
 int ck_connection_start_async(ck_connection_t *connection);
+int ck_connection_start_async_cycle(ck_connection_t *connection,
+		uint64_t cycle_id);
 int ck_connection_try_terminal(ck_connection_t *connection,
 		ck_connection_terminal_event_t event);
 int ck_connection_close(ck_connection_t *connection);
@@ -45,6 +47,11 @@ int ck_connection_validate(const ck_connection_t *connection,
 		uint64_t request_id,
 		uint64_t owner_token,
 		uint64_t lifetime_token);
+int ck_connection_validate_cycle(const ck_connection_t *connection,
+		uint64_t request_id,
+		uint64_t owner_token,
+		uint64_t lifetime_token,
+		uint64_t cycle_id);
 ck_connection_state_t ck_connection_state(const ck_connection_t *connection);
 ck_connection_terminal_event_t ck_connection_terminal_event(
 		const ck_connection_t *connection);

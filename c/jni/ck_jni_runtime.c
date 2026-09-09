@@ -422,18 +422,33 @@ int ck_runtime_init(ck_runtime_t *runtime, const char *class_path)
 		return result;
 	}
 
+	runtime->sync_initialized = 1;
+
 	result = pthread_create(&runtime->bootstrap_thread, NULL, ck_bootstrap_main, runtime);
 	if (result != 0)
 	{
 		pthread_cond_destroy(&runtime->condition);
 		pthread_mutex_destroy(&runtime->lock);
+		runtime->sync_initialized = 0;
 		return result;
 	}
 
-	pthread_mutex_lock(&runtime->lock);
+	runtime->bootstrap_thread_started = 1;
+
+	result = pthread_mutex_lock(&runtime->lock);
+	if (result != 0)
+	{
+		return result;
+	}
+
 	while (!runtime->bootstrap_done)
 	{
-		pthread_cond_wait(&runtime->condition, &runtime->lock);
+		result = pthread_cond_wait(&runtime->condition, &runtime->lock);
+		if (result != 0)
+		{
+			(void)pthread_mutex_unlock(&runtime->lock);
+			return result;
+		}
 	}
 	result = runtime->bootstrap_status;
 	pthread_mutex_unlock(&runtime->lock);

@@ -4,6 +4,8 @@
 
 歷史提交、commit message、PR、merge、CI chronology 與已 supersede 的中間狀態由 Git/GitHub 保存；需要追溯變更來源時直接查 Git provenance。本文件只在歷史資訊仍構成目前有效 invariant 時保留必要摘要。
 
+目前 `main` HEAD：`93988c2996aede7af145c5b1b50e74cfadd56552`。
+
 ## 1. 工程基線
 
 - 正式產品程序入口：C `main()`；Java `main()` 僅供測試／工具。
@@ -96,17 +98,17 @@ feed
 
 這避免 consumer 暫時拒絕 body 時重新 feed 同一 bytes 而重播 parser state。
 
-已建立 64 KiB bounded SPSC body FIFO：
+目前已有 64 KiB bounded SPSC body FIFO，並已接入 connection-owned HTTP reader 的 native smoke path：
 
 ```
 C producer
-→ bounded FIFO
-→ future Java consumer
+→ connection-owned bounded FIFO
+→ future consumer
 ```
 
-但 FIFO 尚未直接接入 HTTP reader 的 production backpressure contract；原因是 parser state、consumed offset 與 sink acceptance 必須先有 transactionally safe boundary。
+body FIFO write 現在採 all-or-nothing contract：當可用空間不足以容納整個 pending body span 時回傳 `CK_HTTP_REQUEST_BODY_WRITE_WOULD_BLOCK` 且不前移 `head`、不寫入部分資料。HTTP reader 因而可以在 sink backpressure 時保留同一 pending span，待 consumer 騰出完整空間後再成功 acknowledge，而不重播 body prefix。
 
-因此目前尚未實作 Servlet 6.1 `ServletInputStream` / `ReadListener` semantics。
+這仍是 native bounded consumer primitive／smoke integration，不是 Servlet 6.1 `ServletInputStream`／`ReadListener` implementation。
 
 ## 5. Linux io_uring 狀態
 
@@ -129,6 +131,7 @@ io_uring 已被正式納入 Linux platform backend research，但沒有取代 ep
 - initial backend 不依賴 SQPOLL、IOPOLL、ZCRX。
 - preferred modern target：Linux 6.12+；5.7+ 可作較低相容基線，但必須 runtime probe。
 - epoll 不因 io_uring 研究而刪除。
+- `ck_io_uring_probe.c` 的 Linux `syscall()` 宣告條件已與 C11/Werror build contract 對齊。
 
 ### Kernel capability summary
 
@@ -175,8 +178,8 @@ GitHub Actions 是最新 CI truth source。
 - connection-owned reader/output writer：已驗證。
 - keep-alive/recycle：已驗證至目前 executable slice。
 - canonical request ABI v2：已驗證至目前 executable smoke slice。
-- transactional request body：已實作，需最新 HEAD CI 完整通過後才升級為 verified gate。
-- io_uring probe：已實作，需最新 HEAD CI 完整通過後才升級為 verified gate。
+- transactional request body：已實作並有 native unit/integration coverage，需最新 HEAD CI 完整通過後才升級為 verified gate。
+- io_uring probe：已實作並有 direct probe test，需最新 HEAD CI 完整通過後才升級為 verified gate。
 - ServletInputStream / ReadListener：未完成。
 - production multi-worker completion notification：未完成。
 - AsyncContext ↔ connection cancellation：未完成。
@@ -245,13 +248,12 @@ JNI／Java：
 
 ## 10. 下一個工程閘門
 
-1. transactional HTTP body 最新 HEAD CI 完整通過。
-2. 將 bounded body FIFO 接到安全的 HTTP body producer/consumer contract。
-3. 建立 Java `ServletInputStream` 的 minimum semantic adapter，包含 `isReady()`、`ReadListener`、EOF、error、cancel 與 lifecycle。
-4. 將 request body lifetime 與 AsyncContext / connection terminal arbitration 接合。
-5. 建立 Linux io_uring completion backend prototype，第一階段使用 one-shot ACCEPT/RECV/SEND 與 direct syscalls；與 epoll 保持可切換。
-6. 建立 epoll vs io_uring identical-workload benchmark，再決定預設 backend與最低支援 kernel。
-7. 之後才進正式 Servlet container routing、TCK、sanitizer/fuzz、TLS 與 end-to-end benchmark。
+1. 以最新 `main` HEAD 跑完整 GitHub Actions `make test`，確認 transactional request body 與 io_uring probe gate。
+2. 建立 Java `ServletInputStream` 的 minimum semantic adapter，包含 `isReady()`、`ReadListener`、EOF、error、cancel 與 lifecycle。
+3. 將 request body lifetime 與 AsyncContext / connection terminal arbitration 接合。
+4. 建立 Linux io_uring completion backend prototype，第一階段使用 one-shot ACCEPT/RECV/SEND 與 direct syscalls；與 epoll 保持可切換。
+5. 建立 epoll vs io_uring identical-workload benchmark，再決定預設 backend與最低支援 kernel。
+6. 之後才進正式 Servlet container routing、TCK、sanitizer/fuzz、TLS 與 end-to-end benchmark。
 
 ## 11. Provenance policy
 

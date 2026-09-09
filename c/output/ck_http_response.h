@@ -5,6 +5,7 @@
 #include <stdint.h>
 
 #define CK_HTTP_RESPONSE_BODY_BUFFER_BYTES 65536u
+#define CK_HTTP_RESPONSE_HEADER_BUFFER_BYTES 1024u
 
 typedef enum ck_http_response_state
 {
@@ -40,6 +41,11 @@ int ck_http_response_write_body(ck_http_response_t *response,
 		size_t length);
 int ck_http_response_commit(ck_http_response_t *response);
 int ck_http_response_finish(ck_http_response_t *response);
+int ck_http_response_serialize_headers(
+		const ck_http_response_t *response,
+		unsigned char *output,
+		size_t capacity,
+		size_t *output_length);
 const unsigned char *ck_http_response_body(
 		const ck_http_response_t *response);
 size_t ck_http_response_body_length(

@@ -19,7 +19,7 @@
 | PENDING | dispatch rejected | request owner / admission boundary | FAILED | RESOURCE | 503 or local rejection | no Java task was started |
 | RUNNING | Java completes normally | request owner via completion | COMPLETED | NONE | application response | release after response ownership ends |
 | RUNNING | Java application throws | Java/container then request owner | FAILING → FAILED | APPLICATION | 500 or Servlet-defined error dispatch | only the failure winner writes error record before publishing FAILED |
-| RUNNING | JNI operation fails | JNI/native owner | FAILED | JNI | 500 / close depending on phase | pending exception must be handled before further unsafe JNI use |
+| RUNNING | JNI operation fails | JNI/native owner | FAILING → FAILED | JNI | 500 / close depending on phase | pending exception must be handled before further unsafe JNI use |
 | RUNNING | timeout wins | request owner | CANCELLING | TIMEOUT | 408/504/close according to phase | cancel Java work; late completion is ignored |
 | RUNNING | client disconnect | connection owner | CANCELLING | CANCELLATION | no client response | connection/resource teardown remains owner-controlled |
 | RUNNING | invariant violation | server control plane | FAILED or FATAL | INTERNAL/FATAL | fail closed; process shutdown if fatal | stop using corrupted state |

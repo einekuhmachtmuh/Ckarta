@@ -142,7 +142,7 @@ Codex 本機測試環境：
 
 此 slice 只驗證 topology A 的 lifecycle／JNI boundary，不代表 A 為最終 topology。真正 A/B/C benchmark 仍待接上 canonical request workload。
 
-目前 PR 尚未合併 `main`；CI 必須以實際 run 結果判定是否可進正式基線。
+PR #1 已合併至 `main`；此 branch 現為歷史 provenance，後續工作不得以此 branch 的 WORK_STATE 覆蓋 main canonical state。
 
 
 ## Branch status

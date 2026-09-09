@@ -11,6 +11,8 @@
 #include <sys/syscall.h>
 #include <unistd.h>
 
+#define CK_IO_URING_PROBE_OPS 255u
+
 static int opcode_supported(
 	const struct io_uring_probe *probe,
 	unsigned int opcode)
@@ -60,7 +62,7 @@ int ck_io_uring_probe(ck_io_uring_probe_result_t *result)
 	result->fast_poll = (params.features & IORING_FEAT_FAST_POLL) != 0;
 
 	probe = calloc(1, sizeof(*probe)
-			+ 256u * sizeof(struct io_uring_probe_op));
+			+ CK_IO_URING_PROBE_OPS * sizeof(struct io_uring_probe_op));
 	if (probe == NULL)
 	{
 		error = errno;
@@ -69,9 +71,9 @@ int ck_io_uring_probe(ck_io_uring_probe_result_t *result)
 		return -1;
 	}
 
-	probe->ops_len = 256;
+	probe->ops_len = CK_IO_URING_PROBE_OPS;
 	if (syscall(SYS_io_uring_register, fd, IORING_REGISTER_PROBE,
-			probe, 256u) == 0)
+			probe, CK_IO_URING_PROBE_OPS) == 0)
 	{
 		result->accept = opcode_supported(probe, IORING_OP_ACCEPT);
 		result->recv = opcode_supported(probe, IORING_OP_RECV);

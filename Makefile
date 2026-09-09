@@ -10,6 +10,7 @@ ERROR_TEST := $(BIN_DIR)/ckarta-error-test
 ERROR_RACE_TEST := $(BIN_DIR)/ckarta-request-error-race-test
 TERMINAL_RACE_TEST := $(BIN_DIR)/ckarta-request-terminal-race-test
 COMPLETION_QUEUE_TEST := $(BIN_DIR)/ckarta-completion-queue-test
+CONNECTION_TEST := $(BIN_DIR)/ckarta-connection-test
 
 CC ?= cc
 CFLAGS := -std=c11 -Wall -Wextra -Wpedantic -Werror -O2 -pthread
@@ -29,9 +30,9 @@ $(CLASS_STAMP): $(JAVA_SOURCES)
 	javac --release 21 -d $(CLASS_DIR) $(JAVA_SOURCES)
 	@touch $@
 
-$(TARGET): c/core/main.c c/config/ck_config.c c/config/ck_config.h c/error/ck_error.c c/error/ck_error.h c/completion/ck_completion_queue.c c/completion/ck_completion_queue.h c/event/ck_completion_notification.c c/event/ck_completion_notification.h c/jni/ck_jni_runtime.c c/jni/ck_jni_runtime.h c/jni/ck_request.c c/jni/ck_request.h classes
+$(TARGET): c/core/main.c c/config/ck_config.c c/config/ck_config.h c/error/ck_error.c c/error/ck_error.h c/completion/ck_completion_queue.c c/completion/ck_completion_queue.h c/event/ck_completion_notification.c c/event/ck_completion_notification.h c/connection/ck_connection.c c/connection/ck_connection.h c/jni/ck_jni_runtime.c c/jni/ck_jni_runtime.h c/jni/ck_request.c c/jni/ck_request.h classes
 	@mkdir -p $(BIN_DIR)
-	$(CC) $(CFLAGS) $(CPPFLAGS) c/core/main.c c/config/ck_config.c c/error/ck_error.c c/completion/ck_completion_queue.c c/event/ck_completion_notification.c c/jni/ck_jni_runtime.c c/jni/ck_request.c -o $@ $(LDFLAGS)
+	$(CC) $(CFLAGS) $(CPPFLAGS) c/core/main.c c/config/ck_config.c c/error/ck_error.c c/completion/ck_completion_queue.c c/event/ck_completion_notification.c c/connection/ck_connection.c c/jni/ck_jni_runtime.c c/jni/ck_request.c -o $@ $(LDFLAGS)
 
 $(ABI_TEST): tests/request_lifecycle_test.c c/jni/ck_request.c c/jni/ck_request.h c/error/ck_error.c c/error/ck_error.h
 	@mkdir -p $(BIN_DIR)
@@ -53,6 +54,10 @@ $(COMPLETION_QUEUE_TEST): tests/completion/ck_completion_queue_test.c c/completi
 	@mkdir -p $(BIN_DIR)
 	$(CC) $(CFLAGS) tests/completion/ck_completion_queue_test.c c/completion/ck_completion_queue.c c/event/ck_completion_notification.c -o $@
 
+$(CONNECTION_TEST): tests/connection/ck_connection_test.c c/connection/ck_connection.c c/connection/ck_connection.h
+	@mkdir -p $(BIN_DIR)
+	$(CC) $(CFLAGS) tests/connection/ck_connection_test.c c/connection/ck_connection.c -o $@
+
 $(CONFIG_TEST): tests/config_load_test.c c/config/ck_config.c c/config/ck_config.h
 	@mkdir -p $(BIN_DIR)
 	$(CC) $(CFLAGS) tests/config_load_test.c c/config/ck_config.c -o $@
@@ -60,12 +65,13 @@ $(CONFIG_TEST): tests/config_load_test.c c/config/ck_config.c c/config/ck_config
 clean:
 	rm -rf $(BUILD_DIR)
 
-test: all $(ABI_TEST) $(CONFIG_TEST) $(ERROR_TEST) $(ERROR_RACE_TEST) $(TERMINAL_RACE_TEST) $(COMPLETION_QUEUE_TEST)
+test: all $(ABI_TEST) $(CONFIG_TEST) $(ERROR_TEST) $(ERROR_RACE_TEST) $(TERMINAL_RACE_TEST) $(COMPLETION_QUEUE_TEST) $(CONNECTION_TEST)
 	$(ABI_TEST)
 	$(CONFIG_TEST) tests/config/valid.conf
 	$(ERROR_TEST)
 	$(ERROR_RACE_TEST)
 	$(TERMINAL_RACE_TEST)
 	$(COMPLETION_QUEUE_TEST)
+	$(CONNECTION_TEST)
 	! $(CONFIG_TEST) tests/config/invalid.conf
 	./tests/smoke_bootstrap.sh $(TARGET)

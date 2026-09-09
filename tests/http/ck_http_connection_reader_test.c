@@ -1,6 +1,7 @@
 #define _GNU_SOURCE
 
 #include "../../c/http/ck_http_connection_reader.h"
+#include "../../c/http/ck_http_request_body.h"
 
 #include <assert.h>
 #include <string.h>
@@ -311,6 +312,98 @@ static void test_eof_incomplete_body(void)
 	assert(close(sockets[1]) == 0);
 }
 
+
+static void test_body_queue_backpressure(void)
+{
+	static const char header[] =
+		"POST /queue HTTP/1.1\r\n"
+		"Host: x\r\n"
+		"Content-Length: 100000\r\n"
+		"\r\n";
+	static unsigned char source[100000];
+	unsigned char received[100000];
+	ck_http_connection_reader_t reader;
+	ck_http_request_body_t body_queue;
+	int sockets[2];
+	ck_http_connection_read_result_t result;
+	size_t received_total = 0;
+	size_t read;
+
+	for (size_t i = 0; i < sizeof(source); i++)
+	{
+		source[i] = (unsigned char)(i % 251U);
+	}
+	memset(received, 0, sizeof(received));
+
+	assert(socketpair(AF_UNIX, SOCK_STREAM, 0, sockets) == 0);
+	ck_http_connection_reader_init(&reader);
+	ck_http_request_body_init(&body_queue);
+	ck_http_connection_reader_attach_body_queue(&reader, &body_queue);
+
+	send_all(sockets[0],
+			(const unsigned char *)header, sizeof(header) - 1U);
+	send_all(sockets[0], source, sizeof(source));
+
+	result = ck_http_connection_reader_drive(
+			&reader, sockets[1], NULL, NULL);
+	assert(result == CK_HTTP_CONNECTION_READ_INCOMPLETE);
+	assert(ck_http_request_body_available(&body_queue)
+			== CK_HTTP_CONNECTION_PROCESS_BUDGET_BYTES);
+
+	result = ck_http_connection_reader_drive(
+			&reader, sockets[1], NULL, NULL);
+	assert(result == CK_HTTP_CONNECTION_READ_INCOMPLETE);
+	assert(ck_http_request_body_available(&body_queue)
+			== CK_HTTP_REQUEST_BODY_BUFFER_BYTES);
+
+	result = ck_http_connection_reader_drive(
+			&reader, sockets[1], NULL, NULL);
+	assert(result == CK_HTTP_CONNECTION_READ_BODY_BACKPRESSURE);
+	assert(ck_http_connection_reader_buffered_bytes(&reader) > 0);
+
+	assert(ck_http_request_body_read(
+			&body_queue, received, 32768U, &read)
+			== CK_HTTP_REQUEST_BODY_READ_DATA);
+	assert(read == 32768U);
+	memcpy(received, received, read);
+	received_total += read;
+
+	result = ck_http_connection_reader_drive(
+			&reader, sockets[1], NULL, NULL);
+	assert(result == CK_HTTP_CONNECTION_READ_INCOMPLETE
+			|| result == CK_HTTP_CONNECTION_READ_REQUEST_COMPLETE);
+	assert(ck_http_request_body_available(&body_queue) > 0);
+
+	while (!ck_http_request_body_is_finished(&body_queue))
+	{
+		result = ck_http_connection_reader_drive(
+				&reader, sockets[1], NULL, NULL);
+		assert(result == CK_HTTP_CONNECTION_READ_INCOMPLETE
+				|| result == CK_HTTP_CONNECTION_READ_REQUEST_COMPLETE
+				|| result == CK_HTTP_CONNECTION_READ_BODY_BACKPRESSURE);
+		if (ck_http_request_body_available(&body_queue) != 0)
+		{
+			assert(ck_http_request_body_read(
+					&body_queue,
+					received + received_total,
+					sizeof(received) - received_total,
+					&read)
+					== CK_HTTP_REQUEST_BODY_READ_DATA);
+			received_total += read;
+		}
+		if (result == CK_HTTP_CONNECTION_READ_REQUEST_COMPLETE
+				&& ck_http_request_body_is_finished(&body_queue))
+		{
+			break;
+		}
+	}
+
+	assert(received_total == sizeof(source));
+	assert(memcmp(received, source, sizeof(source)) == 0);
+	assert(close(sockets[0]) == 0);
+	assert(close(sockets[1]) == 0);
+}
+
 int main(void)
 {
 	test_content_length_pipeline();
@@ -319,5 +412,6 @@ int main(void)
 	test_chunked_split_crlf();
 	test_read_batch_budget();
 	test_eof_incomplete_body();
+	test_body_queue_backpressure();
 	return 0;
 }

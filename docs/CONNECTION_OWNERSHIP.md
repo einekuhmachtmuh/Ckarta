@@ -26,11 +26,12 @@ C connection object 擁有：
 
 - socket descriptor
 - TLS state
-- event registration state
 - connection timer references
 - input/output buffer references
 - current request reference
 - lifecycle state
+
+`ck_event_loop` 則擁有其 epoll instance；connection 不直接擁有 epoll fd。connection owner 負責決定何時把其 socket registration 加入、修改或移除 event loop，但 event backend 不因此取得 socket ownership。
 
 Connection owner 必須是唯一 authority。
 
@@ -209,6 +210,8 @@ JNIEnv pointer 不得跨執行緒共享。
 
 目前 Java completion producer 可在 executor thread 透過 registered JNI method 發布 value-only completion；native queue 不保存 `JNIEnv*`、Java Throwable 或 Java object reference。
 
+目前 `ck_event_loop_t` 另外有 single-owner contract：同一 instance 在任一時間只能由一個 C event-loop owner thread 呼叫 event registration／modification／removal／wait／destroy；不得將目前 API 當作 thread-safe shared object。
+
 ## 13. 暫時禁止
 
 在下列文件尚未完成並審查前，不建立正式 public JNI API：
@@ -239,6 +242,7 @@ Tomcat 11.0.25 `AsyncContextImpl` 顯示真正 async lifecycle 還包含 `start(
 5. native terminal result 的 CLAIMED／ALREADY_SAME／ALREADY_DIFFERENT 三分法。
 6. native connection object 的實際 Linux/POSIX socket descriptor ownership。
 7. C-driven JVM integration test 與 `socketpair()` EOF 驗證。
+8. Linux/POSIX `ck_event_loop` 的獨立 epoll backend smoke slice。
 
 仍待完成：
 
@@ -249,6 +253,8 @@ Tomcat 11.0.25 `AsyncContextImpl` 顯示真正 async lifecycle 還包含 `start(
 5. async dispatch / new-cycle reinitialization。
 6. shutdown drain。
 7. Servlet 6.1 TCK compatibility tests。
+8. listener／accepted connection 與 event registration 的正式整合。
+9. notification consumer 的 generation/cookie validation 與 stale-event rejection。
 
 固定 Tomcat source：
 https://github.com/apache/tomcat/blob/cbe6e15ee81e2fc6232954292a80cca5d1e84009/java/org/apache/catalina/core/AsyncContextImpl.java
@@ -277,6 +283,10 @@ JNI integration test 已驗證 stale handle、capacity、cycle identity、comple
 
 terminal owner 成功把 lifecycle 從 `CLOSING` 推至 `CLOSED` 後，只有該 caller 執行 descriptor close，並立即把 `socket_fd` 設為無效值。其他 caller 看到 `CLOSED` 只能得到 already-closed 結果，不會再次 close 同一 descriptor。registry retire 另外要求 connection 已 `CLOSED` 且 descriptor 已失效後才可釋放 entry。
 
+目前 event registration 不改變 socket ownership：connection owner 仍擁有 fd；event loop owner 擁有 epoll instance；registration 的建立／修改／移除只能由 event-loop owner 執行。關閉 connection 前，正式 network path 必須先依 registration contract 移除或失效其 event registration，再進行 descriptor close 與 registry retire，避免 stale notification 與 fd reuse 相互混淆。
+
 目前 executable scope 是 Linux/POSIX baseline；Windows `SOCKET`／IOCP 尚未提前塞入 connection core。這不是 public ABI 決策，而是後續 platform event backend 的獨立 gate。
 
 `tests/connection/ck_connection_test.c` 與 `tests/connection/ck_connection_registry_test.c` 使用 `socketpair(AF_UNIX, SOCK_STREAM, ...)` 驗證 attach ownership、wrong-token rejection、terminal close、descriptor invalidation、peer EOF 與 close/retire ordering。
+
+Linux event backend 的獨立驗證見 `docs/EVENT_BACKEND.md` 與 `tests/event/ck_event_loop_test.c`；該 test 尚未證明 connection registry 與 epoll registration 的完整 lifetime ordering。

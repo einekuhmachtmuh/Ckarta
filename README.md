@@ -48,7 +48,7 @@ Nginx 與 Apache Tomcat 不直接複製進 Ckarta repository，而是以 Git sub
 - docs/STARTUP_CONFIGURATION_RESEARCH.md：Apache HTTP Server、Nginx、Tomcat 與 Ckarta 啟動配置／驗證／reload 架構研究。
 - docs/STARTUP_STATE_MACHINE.md：C main、JVM、Java container、network runtime 的啟動／停止狀態機。
 - docs/HTTP_FRAMING_POLICY.md：HTTP/1.1 framing（訊息框架）權威解析政策與目前 executable parser/decode boundary。
-- docs/HTTP_CONNECTION_READER.md：connection-owned HTTP input buffer、non-blocking read consumer、body sink、pipeline 與 request recycle 契約。
+- docs/HTTP_CONNECTION_READER.md：connection-owned HTTP input buffer、non-blocking read consumer、body sink、pipeline、request recycle 與 registry pin 契約。
 - docs/CONCURRENCY_MODEL.md：C 事件並行與 Java Servlet 執行模型。
 - docs/EXCEPTION_HANDLING_RESEARCH.md：C/Java/JNI 例外、錯誤傳播、恢復、資訊洩漏與 exactly-once terminal outcome 的唯一權威研究。
 - docs/ERROR_STATE_MATRIX.md：error category × request lifecycle × owner × HTTP outcome 的形式化矩陣與 `ck_error_t` 邊界。
@@ -98,9 +98,11 @@ OpenJDK 21 的 JNI 成本研究見 docs/JNI_COST_MODEL.md；固定 21u HotSpot i
 
 ## 架構原則
 
-C：non-blocking I/O（非阻塞輸入輸出）、event loop（事件迴圈）、HTTP parsing（HTTP 解析）、TLS、static file、reverse proxy、load balancing、rate／connection limiting、output pipeline。
+C：non-blocking I/O（非阻塞輸入輸出）、event loop（事件迴圈）、HTTP parsing（HTTP 解析）、TLS、static file、reverse proxy、load balancing、rate／connection limiting、buffering（緩衝）、compression（壓縮）、network access control（網路存取控制）、logging（日誌）與 metrics transport（指標傳輸）。
 
-Java：Jakarta Servlet 6.1、Servlet lifecycle、Filter、Listener、Session、ServletContext、RequestDispatcher、AsyncContext、web application lifecycle、class loading。
+Java：Jakarta Servlet 6.1、Servlet lifecycle、Filter、Listener、Session、ServletContext、RequestDispatcher、AsyncContext、web application lifecycle、class loading、deployment（部署）與 application execution（應用程式執行）。
+
+C 不得直接執行 Servlet application code（Servlet 應用程式程式碼）；Servlet application code 不得在 C event-loop thread 上執行。
 
 ## 重要聲明
 
@@ -131,6 +133,6 @@ CGI/FastCGI 定位：未來可掛接 application gateway module，不屬核心 r
 
 Linux `ck_event_loop` 已有獨立 executable baseline，並已完成 loopback TCP listener／accept integration smoke：event loop 擁有 epoll instance、connection owner 擁有 socket descriptor；notification 只攜帶 opaque `uint64_t` cookie，accepted socket 由 `accept4()` 以 nonblocking／close-on-exec 屬性建立。
 
-目前 HTTP path 已增加 bounded executable framing components：header parser 能處理 incremental request line/header block、Content-Length normalization、Transfer-Encoding framing decision；獨立 chunked decoder 能處理 chunk size、chunk data、chunk CRLF、last chunk 與 trailer syntax。reader 可將 Content-Length／chunked body 以同步 sink 分段消費，並在 request completion 後保留下一則 pipelined request；目前 reader 已有獨立 socketpair executable test 與 fragmented chunk delimiter regression coverage，但 loopback TCP integration test 仍直接使用 `ck_http_input`，尚未把 reader 納入該 integration path。
+目前 HTTP path 已增加 bounded executable framing components：header parser 能處理 incremental request line/header block、Content-Length normalization、Transfer-Encoding framing decision；獨立 chunked decoder 能處理 chunk size、chunk data、chunk CRLF、last chunk 與 trailer syntax。reader 可將 Content-Length／chunked body 以同步 sink 分段消費，並在 request completion 後保留下一則 pipelined request；loopback TCP integration 現已透過 registry-safe reader pin 將 epoll readiness 對接到 connection-owned reader，並測試 body consumption、pipelined request、EOF 與 stale-handle lifecycle。
 
-目前尚未完成：正式多 worker listener/accept ownership、registry-safe reader dispatch API、production read-event state integration、read batching/fairness budget、完整 HTTP/1.1 request/response state machine、response ownership、async dispatch、real timeout source、完整 client-disconnect policy、shutdown drain、TCK、sanitizer/fuzz、Windows IOCP 與其他平台 event backend。
+目前尚未完成：正式多 worker listener/accept ownership、read batching/fairness budget、完整 HTTP/1.1 request/response state machine、response ownership、async dispatch、real timeout source、完整 client-disconnect policy、shutdown drain、TCK、sanitizer/fuzz、Windows IOCP 與其他平台 event backend。

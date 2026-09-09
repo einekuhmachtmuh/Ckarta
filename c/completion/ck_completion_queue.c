@@ -153,6 +153,13 @@ int ck_completion_queue_close(ck_completion_queue_t *queue)
 	}
 
 	queue->closed = 1;
+	result = ck_completion_notification_signal(&queue->notification);
+	if (result != 0)
+	{
+		(void)pthread_mutex_unlock(&queue->lock);
+		return result;
+	}
+
 	return pthread_mutex_unlock(&queue->lock);
 }
 

@@ -1,7 +1,6 @@
 #include "ck_http_parser.h"
 
 #include <ctype.h>
-#include <stdint.h>
 #include <string.h>
 
 static int is_tchar(unsigned char value)
@@ -20,7 +19,6 @@ static int span_equal_ci(ck_http_span_t span, const char *literal)
 	{
 		return 0;
 	}
-
 	for (size_t i = 0; i < length; i++)
 	{
 		if (tolower((unsigned char)span.data[i]) !=
@@ -29,7 +27,6 @@ static int span_equal_ci(ck_http_span_t span, const char *literal)
 			return 0;
 		}
 	}
-
 	return 1;
 }
 
@@ -48,7 +45,6 @@ static void trim_ows(ck_http_span_t *span)
 	{
 		end--;
 	}
-
 	span->data += start;
 	span->length = end - start;
 }
@@ -61,12 +57,9 @@ static int parse_uint64(ck_http_span_t span, uint64_t *value)
 	{
 		return 0;
 	}
-
 	for (size_t i = 0; i < span.length; i++)
 	{
 		unsigned char digit = (unsigned char)span.data[i];
-		uint64_t next;
-
 		if (digit < '0' || digit > '9')
 		{
 			return 0;
@@ -75,16 +68,14 @@ static int parse_uint64(ck_http_span_t span, uint64_t *value)
 		{
 			return 0;
 		}
-		next = result * 10u + (uint64_t)(digit - '0');
-		result = next;
+		result = result * 10u + (uint64_t)(digit - '0');
 	}
-
 	*value = result;
 	return 1;
 }
 
-static int find_line_end(const char *buffer, size_t length,
-	size_t start, size_t *line_end)
+static int find_crlf(const char *buffer, size_t length, size_t start,
+	size_t *line_end)
 {
 	for (size_t i = start; i + 1 < length; i++)
 	{
@@ -94,83 +85,81 @@ static int find_line_end(const char *buffer, size_t length,
 			return 1;
 		}
 	}
-
 	return 0;
 }
 
 static int parse_request_line(const char *buffer, size_t line_end,
 	ck_http_request_t *request)
 {
-	size_t first = 0;
-	size_t second = 0;
-	size_t pos;
+	size_t method_end = 0;
+	size_t target_start;
+	size_t target_end;
+	size_t version_start;
 
-	while (first < line_end && buffer[first] != ' ' && buffer[first] != '\t')
+	while (method_end < line_end && buffer[method_end] != ' '
+			&& buffer[method_end] != '\t')
 	{
-		first++;
+		method_end++;
 	}
-	if (first == 0 || first >= line_end ||
-			first > CK_HTTP_MAX_METHOD_BYTES)
+	if (method_end == 0 || method_end > CK_HTTP_MAX_METHOD_BYTES
+			|| method_end == line_end)
 	{
 		return 0;
 	}
-
-	for (pos = 0; pos < first; pos++)
+	for (size_t i = 0; i < method_end; i++)
 	{
-		if (!is_tchar((unsigned char)buffer[pos]))
+		if (!is_tchar((unsigned char)buffer[i]))
 		{
 			return 0;
 		}
 	}
 
-	pos = first;
-	while (pos < line_end && (buffer[pos] == ' ' || buffer[pos] == '\t'))
+	target_start = method_end;
+	while (target_start < line_end && (buffer[target_start] == ' '
+			|| buffer[target_start] == '\t'))
 	{
-		pos++;
+		target_start++;
 	}
-	second = pos;
-	while (second < line_end && buffer[second] != ' '
-			&& buffer[second] != '\t')
+	target_end = target_start;
+	while (target_end < line_end && buffer[target_end] != ' '
+			&& buffer[target_end] != '\t')
 	{
-		second++;
+		target_end++;
 	}
-	if (second == pos || second - pos > CK_HTTP_MAX_TARGET_BYTES)
+	if (target_end == target_start
+			|| target_end - target_start > CK_HTTP_MAX_TARGET_BYTES)
 	{
 		return 0;
 	}
-
-	request->method.data = buffer;
-	request->method.length = first;
-	request->target.data = buffer + pos;
-	request->target.length = second - pos;
-
-	for (size_t i = 0; i < request->target.length; i++)
+	for (size_t i = target_start; i < target_end; i++)
 	{
-		unsigned char value = (unsigned char)request->target.data[i];
+		unsigned char value = (unsigned char)buffer[i];
 		if (value <= 0x20 || value == 0x7f)
 		{
 			return 0;
 		}
 	}
 
-	pos = second;
-	while (pos < line_end && (buffer[pos] == ' ' || buffer[pos] == '\t'))
+	version_start = target_end;
+	while (version_start < line_end && (buffer[version_start] == ' '
+			|| buffer[version_start] == '\t'))
 	{
-		pos++;
+		version_start++;
 	}
-	if (pos >= line_end || line_end - pos > CK_HTTP_MAX_VERSION_BYTES)
-	{
-		return 0;
-	}
-
-	request->version.data = buffer + pos;
-	request->version.length = line_end - pos;
-	if (request->version.length != sizeof("HTTP/1.1") - 1 ||
-			memcmp(request->version.data, "HTTP/1.1", sizeof("HTTP/1.1") - 1) != 0)
+	if (version_start >= line_end
+			|| line_end - version_start != sizeof("HTTP/1.1") - 1
+			|| memcmp(buffer + version_start, "HTTP/1.1",
+				sizeof("HTTP/1.1") - 1) != 0)
 	{
 		return 0;
 	}
 
+	request->method.data = buffer;
+	request->method.length = method_end;
+	request->target.data = buffer + target_start;
+	request->target.length = target_end - target_start;
+	request->version.data = buffer + version_start;
+	request->version.length = line_end - version_start;
 	return 1;
 }
 
@@ -182,33 +171,31 @@ static int parse_content_length_headers(const ck_http_request_t *request,
 
 	for (size_t i = 0; i < request->header_count; i++)
 	{
-		ck_http_span_t value_span;
-		size_t start;
+		ck_http_span_t source;
+		size_t start = 0;
 
 		if (!span_equal_ci(request->headers[i].name, "Content-Length"))
 		{
 			continue;
 		}
-
-		value_span = request->headers[i].value;
-		start = 0;
-		while (start < value_span.length)
+		source = request->headers[i].value;
+		while (start < source.length)
 		{
 			size_t end = start;
 			ck_http_span_t item;
 			uint64_t parsed;
 
-			while (start < value_span.length && (value_span.data[start] == ' '
-					|| value_span.data[start] == '\t'))
+			while (start < source.length && (source.data[start] == ' '
+					|| source.data[start] == '\t'))
 			{
 				start++;
 			}
 			end = start;
-			while (end < value_span.length && value_span.data[end] != ',')
+			while (end < source.length && source.data[end] != ',')
 			{
 				end++;
 			}
-			item.data = value_span.data + start;
+			item.data = source.data + start;
 			item.length = end - start;
 			trim_ows(&item);
 			if (!parse_uint64(item, &parsed))
@@ -224,29 +211,24 @@ static int parse_content_length_headers(const ck_http_request_t *request,
 			{
 				return 0;
 			}
-
-			start = end;
-			if (start < value_span.length)
-			{
-				start++;
-			}
+			start = end < source.length ? end + 1 : end;
 		}
 	}
 
-	*value = found ? canonical : 0;
+	*value = canonical;
 	*present = found;
 	return 1;
 }
 
 static int parse_transfer_encoding_headers(const ck_http_request_t *request,
-	int *present, int *final_chunked)
+	int *present, int *is_chunked)
 {
 	int found = 0;
-	int final_is_chunked = 0;
+	int chunked = 0;
 
 	for (size_t i = 0; i < request->header_count; i++)
 	{
-		ck_http_span_t value_span;
+		ck_http_span_t source;
 		size_t start = 0;
 
 		if (!span_equal_ci(request->headers[i].name, "Transfer-Encoding"))
@@ -254,68 +236,55 @@ static int parse_transfer_encoding_headers(const ck_http_request_t *request,
 			continue;
 		}
 		found = 1;
-		value_span = request->headers[i].value;
-		while (start < value_span.length)
+		source = request->headers[i].value;
+		while (start < source.length)
 		{
 			size_t end = start;
 			ck_http_span_t token;
 
-			while (start < value_span.length && (value_span.data[start] == ' '
-					|| value_span.data[start] == '\t'
-					|| value_span.data[start] == ','))
+			while (start < source.length && (source.data[start] == ' '
+					|| source.data[start] == '\t'))
 			{
 				start++;
 			}
-			if (start == value_span.length)
+			if (start == source.length || source.data[start] == ',')
 			{
 				return 0;
 			}
 			end = start;
-			while (end < value_span.length && value_span.data[end] != ',')
+			while (end < source.length && source.data[end] != ',')
 			{
 				end++;
 			}
-			token.data = value_span.data + start;
+			token.data = source.data + start;
 			token.length = end - start;
 			trim_ows(&token);
-			if (token.length == 0)
+			if (!span_equal_ci(token, "chunked"))
 			{
 				return 0;
 			}
-			for (size_t j = 0; j < token.length; j++)
-			{
-				if (!is_tchar((unsigned char)token.data[j]))
-				{
-					return 0;
-				}
-			}
-			final_is_chunked = span_equal_ci(token, "chunked");
-
-			start = end;
-			if (start < value_span.length)
-			{
-				start++;
-			}
+			chunked = 1;
+			start = end < source.length ? end + 1 : end;
 		}
 	}
 
 	*present = found;
-	*final_chunked = final_is_chunked;
-	return found;
+	*is_chunked = chunked;
+	return 1;
 }
 
-static ck_http_parse_result_t parse_complete_header_block(
+static ck_http_parse_result_t parse_header_block(
 	ck_http_parser_t *parser, size_t header_end, ck_http_request_t *request)
 {
 	size_t line_start = 0;
 	size_t line_end;
-	uint64_t content_length;
-	int has_content_length;
-	int has_transfer_encoding;
-	int final_chunked;
+	uint64_t content_length = 0;
+	int has_content_length = 0;
+	int has_transfer_encoding = 0;
+	int transfer_is_chunked = 0;
 
 	memset(request, 0, sizeof(*request));
-	if (!find_line_end(parser->buffer, header_end, 0, &line_end)
+	if (!find_crlf(parser->buffer, header_end, 0, &line_end)
 			|| !parse_request_line(parser->buffer, line_end, request))
 	{
 		return CK_HTTP_PARSE_BAD_REQUEST;
@@ -328,7 +297,7 @@ static ck_http_parse_result_t parse_complete_header_block(
 		ck_http_span_t value;
 		size_t colon = line_start;
 
-		if (!find_line_end(parser->buffer, header_end, line_start, &line_end))
+		if (!find_crlf(parser->buffer, header_end, line_start, &line_end))
 		{
 			return CK_HTTP_PARSE_BAD_REQUEST;
 		}
@@ -340,7 +309,6 @@ static ck_http_parse_result_t parse_complete_header_block(
 		{
 			return CK_HTTP_PARSE_HEADER_TOO_LARGE;
 		}
-
 		while (colon < line_end && parser->buffer[colon] != ':')
 		{
 			colon++;
@@ -373,20 +341,20 @@ static ck_http_parse_result_t parse_complete_header_block(
 		line_start = line_end + 2;
 	}
 
-	if (!parse_content_length_headers(request, &content_length, &has_content_length))
+	if (!parse_content_length_headers(request, &content_length,
+			&has_content_length))
 	{
 		return CK_HTTP_PARSE_BAD_REQUEST;
 	}
-
 	if (!parse_transfer_encoding_headers(request, &has_transfer_encoding,
-			&final_chunked) && has_transfer_encoding)
+			&transfer_is_chunked))
 	{
 		return CK_HTTP_PARSE_BAD_REQUEST;
 	}
 
 	if (has_transfer_encoding)
 	{
-		if (!final_chunked)
+		if (!transfer_is_chunked)
 		{
 			return CK_HTTP_PARSE_BAD_REQUEST;
 		}
@@ -416,7 +384,6 @@ void ck_http_parser_init(ck_http_parser_t *parser)
 	{
 		return;
 	}
-
 	parser->length = 0;
 	parser->complete = 0;
 }
@@ -429,6 +396,7 @@ ck_http_parse_result_t ck_http_parser_feed(
 	ck_http_request_t *request)
 {
 	const char *source = data;
+	size_t previous_length;
 	size_t header_end = 0;
 	ck_http_parse_result_t result;
 
@@ -443,13 +411,14 @@ ck_http_parse_result_t ck_http_parser_feed(
 	{
 		return CK_HTTP_PARSE_COMPLETE;
 	}
-	if (length > CK_HTTP_MAX_HEADER_BYTES - parser->length)
+	previous_length = parser->length;
+	if (length > CK_HTTP_MAX_HEADER_BYTES - previous_length)
 	{
 		return CK_HTTP_PARSE_HEADER_TOO_LARGE;
 	}
 	if (length != 0)
 	{
-		memcpy(parser->buffer + parser->length, source, length);
+		memcpy(parser->buffer + previous_length, source, length);
 		parser->length += length;
 	}
 
@@ -464,19 +433,17 @@ ck_http_parse_result_t ck_http_parser_feed(
 			break;
 		}
 	}
-
 	if (header_end == 0)
 	{
 		return CK_HTTP_PARSE_INCOMPLETE;
 	}
 
-	result = parse_complete_header_block(parser, header_end, request);
+	result = parse_header_block(parser, header_end, request);
 	if (result != CK_HTTP_PARSE_COMPLETE)
 	{
 		return result;
 	}
-
 	parser->complete = 1;
-	*consumed = header_end;
+	*consumed = header_end - previous_length;
 	return CK_HTTP_PARSE_COMPLETE;
 }

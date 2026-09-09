@@ -82,7 +82,7 @@ int main(void)
 	{
 		assert(record.status == 0);
 		assert(record.request_id == 100 + (uint64_t)record.result
-				|| record.request_id == 200 + (uint64_t)(record.result == record.result ? record.result : 0));
+				|| record.request_id == 200 + (uint64_t)record.result);
 		count++;
 	}
 	assert(result == 0);

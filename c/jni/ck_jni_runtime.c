@@ -210,8 +210,13 @@ static void *ck_bootstrap_main(void *arg)
 
 	if (start_status == 0)
 	{
-		ck_runtime_sync_fatal("bootstrap.completion_queue_close",
-				ck_completion_queue_close(&runtime->completion_queue));
+		result = ck_completion_queue_close(&runtime->completion_queue);
+		if (result != 0 && result != 1)
+		{
+			runtime->shutdown_status = result;
+			start_status = result;
+		}
+
 		start_status = ck_call_stop(env);
 		runtime->shutdown_status = start_status == 0 ? 0 : -1;
 	}

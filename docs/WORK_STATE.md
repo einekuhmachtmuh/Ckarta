@@ -190,3 +190,11 @@ Java executor handoff 的 v2 smoke slice 使用 bounded Java completion queue，
 2026-09-09：完成 Apache HTTP Server、Nginx、Tomcat 的核心設定候選與 native module 架構交叉研究。研究結果持久化於 docs/CORE_CONFIGURATION_CANDIDATES.md 與 docs/MODULE_ARCHITECTURE_RESEARCH.md；目前不實作新的 core config options 或 module loader。候選分為 P0 程序／路徑／listener、P1 安全／資源／併行、P2 靜態／代理／觀測、P3 平台調校。
 
 Native module 暫定為 load-at-start、ABI/version/signature 驗證、dependency DAG、module-owned configuration、request route pre-resolution；不做 runtime unload。完整 module benchmark 尚未建立。
+
+
+## Branch status
+
+- Purpose: 核心 configuration 與 native module research
+- Lifecycle status: CLOSED / SUPERSEDED
+- Relation to main: PR #11 closed；研究已持久化至 main 權威文件。
+- This file is branch-specific state and must not be treated as main canonical state.

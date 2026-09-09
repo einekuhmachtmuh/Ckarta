@@ -163,7 +163,7 @@ epoll + eventfd + bounded completion queue
 Windows：
 IOCP + PostQueuedCompletionStatus + bounded completion queue
 
-尚未實作。
+Windows 端仍尚未實作；Linux 的 epoll + eventfd + bounded native completion queue 已完成第一個 executable integration。它尚未宣稱跨平台最終選型。
 
 正式 benchmark 必須比較：
 

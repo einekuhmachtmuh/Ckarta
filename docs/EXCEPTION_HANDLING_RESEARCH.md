@@ -250,6 +250,6 @@ https://doi.org/10.1109/MC.2004.219
 
 ## 17. 目前 `ck_error` 狀態
 
-已建立第一個 process-local `ck_error_t` 骨架及 layout test；它不是 Java exception hierarchy，也不是 externally loadable plugin ABI。它目前刻意沒有直接嵌入 `ck_request_t`，因為 request state 與 error payload 的 concurrent publication 若沒有 terminal publication primitive 會產生 data race。
+`ck_error_t` 已接入 `ck_request_t`。失敗路徑採 `RUNNING → FAILING → FAILED`：CAS 唯一決定 failure winner，winner 寫入 error record，最後以 release-store 發布 `FAILED`；讀者 acquire-load 看到 `FAILED` 後才可讀取 error。這避免先前的 error payload publication data race。
 
-正式接入 request/completion 前，必須先完成 `docs/ERROR_STATE_MATRIX.md` 定義的 exactly-once publication、late completion、cancellation race 與 owner teardown contract。
+它仍不是 Java exception hierarchy，也不是 externally loadable plugin ABI。正式 completion queue 與 cross-thread owner routing 仍需沿用同一 publication contract。

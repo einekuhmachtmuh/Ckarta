@@ -106,7 +106,7 @@ global cache mutation
 
 除非 profiling（效能分析）證明必要。
 
-registry mutex 可以保護 handle lookup、generation validation 與 reader pin counter，但不得把 `recv()`、HTTP framing 或 Servlet dispatch 等長時間／可變長度工作放在 registry critical section 內。
+registry mutex 可以保護 handle lookup、generation validation 與 reader pin counter，但不得把 `recv()`、HTTP framing 或 Servlet dispatch 等 I/O／可變長度工作放在 registry critical section 內。
 
 ## 8. Lock-free
 

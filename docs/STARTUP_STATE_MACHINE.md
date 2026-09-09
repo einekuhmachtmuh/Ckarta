@@ -2,6 +2,10 @@
 
 本文件把 C main()、JVM 啟動、Java Servlet container（Java Servlet 容器）、C network data plane（C 網路資料平面）與停止流程固定成顯式狀態。
 
+## 0. Target state vs current executable slice
+
+本文件固定的是目標啟動／停止狀態機；目前 executable smoke 只實作 C main → config → JVM bootstrap → Java runtime → JNI request/completion → shutdown，尚未實作 NATIVE_RUNTIME_READY、NETWORK_READY 或 RUNNING 的完整 network data plane。不能把 smoke path 缺少的狀態寫成已完成。
+
 ## 1. 正常啟動
 
 START

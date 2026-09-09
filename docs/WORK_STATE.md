@@ -148,3 +148,11 @@ PR #2 已於 2026-09-08 squash-merge 至 `main`，merge commit `2638bc5017093b5f
 ## 12. Web server theory 結論
 
 2026-09-08：Servlet 6.1、固定 Nginx/Tomcat 原始碼與事件／排隊理論比較後，Ckarta 整體方向維持，但正式架構語意更新為「C event-driven network data plane + bounded semantic handoff + Java Servlet semantic plane」。C event-loop thread 不得執行 Servlet application code；attached worker 只能作 JNI control／submission。完整研究見 `docs/WEB_SERVER_THEORY_SERVLET_NGINX.md`。
+
+
+## Branch status
+
+- Purpose: Web-server theory、Servlet/Nginx/Tomcat architecture analysis
+- Lifecycle status: CLOSED / SUPERSEDED
+- Relation to main: PR #3 closed;研究已保留於 main。
+- This file is branch-specific state and must not be treated as main canonical state.

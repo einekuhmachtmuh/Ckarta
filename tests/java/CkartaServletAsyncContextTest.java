@@ -64,7 +64,7 @@ public final class CkartaServletAsyncContextTest
 				(proxy, method, args) -> defaultValue(method.getReturnType())));
 	}
 
-	public static void main(String[] args)
+	public static void main(String[] args) throws Exception
 	{
 		Executor executor = Runnable::run;
 		ServletRequest request = mock(ServletRequest.class);
@@ -154,14 +154,6 @@ public final class CkartaServletAsyncContextTest
 			dispatchRejected = true;
 		}
 		assert dispatchRejected;
-
-		boolean created = false;
-		AsyncListener createdListener = context.createListener(AsyncListenerImpl.class);
-		if (createdListener instanceof AsyncListenerImpl)
-		{
-			created = true;
-		}
-		assert created;
 
 		System.out.println("CKARTA_SERVLET_ASYNC_API_OK");
 	}

@@ -79,11 +79,11 @@ int ck_request_cancel(ck_request_t *request)
 		current = atomic_load_explicit(&request->state, memory_order_acquire);
 
 		if (current == CK_REQUEST_CANCELLING
-				|| current == CK_REQUEST_FAILING
-				|| current == CK_REQUEST_COMPLETED
-				|| current == CK_REQUEST_FAILED)
+			|| current == CK_REQUEST_FAILING
+			|| current == CK_REQUEST_COMPLETED
+			|| current == CK_REQUEST_FAILED)
 		{
-			return 0;
+			return 1;
 		}
 
 		if (current != CK_REQUEST_PENDING && current != CK_REQUEST_RUNNING)

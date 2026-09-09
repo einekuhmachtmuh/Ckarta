@@ -28,8 +28,8 @@ typedef struct ck_connection
 	uint64_t request_id;
 	uint64_t owner_token;
 	uint64_t lifetime_token;
-	_Atomic uint32_t state;
-	_Atomic int32_t terminal_event;
+	/* Low 32 bits are state; high 32 bits are terminal event. */
+	_Atomic uint64_t lifecycle;
 } ck_connection_t;
 
 int ck_connection_init(ck_connection_t *connection,

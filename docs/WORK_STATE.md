@@ -160,3 +160,11 @@ PR #2 已於 2026-09-08 squash-merge 至 `main`，merge commit `2638bc5017093b5f
 2026-09-08：完成 CGI/1.1、Nginx FastCGI、PHP-FPM 與 Tomcat CGIServlet 交叉研究。暫定產品方向為：CGI 作為可選外部 application gateway；PHP 優先 FastCGI／PHP-FPM；純 C 可執行程式可經 CGI。尚未實作 process lifecycle、pipe backpressure、reaping、sandbox 或 gateway protocol。
 
 下一個仍待完成的上一階段閘門是 Java executor → 非阻塞 completion → C owner；本次 CGI 研究不取代該閘門。
+
+
+## Branch status
+
+- Purpose: CGI/FastCGI application gateway research與架構定位
+- Lifecycle status: CLOSED / SUPERSEDED
+- Relation to main: PR #5 closed;有效研究已保留於 main 權威文件。
+- This file is branch-specific state and must not be treated as main canonical state.

@@ -35,13 +35,13 @@ static int ck_call_start(JNIEnv *env)
 	jmethodID method;
 
 	runtime_class = (*env)->FindClass(env, "org/ckarta/bootstrap/CkartaRuntime");
-	if (runtime_class == NULL || ck_check_java_exception(env, "FindClass") != 0)
+	if (ck_check_java_exception(env, "FindClass") != 0 || runtime_class == NULL)
 	{
 		return -1;
 	}
 
 	method = (*env)->GetStaticMethodID(env, runtime_class, "start", "()V");
-	if (method == NULL || ck_check_java_exception(env, "GetStaticMethodID(start)") != 0)
+	if (ck_check_java_exception(env, "GetStaticMethodID(start)") != 0 || method == NULL)
 	{
 		(*env)->DeleteLocalRef(env, runtime_class);
 		return -1;
@@ -64,13 +64,13 @@ static int ck_call_stop(JNIEnv *env)
 	jmethodID method;
 
 	runtime_class = (*env)->FindClass(env, "org/ckarta/bootstrap/CkartaRuntime");
-	if (runtime_class == NULL || ck_check_java_exception(env, "FindClass(stop)") != 0)
+	if (ck_check_java_exception(env, "FindClass(stop)") != 0 || runtime_class == NULL)
 	{
 		return -1;
 	}
 
 	method = (*env)->GetStaticMethodID(env, runtime_class, "stop", "()V");
-	if (method == NULL || ck_check_java_exception(env, "GetStaticMethodID(stop)") != 0)
+	if (ck_check_java_exception(env, "GetStaticMethodID(stop)") != 0 || method == NULL)
 	{
 		(*env)->DeleteLocalRef(env, runtime_class);
 		return -1;
@@ -184,16 +184,16 @@ static int ck_call_dispatch_async(JNIEnv *env,
 	jobject buffer;
 
 	runtime_class = (*env)->FindClass(env, "org/ckarta/bootstrap/CkartaRuntime");
-	if (runtime_class == NULL ||
-			ck_check_java_exception(env, "FindClass(dispatchAsync)") != 0)
+	if (ck_check_java_exception(env, "FindClass(dispatchAsync)") != 0 ||
+			runtime_class == NULL)
 	{
 		return -1;
 	}
 
 	method = (*env)->GetStaticMethodID(env, runtime_class, "dispatchAsync",
 			"(JJJLjava/nio/ByteBuffer;)V");
-	if (method == NULL ||
-			ck_check_java_exception(env, "GetStaticMethodID(dispatchAsync)") != 0)
+	if (ck_check_java_exception(env, "GetStaticMethodID(dispatchAsync)") != 0 ||
+			method == NULL)
 	{
 		(*env)->DeleteLocalRef(env, runtime_class);
 		return -1;
@@ -201,8 +201,8 @@ static int ck_call_dispatch_async(JNIEnv *env,
 
 	buffer = (*env)->NewDirectByteBuffer(env, (void *)descriptor->body,
 			(jlong)descriptor->body_length);
-	if (buffer == NULL ||
-			ck_check_java_exception(env, "NewDirectByteBufferAsync") != 0)
+	if (ck_check_java_exception(env, "NewDirectByteBufferAsync") != 0 ||
+			buffer == NULL)
 	{
 		(*env)->DeleteLocalRef(env, runtime_class);
 		return -1;
@@ -349,8 +349,8 @@ int ck_runtime_poll_completion(ck_runtime_t *runtime, ck_request_t *requests,
 	}
 
 	runtime_class = (*env)->FindClass(env, "org/ckarta/bootstrap/CkartaRuntime");
-	if (runtime_class == NULL ||
-			ck_check_java_exception(env, "FindClass(pollCompletion)") != 0)
+	if (ck_check_java_exception(env, "FindClass(pollCompletion)") != 0 ||
+			runtime_class == NULL)
 	{
 		(void)(*runtime->vm)->DetachCurrentThread(runtime->vm);
 		return -1;
@@ -358,8 +358,8 @@ int ck_runtime_poll_completion(ck_runtime_t *runtime, ck_request_t *requests,
 
 	method = (*env)->GetStaticMethodID(env, runtime_class, "pollCompletion",
 			"(Ljava/nio/ByteBuffer;)I");
-	if (method == NULL ||
-			ck_check_java_exception(env, "GetStaticMethodID(pollCompletion)") != 0)
+	if (ck_check_java_exception(env, "GetStaticMethodID(pollCompletion)") != 0 ||
+			method == NULL)
 	{
 		(*env)->DeleteLocalRef(env, runtime_class);
 		(void)(*runtime->vm)->DetachCurrentThread(runtime->vm);
@@ -369,8 +369,8 @@ int ck_runtime_poll_completion(ck_runtime_t *runtime, ck_request_t *requests,
 	memset(storage, 0, sizeof(storage));
 	native_output = storage;
 	output = (*env)->NewDirectByteBuffer(env, native_output, sizeof(storage));
-	if (output == NULL ||
-			ck_check_java_exception(env, "NewDirectByteBuffer(pollCompletion)") != 0)
+	if (ck_check_java_exception(env, "NewDirectByteBuffer(pollCompletion)") != 0 ||
+			output == NULL)
 	{
 		(*env)->DeleteLocalRef(env, runtime_class);
 		(void)(*runtime->vm)->DetachCurrentThread(runtime->vm);

@@ -1,10 +1,8 @@
 package org.ckarta.bootstrap;
 
 import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.RejectedExecutionException;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 
@@ -17,22 +15,26 @@ public final class CkartaRuntime
 {
 	private static final Object EXECUTOR_LOCK = new Object();
 	private static final int EXECUTOR_QUEUE_CAPACITY = 16;
-	private static final int COMPLETION_QUEUE_CAPACITY = 16;
 
 	private static ThreadPoolExecutor executor;
-	private static ArrayBlockingQueue<CompletionRecord> completions;
-	private static AtomicBoolean completionOverflow;
+	private static long nativeQueueHandle;
 
 	private CkartaRuntime()
 	{
 	}
 
-	public static void start()
+	public static void start(long queueHandle)
 	{
+		if (queueHandle <= 0)
+		{
+			throw new IllegalArgumentException("invalid native completion queue");
+		}
+
 		synchronized (EXECUTOR_LOCK)
 		{
 			if (executor == null)
 			{
+				nativeQueueHandle = queueHandle;
 				executor = new ThreadPoolExecutor(
 						1,
 						1,
@@ -40,8 +42,6 @@ public final class CkartaRuntime
 						TimeUnit.MILLISECONDS,
 						new ArrayBlockingQueue<>(EXECUTOR_QUEUE_CAPACITY),
 						new ThreadPoolExecutor.AbortPolicy());
-				completions = new ArrayBlockingQueue<>(COMPLETION_QUEUE_CAPACITY);
-				completionOverflow = new AtomicBoolean(false);
 			}
 		}
 		System.out.println("CKARTA_JAVA_READY");
@@ -54,8 +54,6 @@ public final class CkartaRuntime
 		{
 			currentExecutor = executor;
 			executor = null;
-			completions = null;
-			completionOverflow = null;
 		}
 
 		if (currentExecutor != null)
@@ -74,6 +72,11 @@ public final class CkartaRuntime
 				Thread.currentThread().interrupt();
 			}
 		}
+
+		synchronized (EXECUTOR_LOCK)
+		{
+			nativeQueueHandle = 0;
+		}
 		System.out.println("CKARTA_JAVA_STOP");
 	}
 
@@ -81,16 +84,14 @@ public final class CkartaRuntime
 		long lifetimeToken, ByteBuffer data)
 	{
 		ThreadPoolExecutor currentExecutor;
-		ArrayBlockingQueue<CompletionRecord> currentCompletions;
-		AtomicBoolean currentOverflow;
+		long queueHandle;
 		synchronized (EXECUTOR_LOCK)
 		{
 			currentExecutor = executor;
-			currentCompletions = completions;
-			currentOverflow = completionOverflow;
+			queueHandle = nativeQueueHandle;
 		}
 
-		if (currentExecutor == null || currentCompletions == null)
+		if (currentExecutor == null || queueHandle <= 0)
 		{
 			throw new IllegalStateException("Ckarta runtime is not running");
 		}
@@ -117,73 +118,28 @@ public final class CkartaRuntime
 					status = -1;
 				}
 
-				if (!currentCompletions.offer(
-						new CompletionRecord(requestHandle, ownerToken, lifetimeToken, result, status)))
+				int publishStatus = publishCompletion(queueHandle,
+						requestHandle, ownerToken, lifetimeToken, result, status);
+				if (publishStatus != 0 && publishStatus != 2)
 				{
-					if (currentOverflow != null)
-					{
-						currentOverflow.set(true);
-					}
+					throw new IllegalStateException(
+							"native completion publication failed: " + publishStatus);
 				}
 			});
 		}
 		catch (RejectedExecutionException exception)
 		{
-			if (!currentCompletions.offer(
-					new CompletionRecord(requestHandle, ownerToken, lifetimeToken, 0L, -2))
-				&& currentOverflow != null)
+			int publishStatus = publishCompletion(queueHandle,
+					requestHandle, ownerToken, lifetimeToken, 0L, -2);
+			if (publishStatus != 0 && publishStatus != 2)
 			{
-				currentOverflow.set(true);
+				throw new IllegalStateException(
+						"native rejection publication failed: " + publishStatus);
 			}
 		}
 	}
 
-	public static int pollCompletion(ByteBuffer output)
-	{
-		if (output == null || !output.isDirect() || output.capacity() < 36)
-		{
-			throw new IllegalArgumentException("completion output buffer");
-		}
-
-		ArrayBlockingQueue<CompletionRecord> currentCompletions;
-		synchronized (EXECUTOR_LOCK)
-		{
-			currentCompletions = completions;
-		}
-
-		AtomicBoolean currentOverflow;
-		synchronized (EXECUTOR_LOCK)
-		{
-			currentOverflow = completionOverflow;
-		}
-
-		if (currentCompletions == null || currentOverflow == null)
-		{
-			return -1;
-		}
-
-		if (currentOverflow.get())
-		{
-			return -2;
-		}
-
-		CompletionRecord completion = currentCompletions.poll();
-		if (completion == null)
-		{
-			return 0;
-		}
-
-		output.order(ByteOrder.nativeOrder());
-		output.putLong(0, completion.requestHandle());
-		output.putLong(8, completion.ownerToken());
-		output.putLong(16, completion.lifetimeToken());
-		output.putLong(24, completion.result());
-		output.putInt(32, completion.status());
-		return 1;
-	}
-
-	private record CompletionRecord(long requestHandle, long ownerToken,
-		long lifetimeToken, long result, int status)
-	{
-	}
+	private static native int publishCompletion(long queueHandle,
+		long requestHandle, long ownerToken, long lifetimeToken,
+		long result, int status);
 }

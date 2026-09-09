@@ -248,6 +248,8 @@ https://doi.org/10.1109/MC.2004.219
 10. timeout、disconnect、AsyncContext、upstream failure、shutdown race tests。
 11. fuzz/negative tests 及 sanitizer coverage。
 
-## 17. 尚未實作
+## 17. 目前 `ck_error` 狀態
 
-目前 Ckarta 尚沒有正式 `ck_error` ABI、完整 Java exception translation API、正式 error registry 或完成上述全部 error-path tests。本文件是架構與研究基線，不表示這些功能已完成。
+已建立第一個 process-local `ck_error_t` 骨架及 layout test；它不是 Java exception hierarchy，也不是 externally loadable plugin ABI。它目前刻意沒有直接嵌入 `ck_request_t`，因為 request state 與 error payload 的 concurrent publication 若沒有 terminal publication primitive 會產生 data race。
+
+正式接入 request/completion 前，必須先完成 `docs/ERROR_STATE_MATRIX.md` 定義的 exactly-once publication、late completion、cancellation race 與 owner teardown contract。

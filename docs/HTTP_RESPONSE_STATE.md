@@ -45,7 +45,7 @@ FAILED
 
 Servlet 6.1 的 `ServletResponse` 規定：response committed 表示 status code 與 headers 已經寫出；`flushBuffer()` 會 commit；`getOutputStream()`／`getWriter()` 的 flush 也會 commit。
 
-因此 Ckarta native transaction 把第一次 body write 視為 implicit commit，是為了保留「body output 不能在 header mutation 之後繼續任意回溯」的核心 invariant。但目前 native `commit()` 尚未真的序列化 HTTP status line／headers；這仍是下一個 output serialization slice，而不是 Servlet 6.1 完整 commit 實作。
+因此 Ckarta native transaction 把第一次 body write 視為 implicit commit，是為了保留「body output 不能在 header mutation 之後繼續任意回溯」的核心 invariant。native response header serialization 已有獨立 executable slice：`FINISHED` response 可序列化為受限的 HTTP/1.1 final-response header bytes；這仍不是 Servlet 6.1 完整 commit 實作。
 
 來源：
 https://jakarta.ee/specifications/servlet/6.1/apidocs/jakarta.servlet/jakarta/servlet/servletresponse
@@ -108,10 +108,8 @@ native socket writer 採與 reader 對稱的 bounded work policy：一次 writab
 
 尚未完成：
 
-- HTTP response status/header serialization
 - response header validation and injection protection
 - chunked response encoder
-- HEAD／204／304／CONNECT response-specific body rules
 - response output filter pipeline
 - TLS output integration
 - Servlet Writer／ServletOutputStream facade
@@ -121,3 +119,18 @@ native socket writer 採與 reader 對稱的 bounded work policy：一次 writab
 - graceful shutdown output drain
 
 因此本文件的「已完成」只代表 native response transaction + bounded socket writer slices，不代表完整 HTTP response implementation 或 Servlet 6.1 response compatibility。
+
+
+## 10. Current output integration boundary
+
+目前 native response path 已可形成：
+
+response transaction
+→ final-response header serialization
+→ bounded output writer
+→ partial send()
+→ writable continuation
+
+response header serializer 目前只接受 final-response status 200..599，輸出受控的 Content-Length 與 optional Connection: close；尚未覆蓋完整 header collection、header-value validation、interim 1xx response、body-forbidden response semantics 與 transfer-coding response。
+
+因此 FINISHED 仍只表示 native response transaction 已完成 framing invariant，不表示 bytes 已經送完或 connection 可以立即 recycle。

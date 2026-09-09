@@ -6,6 +6,7 @@
 
 #include "../http/ck_http_connection_reader.h"
 #include "../output/ck_http_output_writer.h"
+#include "../output/ck_http_response.h"
 
 typedef enum ck_connection_state
 {
@@ -41,6 +42,7 @@ typedef struct ck_connection
 	int socket_fd;
 	ck_http_connection_reader_t *http_reader;
 	ck_http_output_writer_t *http_writer;
+	ck_http_response_t *http_response;
 	/* Low 8 bits are state; next 8 bits are terminal event; upper 48 bits are cycle id. */
 	_Atomic uint64_t lifecycle;
 } ck_connection_t;
@@ -54,6 +56,8 @@ int ck_connection_attach_socket(ck_connection_t *connection, int socket_fd);
 int ck_connection_socket_fd(const ck_connection_t *connection);
 ck_http_connection_reader_t *ck_connection_http_reader(ck_connection_t *connection);
 ck_http_output_writer_t *ck_connection_http_writer(ck_connection_t *connection);
+ck_http_response_t *ck_connection_http_response(ck_connection_t *connection);
+int ck_connection_http_recycle(ck_connection_t *connection);
 int ck_connection_start_async(ck_connection_t *connection);
 int ck_connection_start_async_cycle(ck_connection_t *connection,
 		uint64_t cycle_id);

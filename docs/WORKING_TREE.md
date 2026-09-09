@@ -57,9 +57,9 @@ c/
 ├── logging/
 └── jni/
 
-模組名稱目前是架構規劃，不代表檔案已實作。
+除 `error/` 外，多數目錄目前仍屬架構規劃，不代表該目錄內功能已實作。
 
-error/ 提供 process-local error/outcome record；不直接承擔 Java Throwable ownership。
+error/ 已提供 process-local error/outcome record；不直接承擔 Java Throwable ownership。
 
 jni/ 是唯一允許直接定義 C/Java ABI（應用程式二進位介面）邊界的 C 模組之一。
 

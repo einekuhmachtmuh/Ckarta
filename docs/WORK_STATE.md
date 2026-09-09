@@ -188,3 +188,24 @@ Native module 暫定為 load-at-start、ABI/version/signature 驗證、dependenc
 ## 22. 多請求 completion smoke
 
 2026-09-09：多請求 completion routing 已完成第一個可執行 smoke slice。兩個 C request 可在同一 Java executor completion queue 完成，completion 帶 request_id、owner_token、lifetime_token、result、status，C 不依賴完成順序進行 routing。此 slice 仍由 smoke worker 建立後 join，未代表正式 event-loop 非阻塞 producer，也未使用高效率事件通知原語。
+
+## 23. 2026-09-09 repository audit
+
+本輪依 `WORKING_RULES.md` 完成全 repository 結構、原始碼、研究文件、測試、CI、設定與固定 upstream gitlink 交叉檢查。已修正：
+
+- JNI DirectByteBuffer descriptor 的 `body`／`body_length` 前置條件，避免把 NULL address 或超過 Java `Integer.MAX_VALUE` 的 capacity 交給 `NewDirectByteBuffer`。
+- JVM bootstrap error path 的 mutex／condition lifecycle，並避免持鎖執行 Java container start call。
+- `ENTRYPOINT_DESIGN.md` 對 JNI bridge topology 的過時固定描述，重新與 A/B/C benchmark 候選及 `THREAD_MODEL.md` 對齊。
+- `THREAD_BENCHMARK_PLAN.md` 與 `bench/jni/README.md` 對目前低階 JNI harness 的能力邊界，移除缺少完整 reproducibility metadata 的性能數字作為證據。
+- `WORKING_RULES.md` 文件索引漏列的 gateway／CGI 研究文件，以及 `ARCHITECTURE.md`、`THREAD_BENCHMARK_PLAN.md`、本文件的章節編號／狀態描述失配。
+
+目前仍刻意不定案：
+
+- formal A/B/C thread topology；
+- production multi-worker completion notification primitive；
+- AsyncContext ↔ C connection cancellation integration；
+- production poll／event notification path；
+- CGI/FastCGI implementation；
+- Servlet 6.1 TCK、ASan/UBSan CI 與正式 performance baseline。
+
+這些仍依既有工程閘門處理，未因本輪 audit 而新增另一套規則。

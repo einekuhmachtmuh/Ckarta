@@ -29,12 +29,6 @@ static int connect_loopback(int port)
 	return socket_fd;
 }
 
-static void assert_peer_eof(int socket_fd)
-{
-	char buffer[1];
-	assert(recv(socket_fd, buffer, sizeof(buffer), 0) == 0);
-}
-
 int main(void)
 {
 	ck_tcp_listener_t listener = {0};
@@ -42,18 +36,19 @@ int main(void)
 	ck_connection_registry_t registry = {0};
 	ck_event_notification_t notifications[4] = {0};
 	ck_connection_handle_t handle;
+	ck_connection_handle_t reused_handle;
 	const char payload[] = "GET / HTTP/1.1\r\nHost: localhost\r\n\r\n";
 	char request[sizeof(payload)];
 	int client_fd;
 	int accepted_fd;
 	int count;
-	int state;
 
 	assert(ck_tcp_listener_init(&listener, 0) == 0);
 	assert(ck_event_loop_init(&loop) == 0);
 	assert(ck_connection_registry_init(&registry) == 0);
 
 	client_fd = connect_loopback(ck_tcp_listener_port(&listener));
+	assert(client_fd >= 0);
 	assert(ck_event_loop_add(&loop, ck_tcp_listener_fd(&listener),
 		UINT64_C(1), CK_EVENT_READ | CK_EVENT_ERROR) == 0);
 
@@ -92,17 +87,36 @@ int main(void)
 	assert((notifications[0].events & (CK_EVENT_RDHUP | CK_EVENT_ERROR)) != 0);
 
 	assert(ck_event_loop_remove(&loop, accepted_fd) == 0);
-	state = ck_connection_registry_try_terminal(&registry, handle,
-		UINT64_C(2001), UINT64_C(3001), UINT64_C(4001), UINT64_C(0),
-		CK_CONNECTION_TERMINAL_CLIENT_DISCONNECT);
-	assert(state < 0);
-
+	assert(ck_connection_registry_start_async_cycle(&registry, handle,
+		UINT64_C(2001), UINT64_C(3001), UINT64_C(4001), UINT64_C(1)) == 0);
+	assert(ck_connection_registry_try_terminal(&registry, handle,
+		UINT64_C(2001), UINT64_C(3001), UINT64_C(4001), UINT64_C(1),
+		CK_CONNECTION_TERMINAL_CLIENT_DISCONNECT)
+			== CK_CONNECTION_TERMINAL_CLAIMED);
 	assert(ck_connection_registry_close(&registry, handle,
 		UINT64_C(2001), UINT64_C(3001), UINT64_C(4001)) == 0);
 	assert(ck_connection_registry_socket_fd(&registry, handle,
 		UINT64_C(2001), UINT64_C(3001), UINT64_C(4001)) == -1);
 	assert(ck_connection_registry_retire(&registry, handle,
 		UINT64_C(2001), UINT64_C(3001), UINT64_C(4001)) == 0);
+
+	assert(ck_connection_registry_socket_fd(&registry, handle,
+		UINT64_C(2001), UINT64_C(3001), UINT64_C(4001)) == -2);
+	assert(ck_connection_registry_register(&registry,
+		UINT64_C(1002), UINT64_C(2002), UINT64_C(3002), UINT64_C(4002),
+		&reused_handle) == 0);
+	assert(reused_handle != handle);
+	assert(ck_connection_registry_socket_fd(&registry, handle,
+		UINT64_C(2001), UINT64_C(3001), UINT64_C(4001)) == -2);
+	assert(ck_connection_registry_start_async_cycle(&registry, reused_handle,
+		UINT64_C(2002), UINT64_C(3002), UINT64_C(4002), UINT64_C(1)) == 0);
+	assert(ck_connection_registry_try_terminal(&registry, reused_handle,
+		UINT64_C(2002), UINT64_C(3002), UINT64_C(4002), UINT64_C(1),
+		CK_CONNECTION_TERMINAL_SHUTDOWN) == CK_CONNECTION_TERMINAL_CLAIMED);
+	assert(ck_connection_registry_close(&registry, reused_handle,
+		UINT64_C(2002), UINT64_C(3002), UINT64_C(4002)) == 0);
+	assert(ck_connection_registry_retire(&registry, reused_handle,
+		UINT64_C(2002), UINT64_C(3002), UINT64_C(4002)) == 0);
 
 	assert(ck_event_loop_remove(&loop, ck_tcp_listener_fd(&listener)) == 0);
 	assert(ck_tcp_listener_destroy(&listener) == 0);

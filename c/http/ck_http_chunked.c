@@ -82,9 +82,9 @@ static int parse_chunk_size(ck_http_chunked_decoder_t *decoder,
 	{
 		for (pos++; pos < decoder->line_length; pos++)
 		{
-			if ((unsigned char)decoder->line[pos] == 0x7f
-					|| ((unsigned char)decoder->line[pos] < 0x20
-							&& decoder->line[pos] != '\t')
+			unsigned char value_byte = (unsigned char)decoder->line[pos];
+			if (value_byte == 0x7f
+					|| (value_byte < 0x20 && value_byte != '\t'))
 			{
 				return 0;
 			}
@@ -117,7 +117,7 @@ static int valid_trailer_field(const char *line, size_t length)
 	for (size_t i = colon + 1; i < length; i++)
 	{
 		unsigned char value = (unsigned char)line[i];
-		if (value == 0x7f || (value < 0x20 && value != ' '\
+		if (value == 0x7f || (value < 0x20 && value != ' '
 				&& value != '\t'))
 		{
 			return 0;
@@ -218,7 +218,7 @@ ck_http_chunked_result_t ck_http_chunked_feed(
 			}
 			if (decoder->total_decoded > CK_HTTP_CHUNKED_MAX_BODY
 					|| (uint64_t)take > CK_HTTP_CHUNKED_MAX_BODY
-					- decoder->total_decoded)
+				- decoder->total_decoded)
 			{
 				return CK_HTTP_CHUNKED_TOO_LARGE;
 			}

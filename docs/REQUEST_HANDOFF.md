@@ -86,3 +86,18 @@ The next step is not a second generic wrapper. It is to create the minimal appli
 6. request recycle after Java completion.
 
 No Servlet 6.1 compatibility claim is made by this document.
+
+## Body lifetime prerequisite
+
+A request body that is still backed by the connection reader buffer MUST NOT be handed to Java as an asynchronous DirectByteBuffer. The reader buffer may be compacted or reused for pipelined data after request processing advances.
+
+Ckarta therefore now has an independent bounded single-producer/single-consumer request-body FIFO in:
+
+- `c/http/ck_http_request_body.h`
+- `c/http/ck_http_request_body.c`
+
+The FIFO provides a fixed 64 KiB byte capacity and non-blocking read/write operations. The native HTTP reader is deliberately not yet wired to return FIFO backpressure, because `ck_http_input_feed()` currently advances parser/message state before invoking the body sink. Retrying the same input after a late sink `WOULD_BLOCK` would replay bytes against already-advanced parser state.
+
+Until that transaction boundary is redesigned, the FIFO is only a lifetime-safe building block and is not claimed as the ServletInputStream implementation.
+
+The next body gate must make the parser/input layer transactional around body delivery, or otherwise establish an explicit consumed-byte handoff before a bounded Java-visible stream can be connected. Only then can `ServletInputStream.isReady()`, `ReadListener.onDataAvailable()` and backpressure be implemented without risking duplicate body delivery.

@@ -6,6 +6,19 @@
 
 typedef struct { ck_request_t *request; int result; } race_args_t;
 
+static void *fail_thread(void *arg)
+{
+	race_args_t *args = arg;
+	ck_error_t error;
+	ck_error_init(&error);
+	assert(ck_error_set(&error, CK_ERROR_CATEGORY_APPLICATION,
+			CK_ERROR_CODE_APPLICATION_EXCEPTION, 500,
+			CK_ERROR_FLAG_CLIENT_VISIBLE, 4,
+			args->request->descriptor.request_id) == 0);
+	args->result = ck_request_fail(args->request, &error);
+	return NULL;
+}
+
 static void *cancel_thread(void *arg)
 {
 	race_args_t *args = arg;
@@ -72,6 +85,25 @@ int main(void)
 	assert(ck_request_finish(&request) == 0);
 	assert(ck_request_cancel(&request) == 1);
 	assert(ck_request_state(&request) == CK_REQUEST_COMPLETED);
+
+	assert(init_request(&request, &descriptor, body, 303) == 0);
+	assert(ck_request_begin(&request) == 0);
+	cancel.request = &request;
+	finish.request = &request;
+	assert(pthread_create(&cancel_tid, NULL, fail_thread, &finish) == 0);
+	assert(pthread_create(&finish_tid, NULL, finish_thread, &cancel) == 0);
+	assert(pthread_join(cancel_tid, NULL) == 0);
+	assert(pthread_join(finish_tid, NULL) == 0);
+	winners = (cancel.result == 0) + (finish.result == 0);
+	assert(winners == 1);
+	assert(ck_request_state(&request) == CK_REQUEST_FAILED
+			|| ck_request_state(&request) == CK_REQUEST_COMPLETED);
+	if (ck_request_state(&request) == CK_REQUEST_FAILED)
+	{
+		assert(ck_request_error(&request) != NULL);
+		assert(ck_request_error(&request)->code == CK_ERROR_CODE_APPLICATION_EXCEPTION);
+		assert(ck_request_finish(&request) == 1);
+	}
 
 	return 0;
 }

@@ -141,11 +141,11 @@ https://docs.oracle.com/en/java/javase/21/docs/specs/jni/functions.html
 
 因此本 harness 只能回答低階的 JNI invocation／queue handoff／thread attachment 問題；它不能直接回答 A/B/C 哪種正式 Ckarta topology 最佳。正式 benchmark 必須在相同 canonical request workload 上加入 Java executor、request lifetime、completion routing、cancellation 與必要的 Servlet semantics。
 
-## 10. 現況
+## 11. 現況
 
 本文件只定義實驗；正式 thread topology 在可重現 benchmark 完成前維持暫定。
 
-## 11. 理論修正
+## 12. 理論修正
 
 Little 定律 `L = λW` 與 SEDA 所強調的 explicit stage／queue／resource control 顯示，新增 JNI handoff 不只增加單次 call cost，也可能新增排隊節點。故正式 benchmark 必須將 queue wait 與 Java executor scheduling 分開量測。
 

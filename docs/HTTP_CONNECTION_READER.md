@@ -132,3 +132,16 @@ SEDA：Matt Welsh、David Culler、Eric Brewer, “SEDA: an architecture for wel
 Herlihy/Wing：Maurice P. Herlihy、Jeannette M. Wing, “Linearizability: A Correctness Condition for Concurrent Objects”, ACM Transactions on Programming Languages and Systems 12(3), 463–492, 1990. DOI: https://doi.org/10.1145/78969.78972
 
 此處用作 concurrent ownership／terminal arbitration 與 lifetime guard 的 correctness reasoning baseline；reader 本身沒有因此被標示為 thread-safe shared object。
+
+
+## 10. Request body queue
+
+The reader may attach a connection-owned ck_http_request_body_t bounded SPSC queue. When no explicit body sink is supplied, the reader writes body spans into this queue.
+
+The queue has 64 KiB capacity while the reader has a 32 KiB per-dispatch processing budget. A body span therefore fits within one processing batch. If the queue is full, the sink returns CK_HTTP_BODY_SINK_WOULD_BLOCK; the reader returns CK_HTTP_CONNECTION_READ_BODY_BACKPRESSURE without acknowledging the pending body. The parser state and reader buffer offset are consequently unchanged for that pending body.
+
+When the consumer drains queue space, the same pending span can be delivered and acknowledged without feeding those bytes through the HTTP parser a second time.
+
+At request completion the reader marks the queue EOF. ck_http_request_body_is_finished() becomes true only after EOF has been published and the consumer has drained all queued bytes. Connection HTTP recycle requires this finished condition, preventing a connection from being reused while a previous request body is still unread by its native consumer.
+
+The queue is currently a native bounded consumer primitive. It is not yet a ServletInputStream implementation and is not directly exposed across JNI.

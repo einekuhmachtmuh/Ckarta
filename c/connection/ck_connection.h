@@ -38,7 +38,7 @@ typedef struct ck_connection
 	uint64_t owner_token;
 	uint64_t lifetime_token;
 	int socket_fd;
-	ck_http_connection_reader_t http_reader;
+	ck_http_connection_reader_t *http_reader;
 	/* Low 8 bits are state; next 8 bits are terminal event; upper 48 bits are cycle id. */
 	_Atomic uint64_t lifecycle;
 } ck_connection_t;

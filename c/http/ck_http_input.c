@@ -138,15 +138,6 @@ ck_http_input_result_t ck_http_input_feed(
 					chunk_result == CK_HTTP_CHUNKED_COMPLETE;
 			return CK_HTTP_INPUT_BODY;
 		}
-		if (*body_length != 0)
-		{
-			input->pending_body_data = *body_data;
-			input->pending_body_length = *body_length;
-			input->pending_input_consumed = chunk_consumed;
-			input->pending_message_complete =
-					chunk_result == CK_HTTP_CHUNKED_COMPLETE;
-			return CK_HTTP_INPUT_BODY;
-		}
 		*consumed += chunk_consumed;
 		if (chunk_result == CK_HTTP_CHUNKED_COMPLETE)
 		{

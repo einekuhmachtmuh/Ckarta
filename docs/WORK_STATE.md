@@ -360,7 +360,7 @@ Makefile 已固定 Jakarta Servlet 6.1 API dependency，並將 Java async semant
 
 本階段研究與實作重新交叉核對固定 Tomcat 11.0.25 `AsyncContextImpl`：application-facing method 先檢查 state，container-internal terminal path 與 recycle/error protection 分開；Ckarta 只採語意，不複製 Tomcat private class graph。Nginx 1.30.4 event guide 仍作為 native event/posted-event 與非阻塞執行模型的 reference。
 
-目前仍未完成：`ServletRequest.startAsync()` 真正建立 async context、`AsyncContext.dispatch()`、完整 `AsyncListener.onStartAsync` cycle、ServletContext/classloader binding、request/response facade、native connection correlation bridge 與 Servlet 6.1 TCK。故不得標示相容。
+目前仍未完成：真正 container request lifecycle 中的 `ServletRequest.startAsync()` integration、`AsyncContext.dispatch()`、完整 `AsyncListener.onStartAsync` cycle、ServletContext/classloader binding、request/response facade、native connection correlation bridge 與 Servlet 6.1 TCK。`CkartaServletRequestAdapter` 已完成獨立 API binding prototype，但不得因此標示相容。
 
 前一個 implementation/test commit `44a785f4196fa6e3a413946f4bcdf74a7f7f3aec` 的完整 `make test` 已通過；其後 API/documentation 與 build wiring 已由最新 HEAD CI 重新驗證。
 

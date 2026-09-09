@@ -110,10 +110,9 @@ Java application-facing API 已開始使用固定 `jakarta.servlet:jakarta.servl
 
 CGI/FastCGI 定位：未來可掛接 application gateway module，不屬核心 request execution；PHP 優先透過 FastCGI/PHP-FPM。完整效能與架構分析見 `docs/CGI_FASTCGI_RESEARCH.md`。
 
-
 啟動配置：正式程序先由 C main 讀取 conf/ckarta.conf，再建立已驗證的 native configuration snapshot；JVM 與後續 runtime 不應讀取未驗證的外部設定值。
 
-## Native async ownership bridge status
+## Native connection / async ownership status
 
 目前已完成可執行的 native connection registry／opaque handle／JNI async terminal arbitration slice：
 
@@ -124,4 +123,6 @@ CGI/FastCGI 定位：未來可掛接 application gateway module，不屬核心 r
 → terminal arbitration
 → Java AsyncContext semantic state`
 
-此功能已有 native registry unit test 與 C 驅動 JVM 的 JNI integration test。它仍不是完整 Servlet 6.1 runtime；HTTP socket data plane、真正 container request lifecycle、response ownership、async dispatch、real timeout source、client-disconnect event source、shutdown drain、TCK 與 sanitizer/fuzz 均未完成。
+`ck_connection_t` 現已直接擁有 Linux/POSIX socket descriptor；C-driven JVM integration test 以 `socketpair()` 驗證 Java 不接觸 descriptor，terminal winner 之後由 native owner close socket，peer 收到 EOF，registry 再允許 retire。
+
+此功能仍不是完整 Servlet 6.1 runtime；HTTP socket event backend、真正 container request lifecycle、response ownership、async dispatch、real timeout/client-disconnect source、shutdown drain、TCK、sanitizer/fuzz 與 cross-platform IO backend 尚未完成。

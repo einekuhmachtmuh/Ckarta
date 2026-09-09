@@ -48,6 +48,7 @@ Nginx 與 Apache Tomcat 不直接複製進 Ckarta repository，而是以 Git sub
 - docs/HTTP_FRAMING_POLICY.md：HTTP/1.1 framing（訊息框架）權威解析政策。
 - docs/CONCURRENCY_MODEL.md：C 事件並行與 Java Servlet 執行模型。
 - docs/EXCEPTION_HANDLING_RESEARCH.md：C/Java/JNI 例外、錯誤傳播、恢復、資訊洩漏與 exactly-once terminal outcome 的唯一權威研究。
+- docs/ERROR_STATE_MATRIX.md：error category × request lifecycle × owner × HTTP outcome 的形式化矩陣與 `ck_error_t` 邊界。
 - docs/THREAD_MODEL.md：C worker、JVM bootstrap、JNI bridge 與 direct-attach 候選的 thread model（執行緒模型）研究基線。
 - docs/THREAD_BENCHMARK_PLAN.md：direct attach／JNI bridge／bridge pool 的可重現比較計畫。
 - docs/GATEWAY_SERVLET_NATIVE_BRIDGE_RESEARCH.md：CGI／FastCGI／Tomcat Servlet／CGIServlet／OpenJDK HotSpot／Ckarta JNI 邊界研究。

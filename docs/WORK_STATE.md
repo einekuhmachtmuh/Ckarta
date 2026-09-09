@@ -200,7 +200,7 @@ Native module 暫定為 load-at-start、ABI/version/signature 驗證、dependenc
 
 依 exception taxonomy 與現有 `ck_request` / completion / cancellation 狀態重新逐狀態分析後，確定需要一個小型 process-local `ck_error_t`，因為單一 `CK_REQUEST_FAILED` 及現有 completion `status` 無法保留 failure source。`docs/ERROR_STATE_MATRIX.md` 已固定 lifecycle／owner／HTTP outcome matrix；已加入獨立 `c/error/ck_error.[ch]` 與 layout/validation test。
 
-`ck_error_t` 暫不直接嵌入 `ck_request_t`，以避免在 failure/cancellation race 下形成 error payload data race；正式 publication primitive 完成後再接 request/completion。這是刻意的 ownership/lifecycle 安全邊界，不是遺漏。
+`ck_error_t` 已直接內含於 `ck_request_t`，並由 `RUNNING → FAILING → FAILED` publication gate 保護：唯一 failure winner 先寫 error record，再以 release-store 發布 FAILED；`ck_request_error()` 只有在 acquire-load 確認 FAILED 後才回傳該 record。
 
 ## 25. 2026-09-09 error record implementation gate
 

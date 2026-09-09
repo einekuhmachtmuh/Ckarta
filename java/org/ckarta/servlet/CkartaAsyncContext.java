@@ -1,6 +1,7 @@
 package org.ckarta.servlet;
 
 import java.util.Objects;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
@@ -9,9 +10,9 @@ import java.util.concurrent.atomic.AtomicReference;
  * Internal Servlet async lifecycle core.
  *
  * <p>This class deliberately does not implement jakarta.servlet.AsyncContext yet.
- * It contains only the container-side lifecycle semantics that do not require
- * the Jakarta Servlet API artifact. A future Jakarta-facing adapter must map
- * the official API to this core without exposing native connection state.</p>
+ * It contains only container-side lifecycle semantics that do not require the
+ * Jakarta Servlet API artifact. A future Jakarta-facing adapter must map the
+ * official API to this core without exposing native connection state.</p>
  */
 public final class CkartaAsyncContext
 {
@@ -51,8 +52,8 @@ public final class CkartaAsyncContext
 	private final AtomicReference<State> state =
 			new AtomicReference<>(State.ACTIVE);
 	private final AtomicBoolean listenerFired = new AtomicBoolean(false);
-	private final java.util.concurrent.CopyOnWriteArrayList<Listener> listeners =
-			new java.util.concurrent.CopyOnWriteArrayList<>();
+	private final CopyOnWriteArrayList<Listener> listeners =
+			new CopyOnWriteArrayList<>();
 
 	public CkartaAsyncContext(Executor executor, TerminalSink terminalSink)
 	{
@@ -69,10 +70,12 @@ public final class CkartaAsyncContext
 	{
 		Objects.requireNonNull(listener, "listener");
 		checkUsable();
+
 		if (state.get() != State.ACTIVE)
 		{
 			throw new IllegalStateException("async context is no longer active");
 		}
+
 		listeners.add(listener);
 	}
 
@@ -91,40 +94,48 @@ public final class CkartaAsyncContext
 				}
 				catch (Throwable error)
 				{
-					terminate(TerminalEvent.ERROR, error);
+					tryTerminate(TerminalEvent.ERROR, error, false);
 				}
 			});
 		}
 		catch (RuntimeException error)
 		{
-			terminate(TerminalEvent.ERROR, error);
-			throw error;
+			if (tryTerminate(TerminalEvent.ERROR, error, true))
+			{
+				throw error;
+			}
+			throw new IllegalStateException(
+					"async operation is no longer active", error);
 		}
 	}
 
 	public void complete()
 	{
-		terminate(TerminalEvent.COMPLETE, null);
+		if (!tryTerminate(TerminalEvent.COMPLETE, null, true))
+		{
+			throw new IllegalStateException("async operation is no longer active");
+		}
 	}
 
 	public void timeout()
 	{
-		terminate(TerminalEvent.TIMEOUT, null);
+		tryTerminate(TerminalEvent.TIMEOUT, null, false);
 	}
 
 	public void error(Throwable error)
 	{
-		terminate(TerminalEvent.ERROR, Objects.requireNonNull(error, "error"));
+		Objects.requireNonNull(error, "error");
+		tryTerminate(TerminalEvent.ERROR, error, false);
 	}
 
 	public void clientDisconnect()
 	{
-		terminate(TerminalEvent.CLIENT_DISCONNECT, null);
+		tryTerminate(TerminalEvent.CLIENT_DISCONNECT, null, false);
 	}
 
 	public void shutdown()
 	{
-		terminate(TerminalEvent.SHUTDOWN, null);
+		tryTerminate(TerminalEvent.SHUTDOWN, null, false);
 	}
 
 	public void recycle()
@@ -136,7 +147,8 @@ public final class CkartaAsyncContext
 		}
 	}
 
-	private void terminate(TerminalEvent event, Throwable error)
+	private boolean tryTerminate(
+			TerminalEvent event, Throwable error, boolean failOnRace)
 	{
 		State terminalState = switch (event)
 		{
@@ -147,17 +159,39 @@ public final class CkartaAsyncContext
 
 		if (!state.compareAndSet(State.ACTIVE, terminalState))
 		{
-			throw new IllegalStateException("async operation is no longer active");
+			if (failOnRace)
+			{
+				return false;
+			}
+			return false;
 		}
 
 		/*
-		 * The state transition is the single linearization point for terminal
-		 * ownership. The sink sees exactly one terminal event per async cycle.
+		 * The ACTIVE -> terminal-state CAS is the single linearization point.
+		 * Internal terminal contenders that lose the race are intentionally
+		 * ignored; application-facing complete() reports IllegalStateException.
 		 */
-		terminalSink.onTerminal(event, error);
-		fireListenerOnce(event, error);
+		RuntimeException sinkFailure = null;
+		try
+		{
+			terminalSink.onTerminal(event, error);
+		}
+		catch (RuntimeException failure)
+		{
+			sinkFailure = failure;
+		}
+		finally
+		{
+			fireListenerOnce(event, error);
+			state.set(State.COMPLETED);
+		}
 
-		state.set(State.COMPLETED);
+		if (sinkFailure != null && failOnRace)
+		{
+			throw sinkFailure;
+		}
+
+		return true;
 	}
 
 	private void fireListenerOnce(TerminalEvent event, Throwable error)
@@ -176,9 +210,8 @@ public final class CkartaAsyncContext
 			catch (Throwable ignored)
 			{
 				/*
-				 * Listener failure is diagnostic at this semantic-core level.
-				 * The terminal outcome has already been linearized and must
-				 * not be changed by a listener failure.
+				 * Listener failure must not alter the already-linearized
+				 * terminal outcome at this semantic-core layer.
 				 */
 			}
 		}

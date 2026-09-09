@@ -155,7 +155,7 @@ native terminal candidate
 CLOSING → CLOSED
 ```
 
-這是 bridge contract，不代表目前已有完整 Servlet AsyncContext implementation。
+這是 bridge contract；目前已完成 Java cycle identity binding 與 native connection cycle validation primitive，但尚未完成真正 JNI/native connection lookup 與完整 Servlet AsyncContext implementation。
 
 ## 9. Cancellation
 

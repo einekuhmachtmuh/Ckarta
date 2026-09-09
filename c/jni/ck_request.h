@@ -7,7 +7,7 @@
 #include "../error/ck_error.h"
 #include "../http/ck_http_parser.h"
 
-#define CK_JNI_ABI_VERSION 1u
+#define CK_JNI_ABI_VERSION 2u
 
 #define CK_REQUEST_FEATURE_DIRECT_BUFFER (UINT64_C(1) << 0)
 #define CK_REQUEST_FEATURE_METADATA_BUFFER (UINT64_C(1) << 1)

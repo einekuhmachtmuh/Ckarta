@@ -1,5 +1,7 @@
 #include "ck_connection.h"
 
+#include <stddef.h>
+
 #define CK_CONNECTION_STATE_MASK UINT64_C(0xffffffff)
 #define CK_CONNECTION_EVENT_MASK UINT64_C(0xffffffff)
 

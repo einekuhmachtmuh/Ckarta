@@ -12,9 +12,6 @@ typedef struct ck_io_uring_probe_result
 	int accept;
 	int recv;
 	int send;
-	int accept_multishot;
-	int recv_multishot;
-	int provided_buffer_ring;
 } ck_io_uring_probe_result_t;
 
 int ck_io_uring_probe(ck_io_uring_probe_result_t *result);

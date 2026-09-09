@@ -1,6 +1,7 @@
 #include "ck_connection.h"
 
 #include <errno.h>
+#include <stdlib.h>
 #include <unistd.h>
 
 #define CK_CONNECTION_STATE_MASK UINT64_C(0xff)
@@ -48,12 +49,18 @@ static int ck_connection_valid_cycle_id(uint64_t cycle_id)
 }
 
 int ck_connection_init(ck_connection_t *connection,
-		uint64_t connection_id,
-		uint64_t request_id,
-		uint64_t owner_token,
-		uint64_t lifetime_token)
+	uint64_t connection_id,
+	uint64_t request_id,
+	uint64_t owner_token,
+	uint64_t lifetime_token)
 {
 	if (connection == NULL || connection_id == 0 || request_id == 0)
+	{
+		return -1;
+	}
+
+	connection->http_reader = malloc(sizeof(*connection->http_reader));
+	if (connection->http_reader == NULL)
 	{
 		return -1;
 	}
@@ -63,7 +70,7 @@ int ck_connection_init(ck_connection_t *connection,
 	connection->owner_token = owner_token;
 	connection->lifetime_token = lifetime_token;
 	connection->socket_fd = -1;
-	ck_http_connection_reader_init(&connection->http_reader);
+	ck_http_connection_reader_init(connection->http_reader);
 	atomic_init(&connection->lifecycle,
 			ck_connection_pack(CK_CONNECTION_OPEN, -1, 0));
 	return 0;
@@ -102,11 +109,16 @@ int ck_connection_socket_fd(const ck_connection_t *connection)
 
 ck_http_connection_reader_t *ck_connection_http_reader(ck_connection_t *connection)
 {
-	return connection == NULL ? NULL : &connection->http_reader;
+	if (connection == NULL || connection->http_reader == NULL
+			|| ck_connection_state(connection) == CK_CONNECTION_CLOSED)
+	{
+		return NULL;
+	}
+	return connection->http_reader;
 }
 
 int ck_connection_start_async_cycle(ck_connection_t *connection,
-		uint64_t cycle_id)
+	uint64_t cycle_id)
 {
 	uint64_t expected;
 	uint64_t desired;
@@ -209,28 +221,33 @@ int ck_connection_close(ck_connection_t *connection)
 			/* The successful state transition transfers descriptor cleanup to this caller. */
 			socket_fd = connection->socket_fd;
 			connection->socket_fd = -1;
-			if (socket_fd < 0)
+			if (socket_fd >= 0)
 			{
-				return 0;
+				close_result = close(socket_fd);
+				if (close_result != 0)
+				{
+					/* The lifecycle is already CLOSED; the descriptor will not be retried after EINTR. */
+					if (errno != EINTR)
+					{
+						free(connection->http_reader);
+						connection->http_reader = NULL;
+						return -1;
+					}
+				}
 			}
 
-			close_result = close(socket_fd);
-			if (close_result == 0)
-			{
-				return 0;
-			}
-
-			/* The lifecycle is already CLOSED; the descriptor will not be retried after EINTR. */
-			return errno == EINTR ? 2 : -1;
+			free(connection->http_reader);
+			connection->http_reader = NULL;
+			return close_result == 0 || socket_fd < 0 ? 0 : 2;
 		}
 		current = expected;
 	}
 }
 
 int ck_connection_validate(const ck_connection_t *connection,
-		uint64_t request_id,
-		uint64_t owner_token,
-		uint64_t lifetime_token)
+	uint64_t request_id,
+	uint64_t owner_token,
+	uint64_t lifetime_token)
 {
 	if (connection == NULL || request_id == 0)
 	{

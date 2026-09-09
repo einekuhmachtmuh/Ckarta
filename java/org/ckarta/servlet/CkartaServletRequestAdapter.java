@@ -22,6 +22,11 @@ public final class CkartaServletRequestAdapter extends ServletRequestWrapper
 	private final ServletResponse originalResponse;
 	private final Executor asyncExecutor;
 	private final CkartaAsyncContext.TerminalSink terminalSink;
+	private final long requestId;
+	private final long ownerToken;
+	private final long lifetimeToken;
+	private final AtomicReference<CkartaAsyncCycleBinding> cycleBinding =
+			new AtomicReference<>();
 	private final AtomicReference<CkartaServletAsyncContext> asyncContext =
 			new AtomicReference<>();
 	private final AtomicBoolean asyncStarted = new AtomicBoolean(false);
@@ -31,7 +36,10 @@ public final class CkartaServletRequestAdapter extends ServletRequestWrapper
 			ServletRequest request,
 			ServletResponse originalResponse,
 			Executor asyncExecutor,
-			CkartaAsyncContext.TerminalSink terminalSink)
+			CkartaAsyncContext.TerminalSink terminalSink,
+			long requestId,
+			long ownerToken,
+			long lifetimeToken)
 	{
 		super(Objects.requireNonNull(request, "request"));
 		this.originalResponse =
@@ -40,6 +48,18 @@ public final class CkartaServletRequestAdapter extends ServletRequestWrapper
 				Objects.requireNonNull(asyncExecutor, "asyncExecutor");
 		this.terminalSink =
 				Objects.requireNonNull(terminalSink, "terminalSink");
+		if (requestId <= 0L)
+		{
+			throw new IllegalArgumentException("requestId must be positive");
+		}
+		if (ownerToken < 0L || lifetimeToken < 0L)
+		{
+			throw new IllegalArgumentException(
+					"owner/lifetime token must be non-negative");
+		}
+		this.requestId = requestId;
+		this.ownerToken = ownerToken;
+		this.lifetimeToken = lifetimeToken;
 	}
 
 	@Override
@@ -128,6 +148,11 @@ public final class CkartaServletRequestAdapter extends ServletRequestWrapper
 			throw new IllegalStateException(
 					"request cannot start async processing again in this dispatch");
 		}
+
+		CkartaAsyncCycleBinding binding =
+				new CkartaAsyncCycleBinding(
+						requestId, ownerToken, lifetimeToken);
+		cycleBinding.set(binding);
 
 		CkartaAsyncContext core = new CkartaAsyncContext(
 				asyncExecutor,

@@ -47,11 +47,11 @@ C connection
 → finish or cancel pending async work
 → release native resources
 
-目前 native connection slice 把上述 terminal ownership 具體化為：
+目前 native connection slice 把上述 terminal ownership 與 descriptor cleanup 具體化為：
 
 `OPEN | ASYNC_WAIT → CLOSING → CLOSED`
 
-第一個合法 terminal event 透過單一 atomic lifecycle word 取得 ownership；terminal reason 與 closing state 同時發布，後續競爭事件不得覆寫。
+第一個合法 terminal event 透過單一 atomic lifecycle word 取得 ownership；terminal reason 與 closing state 同時發布，後續競爭事件不得覆寫。成功取得 close ownership 的 caller 負責釋放 native socket descriptor；registry retire 必須等到 connection 已 `CLOSED` 且 descriptor 已失效。
 
 ## 5. AsyncContext
 
@@ -70,7 +70,7 @@ complete
 
 其中一個合法 terminal event 完成協定後才能釋放相關狀態。
 
-目前 Ckarta 已有 native connection ownership state machine，但尚未把真正的 Jakarta Servlet 6.1 `AsyncContext` 事件接入；這是下一個 integration gate。
+目前 Ckarta 已把第一個 Java AsyncContext semantic core／ServletRequest.startAsync binding 接到 native connection registry 與 terminal gate，並已用 C-driven JVM integration test 驗證 complete 與 simulated client-disconnect 的跨層 arbitration 以及 native socket cleanup。真正 container timeout source、real network client-disconnect event source、response ownership、async dispatch/new-cycle 與完整 Servlet 6.1 TCK 仍未完成。
 
 Tomcat 11.0.25 的 `CoyoteAdapter.asyncDispatch()` 與 `AsyncContextImpl` 是本設計的重要 reference。Tomcat `AsyncContextImpl` 對 `complete()`、`timeout()`、`onError`、`onComplete`、recycle 與 concurrent-use protection 分別處理，不能簡化成一個背景 thread callback。
 
@@ -129,8 +129,7 @@ https://doi.org/10.1145/78969.78972
 
 ## 10. Current implementation boundary
 
-目前 C request lifecycle 已具備 atomic state、idempotent cancellation 與 terminal ownership gate；`c/connection/ck_connection.[ch]` 已提供 connection-level native ownership gate 與 token validation；Java Servlet AsyncContext 的跨執行緒 cancellation、connection close、response ownership 與 recycle-compatible invalidation 仍待 integration test。
-
+目前 C request lifecycle 已具備 atomic state、idempotent cancellation 與 terminal ownership gate；`c/connection/ck_connection.[ch]` 已提供 connection-level native ownership gate、token/cycle validation 與 Linux/POSIX socket descriptor ownership；Java Servlet AsyncContext 的跨執行緒 cancellation、真正 container timeout/client-disconnect source、connection close、response ownership 與 recycle-compatible invalidation 仍待 integration test。
 
 ## 11. Cross-layer terminal arbitration implementation
 
@@ -138,4 +137,8 @@ https://doi.org/10.1145/78969.78972
 
 Java `CkartaAsyncContext` 在有 native capability 時，必須先通過 `TerminalGate`；native LOST 不得進入 Java local terminal transition。只有 CLAIMED 或 ALREADY_SAME 才可把 Java state 推進至 local terminal state。這使 native owner 成為跨層 terminal authority，而 Java state 是對合法 native outcome 的語意反映。
 
-此設計與 Servlet 6.1 AsyncContext 的 per-cycle 模型一致，但目前只驗證 cycle identity 與 terminal ownership，不包含完整 timeout scheduling、error dispatch、async dispatch、新 cycle reinitialization、response close 或 real client disconnect。
+## 12. Native socket ownership validation
+
+C-driven JVM integration test 現已在 Java async lifecycle 中使用 native registry capability，同時由 C owner 在 Java execution 前 attach 真實 Linux/POSIX `socketpair()` descriptor。Java 不取得 descriptor；Java complete 或 client-disconnect 只影響 terminal arbitration。Java call 完成後由 native owner 執行 close，測試端 peer 必須收到 EOF，並且 registry 必須在 descriptor invalidation 後才允許 retire。
+
+此測試證明的是 ownership/lifetime contract 與 JNI boundary 的可執行性，不是完整 network event backend，也不是正式 client-disconnect semantics proof。

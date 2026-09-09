@@ -81,12 +81,27 @@ int main(void)
 	while ((result = ck_completion_queue_pop(&queue, &record)) == 1)
 	{
 		assert(record.status == 0);
-		assert(record.request_id == 100 + (uint64_t)(record.result == record.result ? record.result : 0)
+		assert(record.request_id == 100 + (uint64_t)record.result
 				|| record.request_id == 200 + (uint64_t)(record.result == record.result ? record.result : 0));
 		count++;
 	}
 	assert(result == 0);
 	assert(count == 16);
+
+	{
+		unsigned int i;
+		for (i = 0; i < CK_COMPLETION_QUEUE_CAPACITY; i++)
+		{
+			record.request_id = 10000 + i;
+			assert(ck_completion_queue_push(&queue, &record) == 0);
+		}
+		record.request_id = 20000;
+		assert(ck_completion_queue_push(&queue, &record) == 1);
+		while (ck_completion_queue_pop(&queue, &record) == 1)
+		{
+		}
+		assert(ck_completion_queue_drain_notification(&queue) == 0);
+	}
 
 	assert(ck_completion_queue_close(&queue) == 0);
 	assert(ck_completion_queue_close(&queue) == 1);

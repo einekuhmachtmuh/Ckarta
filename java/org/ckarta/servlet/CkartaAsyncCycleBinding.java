@@ -16,7 +16,6 @@ public final class CkartaAsyncCycleBinding
 	private static final long MAX_CYCLE_ID = 0x0000FFFFFFFFFFFFL;
 	private static final AtomicLong NEXT_CYCLE_ID = new AtomicLong(1L);
 
-	@FunctionalInterface
 	public interface NativeTerminalBridge
 	{
 		int startCycle(

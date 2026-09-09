@@ -447,3 +447,14 @@ ck_connection_try_terminal() 現明確回傳 0=CLAIMED、1=ALREADY_SAME、2=ALRE
 本輪未宣稱 production AsyncContext bridge 完成。真正 C HTTP connection creation、Servlet request/container injection、response/output ownership、real timeout source、client disconnect event source、async dispatch/new-cycle reinitialization、shutdown drain 與 Servlet 6.1 TCK 仍是後續 gate。JNI bridge 的 capability values 目前只存在 process-local container-internal integration test；正式 product path 尚需由 native connection owner 安全注入。
 
 本輪沒有新增 WORKING_RULES 規則，因所有生命週期、ownership、函式簽名、error、競合與文件一致性要求均可由既有規則直接涵蓋。
+
+
+## 46. 2026-09-09 bridge compile correction
+
+commit `698da373de80a792f14b6a4d4299ea93a90409da` 的 GitHub Actions run `34346184980` 實際在 production Java source compile 階段失敗。錯誤已由 job `102448211931` log 核實：`CkartaAsyncCycleBinding.NativeTerminalBridge` 包含兩個非 overriding abstract methods（startCycle、tryTerminal），卻錯誤標示 `@FunctionalInterface`。這是新增介面型態契約的直接實作錯誤，不是架構決策問題。
+
+本輪修正移除錯誤的 `@FunctionalInterface` annotation；`TerminalGate` 仍保留 functional interface，因其只有單一抽象方法。依既有 WORKING_RULES 的函式／型態契約規則，沒有新增工作守則。
+
+同一提交另因建立新 Git tree 時誤使用過期 base tree，使先前已移除的 `.gitkeep` 被重新加入；修正提交將以當前 HEAD tree 為 base 並再次移除這些非空 code/test 目錄的標記檔。此項屬 repository 整合錯誤，已在提交 diff 檢查階段發現，不能視為正常工作樹狀態。
+
+下一次 CI 必須重新驗證 production Java compile、C compile、registry unit test 與 C-driven JVM JNI integration test；在新 run 完成前，不得宣稱本閘門通過。

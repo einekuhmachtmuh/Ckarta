@@ -311,3 +311,29 @@ epoll cookie
 → 必要時更新 EPOLLOUT interest
 
 這只保護 native writer/connection lifetime，不等同 writer thread-safe；同一 connection output state 仍以單一 worker owner 推進為原則。
+
+
+## 20. HTTP/1.1 keep-alive 與 response recycle
+
+HTTP/1.1 persistence 不使用 connection terminal state 表示。正常 request/response 完成後，只要目前 request 的 message framing 已完整、request 未要求 `Connection: close`、response transaction 已 `FINISHED`、response output writer 已完全 `DRAINED)，connection owner 才可以執行 HTTP recycle。
+
+目前 connection API 提供 `ck_connection_http_recycle()` 作為單一 recycle gate。成功後：
+
+1. connection lifecycle 仍保持 `OPEN`；
+2. reader 移除 current request state、保留同一 receive buffer 中尚未消費的 pipelined bytes；
+3. response transaction 重設為 `NEW`；
+4. 下一次 reader drive 可解析下一個 HTTP/1.1 request。
+
+因此正常 keep-alive request 不使用 `CK_CONNECTION_TERMINAL_COMPLETE`；該 terminal event 仍代表 connection-level teardown。
+
+若 request 的 `Connection: close` 存在、request 使用 `Transfer-Encoding` 與 `Content-Length` 的組合、response 明確設定 close，或 output 尚未 drained，recycle 必須拒絕，connection 應依 connection-level terminal policy 收斂。
+
+這與 RFC 9112 §9.3 的 persistence 條件及 §9.6 的 close semantics 一致：只有 self-defined message length 與未出現 close option 時才能持續使用 connection；收到 `Connection: close` 後不得處理後續 request。
+
+RFC：
+https://www.rfc-editor.org/rfc/rfc9112
+
+Tomcat 11.0.25 的 `Http11Processor` 將 `keepAlive` 與 request/response processing、`inputBuffer.nextRequest()`、`outputBuffer.nextRequest()` 分離；Ckarta 目前以 connection-level recycle gate 表達相同的 lifecycle separation，而不複製 Tomcat processor object model。
+
+固定來源：
+https://github.com/apache/tomcat/blob/cbe6e15ee81e2fc6232954292a80cca5d1e84009/java/org/apache/coyote/http11/Http11Processor.java

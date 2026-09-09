@@ -20,6 +20,7 @@ COMPLETION_QUEUE_TEST := $(BIN_DIR)/ckarta-completion-queue-test
 CONNECTION_TEST := $(BIN_DIR)/ckarta-connection-test
 CONNECTION_REGISTRY_TEST := $(BIN_DIR)/ckarta-connection-registry-test
 EVENT_LOOP_TEST := $(BIN_DIR)/ckarta-event-loop-test
+IO_URING_PROBE_TEST := $(BIN_DIR)/ckarta-io-uring-probe-test
 TCP_EVENT_INTEGRATION_TEST := $(BIN_DIR)/ckarta-tcp-event-integration-test
 HTTP_PARSER_TEST := $(BIN_DIR)/ckarta-http-parser-test
 HTTP_CHUNKED_TEST := $(BIN_DIR)/ckarta-http-chunked-test
@@ -104,6 +105,10 @@ $(EVENT_LOOP_TEST): tests/event/ck_event_loop_test.c c/event/ck_event_loop.c c/e
 	@mkdir -p $(BIN_DIR)
 	$(CC) $(CFLAGS) tests/event/ck_event_loop_test.c c/event/ck_event_loop.c -o $@
 
+$(IO_URING_PROBE_TEST): tests/event/ck_io_uring_probe_test.c c/event/ck_io_uring_probe.c c/event/ck_io_uring_probe.h
+	@mkdir -p $(BIN_DIR)
+	$(CC) $(CFLAGS) tests/event/ck_io_uring_probe_test.c c/event/ck_io_uring_probe.c -o $@
+
 $(TCP_EVENT_INTEGRATION_TEST): tests/net/ck_tcp_event_integration_test.c c/net/ck_tcp_listener.c c/net/ck_tcp_listener.h c/event/ck_event_loop.c c/event/ck_event_loop.h c/connection/ck_connection_registry.c c/connection/ck_connection_registry.h c/connection/ck_connection.c c/connection/ck_connection.h c/output/ck_http_output_writer.c c/output/ck_http_output_writer.h c/http/ck_http_connection_reader.c c/http/ck_http_connection_reader.h c/http/ck_http_input.c c/http/ck_http_input.h c/http/ck_http_parser.c c/http/ck_http_parser.h c/http/ck_http_chunked.c c/http/ck_http_chunked.h
 	@mkdir -p $(BIN_DIR)
 	$(CC) $(CFLAGS) tests/net/ck_tcp_event_integration_test.c c/net/ck_tcp_listener.c c/event/ck_event_loop.c c/connection/ck_connection_registry.c c/connection/ck_connection.c c/output/ck_http_output_writer.c c/output/ck_http_response.c c/http/ck_http_connection_reader.c c/http/ck_http_input.c c/http/ck_http_parser.c c/http/ck_http_chunked.c -o $@
@@ -164,6 +169,7 @@ test: all $(JAVA_ASYNC_TEST) $(JAVA_SERVLET_API_TEST) $(JAVA_SERVLET_REQUEST_ASY
 	$(CONNECTION_TEST)
 	$(CONNECTION_REGISTRY_TEST)
 	$(EVENT_LOOP_TEST)
+	$(IO_URING_PROBE_TEST)
 	$(TCP_EVENT_INTEGRATION_TEST)
 	$(HTTP_PARSER_TEST)
 	$(HTTP_CHUNKED_TEST)

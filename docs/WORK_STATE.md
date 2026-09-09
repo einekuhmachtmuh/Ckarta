@@ -189,7 +189,13 @@ Native module 暫定為 load-at-start、ABI/version/signature 驗證、dependenc
 
 2026-09-09：多請求 completion routing 已完成第一個可執行 smoke slice。兩個 C request 可在同一 Java executor completion queue 完成，completion 帶 request_id、owner_token、lifetime_token、result、status，C 不依賴完成順序進行 routing。此 slice 仍由 smoke worker 建立後 join，未代表正式 event-loop 非阻塞 producer，也未使用高效率事件通知原語。
 
-## 23. 2026-09-09 repository audit
+## 23. 2026-09-09 exception handling research
+
+完成 Ckarta exception/error handling architecture 研究並建立唯一權威文件 `docs/EXCEPTION_HANDLING_RESEARCH.md`。研究交叉核對 Nginx 1.30.4、Tomcat 11.0.25、Apache HTTP Server 2.4.68、OpenJDK 21 JNI specification，以及 Goodenough 1975、Liskov/Snyder 1979、Lee et al. 2000/2004、Patterson et al. 2002、Candea et al. 2004、Ma et al. 2025 等已核實文獻。
+
+決策：exception、native error、HTTP status、cancellation、timeout 與 fatal state 分層；JNI pending exception 必須在明確邊界檢查與有責任地清除；異步 error/completion/cancellation 必須 exactly once；client-visible error 與 internal diagnostic 分離；retry 不得僅因 exception 觸發。
+
+## 24. 2026-09-09 repository audit
 
 本輪依 `WORKING_RULES.md` 完成全 repository 結構、原始碼、研究文件、測試、CI、設定與固定 upstream gitlink 交叉檢查。已修正：
 

@@ -265,3 +265,13 @@ handle layout 為低 32 bits slot identifier、高 32 bits generation。retire �
 跨層 terminal ordering 為：先 native registry terminal arbitration，再由 Java semantic core 更新 local async state。若 native 已先因相同 event 取得 terminal ownership，Java 後續收到同一 event 時可回傳 ALREADY_SAME 並正常完成 local publication；若不同 event 已先勝出，Java 不得建立第二個 terminal outcome；若 registry/identity 發生錯誤，必須走獨立 bridge error path。
 
 JNI integration test 已驗證 stale handle、capacity、cycle identity、complete winner、client-disconnect winner 與 delayed same-event notification。仍未接入真正 socket/TLS owner，也未證明完整 Servlet response lifetime。
+
+## 17. Native socket descriptor ownership slice
+
+本輪已將實際 Linux/POSIX socket descriptor ownership 接入 `ck_connection_t`。`socket_fd` 只屬 native connection owner；Java AsyncContext、cycle binding、JNI bridge 均不得直接取得或操作 fd。
+
+`ck_connection_attach_socket()` 僅允許對仍為 `OPEN` 且尚未持有 descriptor 的 connection attach；registry 提供同樣受 identity validation 保護的 `attach_socket()` 與 read-only `socket_fd()` wrapper。terminal owner 成功把 lifecycle 推到 `CLOSED` 後，只有該 caller 進行 descriptor close，並立即將 native `socket_fd` 標記為無效，避免第二個 caller 再次 close。
+
+目前 descriptor close semantics 的 executable scope 是 Linux/POSIX baseline；尚未把 Windows `SOCKET`／IOCP abstraction 提前塞入 connection core。這不是 public ABI 決策，而是為下一階段 event backend 保留明確平台邊界。
+
+`tests/connection/ck_connection_test.c` 與 `tests/connection/ck_connection_registry_test.c` 使用 `socketpair(AF_UNIX, SOCK_STREAM, ...)` 實際驗證：attach ownership、wrong-token rejection、terminal close、descriptor becomes invalid、peer receives EOF、registry close/retire ordering。這證明目前 connection object 不再只是 abstract state machine，而已擁有一個可觀察的 native I/O resource lifetime。

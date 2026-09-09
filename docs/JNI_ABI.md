@@ -139,7 +139,9 @@ Java executor 必須使用有界工作佇列；native completion queue 另有獨
 目前 executable slice 使用 Java ThreadPoolExecutor 的有界工作佇列。C worker 僅負責 submission 後 detach；Java executor thread 建立 NativeRequest 並執行 smoke workload；C 以非阻塞 JNI poll 取得 completion。此 polling 仍是 smoke slice，正式 production event loop 尚需更高效率的通知／多請求 completion queue。
 
 Java executor 必須使用有界容量；飽和時不得 fallback 到 C event-loop thread 執行 Servlet application。
+ 
 
+目前已固定 Jakarta Servlet API dependency `jakarta.servlet:jakarta.servlet-api:6.1.0` 作為 application-facing API compile/test boundary；`CkartaServletAsyncContext` 是薄 adapter，不把 native connection、queue 或 token 暴露給 Servlet application。這不是 TCK compatibility claim。
 ## 16. Native completion notification slice
 
 C runtime 使用 runtime-owned bounded completion queue + platform notification backend。Linux 第一個 executable backend 使用 `eventfd(EFD_CLOEXEC | EFD_NONBLOCK)`，C main 以 `epoll_wait()` 等待 notification fd，收到 wake-up 後 drain notification，再反覆 dequeue completion records。notification coalescing 時不得把一次 wake-up 解讀成恰好一筆 completion。

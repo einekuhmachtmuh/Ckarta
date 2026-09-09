@@ -39,6 +39,16 @@ public final class NativeRequest
 		}
 
 		ByteBuffer header = metadata.asReadOnlyBuffer().order(ByteOrder.BIG_ENDIAN);
+		if (header.remaining() == 0)
+		{
+			methodLength = 0;
+			targetLength = 0;
+			protocolLength = 0;
+			this.handle = handle;
+			this.metadata = metadata.asReadOnlyBuffer();
+			this.data = data.asReadOnlyBuffer();
+			return;
+		}
 		if (header.remaining() < 13)
 		{
 			throw new IllegalArgumentException("invalid native request metadata");
@@ -76,24 +86,36 @@ public final class NativeRequest
 
 	public ByteBuffer methodBytes()
 	{
+		requireMetadata();
 		return metadataSlice(13, methodLength);
 	}
 
 	public ByteBuffer targetBytes()
 	{
+		requireMetadata();
 		return metadataSlice(13 + methodLength, targetLength);
 	}
 
 	public ByteBuffer protocolBytes()
 	{
+		requireMetadata();
 		return metadataSlice(13 + methodLength + targetLength, protocolLength);
 	}
 
 	public boolean connectionCloseRequired()
 	{
+		requireMetadata();
 		ByteBuffer view = metadata.asReadOnlyBuffer();
 		view.position(12 + 0 + methodLength + targetLength + protocolLength);
 		return view.get() != 0;
+	}
+
+	private void requireMetadata()
+	{
+		if (metadata.remaining() == 0)
+		{
+			throw new IllegalStateException("request metadata is unavailable");
+		}
 	}
 
 	private ByteBuffer metadataSlice(int offset, int length)

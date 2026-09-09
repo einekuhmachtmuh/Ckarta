@@ -196,3 +196,6 @@ Apache HTTP Server 2.4.68：startup/config/MPM 研究見 `docs/STARTUP_CONFIGURA
 ACTIVE → COMPLETING|TIMING_OUT|ERRORED 的 CAS 是 async terminal ownership 的單一 linearization point；application 的 complete() 在輸家情況回傳 IllegalStateException，container/internal timeout、error、disconnect、shutdown 的競爭者則只保留唯一 winner，不把正常 race 變成未處理例外。
 
 此 core 仍缺正式 ServletRequest.startAsync()、ServletResponse、AsyncContext.dispatch()、AsyncListener API、ServletContext/classloader 綁定與 native connection bridge。這些必須在正式 Jakarta Servlet 6.1 API dependency 進入 build/test 後逐項接入。
+
+
+目前 java/org/ckarta/servlet/CkartaServletAsyncContext.java 已建立 Jakarta Servlet 6.1 API binding prototype。它只把 complete、start、request/response access、timeout 與 listener 註冊映射到 Ckarta async core；dispatch 目前明確回傳 UnsupportedOperationException，因正式 request mapping/container dispatch 尚不存在。API adapter 不持有或暴露 native connection pointer、queue 或 lifetime token。故此階段是 API boundary validation，不是 Servlet 6.1 compatibility implementation。

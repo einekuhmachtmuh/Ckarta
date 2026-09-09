@@ -47,6 +47,24 @@ https://github.com/apache/tomcat
 官方版本資訊：
 https://tomcat.apache.org/tomcat-11.0-doc/
 
+### Apache HTTP Server
+
+版本：2.4.68
+
+Git tag：
+2.4.68
+
+tagged commit：
+736bb657405eb73fd68a64772c3a908807bdb887
+
+repository：
+https://github.com/apache/httpd
+
+官方版本資訊：
+https://httpd.apache.org/download
+
+Apache httpd 2.4.68 目前作為外部固定研究來源，不加入 `third_party` submodule。研究需固定 tag/commit，並不得把 Apache source 混入 Ckarta runtime。
+
 ## 3. 版本選擇
 
 Nginx 以 stable 1.30.4 作為目前 Ckarta 的穩定參考基線，而不是 mainline 1.31.5。
@@ -110,6 +128,7 @@ Ckarta 不因使用 submodule 而取得修改或重新授權第三方程式碼�
 - Ckarta commit
 - Nginx submodule commit
 - Tomcat submodule commit
+- Apache HTTP Server fixed research tag/commit（若該研究使用 Apache）
 - compiler／JDK
 - 作業系統
 - 核心版本

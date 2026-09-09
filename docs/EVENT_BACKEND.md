@@ -80,7 +80,7 @@ epoll notification
 
 - `ck_event_loop_init()`：建立 event backend。
 - `ck_event_loop_add()`：建立 fd + cookie + interest registration。
-- `ck_event_loop_modify()`：原子性地以 `EPOLL_CTL_MOD` 更新 interest／cookie。
+- `ck_event_loop_modify()`：以 `EPOLL_CTL_MOD` 更新 interest／cookie。
 - `ck_event_loop_remove()`：移除 registration。
 - `ck_event_loop_wait()`：blocking／non-blocking 取得 notification；`timeout_ms=-1` 表示無限等待。
 - `ck_event_loop_destroy()`：釋放 epoll instance。
@@ -89,9 +89,11 @@ epoll notification
 
 `ck_event_loop_wait()` 目前單次最多取 64 個 kernel events，再依 caller 提供的 `capacity` 截斷。這個固定值是 bootstrap 限制，不是最終 throughput tuning 結果。
 
-## 6. Ownership 與 blocking boundary
+## 6. Ownership、thread 與 blocking boundary
 
 event backend 不擁有 socket descriptor。socket descriptor 必須先由 `ck_connection_t` 或更高層 listener owner 建立／接收，再由 owner 將 descriptor 註冊至 event backend。
+
+目前 `ck_event_loop_t` 的正式 ownership contract 是 single-owner：同一個 event loop instance 在任一時間只能由一個 C event-loop owner thread 呼叫 `add`／`modify`／`remove`／`wait`／`destroy`。跨執行緒 registration 與 wakeup 尚未建立正式 contract，不得自行把目前 API 當成 thread-safe shared object。
 
 event loop thread 可以呼叫 `ck_event_loop_wait()`，因為這就是其核心 blocking point；但在 notification dispatch 後不得執行未知 blocking application work。
 

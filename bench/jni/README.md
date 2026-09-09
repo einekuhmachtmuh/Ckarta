@@ -47,23 +47,15 @@ make JDK_HOME=/path/to/jdk-21
 
 ## 本機首次校驗
 
-Codex 測試環境曾以 Linux x86_64、GCC 14.2.0、OpenJDK 21.0.11 建置並執行：
+Codex 測試環境曾成功建置並執行三種 harness 模式：
 
-```text
+```sh
 make
 ./build/ckarta-jni-thread-bench direct 2 10000
 ./build/ckarta-jni-thread-bench bridge 2 10000 1
 ./build/ckarta-jni-thread-bench bridge 2 10000 2
 ```
 
-一次觀測結果：
+當時環境為 Linux x86_64、GCC 14.2.0、OpenJDK 21.0.11；這段記錄只證明 harness 可執行，不把未完整保存硬體、kernel、Ckarta commit、warm-up 與 repetitions 的性能數字當作可重現基準。
 
-```text
-direct 2/10000：throughput 約 6.01 M ops/s，avg operation 約 110 ns
-bridge 2/10000/1：throughput 約 0.104 M ops/s，avg operation 約 13.2 us，avg queue wait 約 6.39 us
-bridge 2/10000/2：throughput 約 0.0419 M ops/s，avg operation 約 36.4 us，avg queue wait 約 21.1 us
-```
-
-這只是 harness／thread handoff 的校驗樣本，不是正式效能基準線；尚未進行足夠 repetitions、CPU isolation、JIT warm-up 控制、tail-latency histogram、不同 worker／bridge 組合與 Ckarta integration。
-
-完整實驗定義見 `docs/THREAD_BENCHMARK_PLAN.md`。
+`docs/THREAD_BENCHMARK_PLAN.md` 定義正式 benchmark 必須補齊的環境、統計與 workload 條件。

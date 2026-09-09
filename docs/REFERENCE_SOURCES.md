@@ -65,7 +65,16 @@ https://httpd.apache.org/download
 
 Apache httpd 2.4.68 目前作為外部固定研究來源，不加入 `third_party` submodule。研究需固定 tag/commit，並不得把 Apache source 混入 Ckarta runtime。
 
-## 3. 版本選擇
+## 3. Java Servlet API dependency
+
+Jakarta Servlet API：6.1.0
+Maven coordinates：`jakarta.servlet:jakarta.servlet-api:6.1.0`
+SHA-256：`8a31f465f3593bf2351531a5c952014eb839da96a605b5825b93dd54714c48c4`
+來源：https://jakarta.ee/specifications/servlet/6.1/ 、 https://central.sonatype.com/artifact/jakarta.servlet/jakarta.servlet-api/6.1.0
+
+Ckarta 目前只使用 API artifact 作為 compile/test boundary，不把它視為 Servlet implementation。版本固定與雜湊驗證由 Makefile 實作；下載失敗不得以未驗證 artifact 替代。
+
+## 4. 版本選擇
 
 Nginx 以 stable 1.30.4 作為目前 Ckarta 的穩定參考基線，而不是 mainline 1.31.5。
 

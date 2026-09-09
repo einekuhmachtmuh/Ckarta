@@ -48,6 +48,7 @@ Nginx 與 Apache Tomcat 不直接複製進 Ckarta repository，而是以 Git sub
 - docs/STARTUP_CONFIGURATION_RESEARCH.md：Apache HTTP Server、Nginx、Tomcat 與 Ckarta 啟動配置／驗證／reload 架構研究。
 - docs/STARTUP_STATE_MACHINE.md：C main、JVM、Java container、network runtime 的啟動／停止狀態機。
 - docs/HTTP_FRAMING_POLICY.md：HTTP/1.1 framing（訊息框架）權威解析政策與目前 executable parser/decode boundary。
+- docs/HTTP_CONNECTION_READER.md：connection-owned HTTP input buffer、non-blocking read consumer、body sink、pipeline 與 request recycle 契約。
 - docs/CONCURRENCY_MODEL.md：C 事件並行與 Java Servlet 執行模型。
 - docs/EXCEPTION_HANDLING_RESEARCH.md：C/Java/JNI 例外、錯誤傳播、恢復、資訊洩漏與 exactly-once terminal outcome 的唯一權威研究。
 - docs/ERROR_STATE_MATRIX.md：error category × request lifecycle × owner × HTTP outcome 的形式化矩陣與 `ck_error_t` 邊界。
@@ -130,6 +131,6 @@ CGI/FastCGI 定位：未來可掛接 application gateway module，不屬核心 r
 
 Linux `ck_event_loop` 已有獨立 executable baseline，並已完成 loopback TCP listener／accept integration smoke：event loop 擁有 epoll instance、connection owner 擁有 socket descriptor；notification 只攜帶 opaque `uint64_t` cookie，accepted socket 由 `accept4()` 以 nonblocking／close-on-exec 屬性建立。
 
-目前 HTTP path 已增加 bounded executable framing components：header parser 能處理 incremental request line/header block、Content-Length normalization、Transfer-Encoding framing decision；獨立 chunked decoder 能處理 chunk size、chunk data、chunk CRLF、last chunk 與 trailer syntax。loopback TCP integration test 已直接把 accepted socket 讀到的 HTTP bytes 餵給 header parser。
+目前 HTTP path 已增加 bounded executable framing components：header parser 能處理 incremental request line/header block、Content-Length normalization、Transfer-Encoding framing decision；獨立 chunked decoder 能處理 chunk size、chunk data、chunk CRLF、last chunk 與 trailer syntax。另已建立 connection-owned 65,536-byte reader buffer 與 non-blocking `recv()` consumer，可將 Content-Length／chunked body 以同步 sink 分段消費，並在 request completion 後保留下一則 pipelined request；loopback TCP integration 已開始使用此 reader。
 
-目前尚未完成：正式多 worker listener/accept ownership、production connection event consumer、完整 HTTP/1.1 request/response state machine、chunked decoder 與 per-connection body ownership integration、response ownership、async dispatch、real timeout source、完整 client-disconnect policy、shutdown drain、TCK、sanitizer/fuzz、Windows IOCP 與其他平台 event backend。
+目前尚未完成：正式多 worker listener/accept ownership、`ck_http_connection_reader_t` 直接納入 `ck_connection_t` 的正式 ownership wiring、完整 HTTP/1.1 request/response state machine、response ownership、async dispatch、real timeout source、完整 client-disconnect policy、shutdown drain、TCK、sanitizer/fuzz、Windows IOCP 與其他平台 event backend。

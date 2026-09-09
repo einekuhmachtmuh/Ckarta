@@ -28,6 +28,7 @@ ngx_http_process_request()
 Tomcat：
 
 third_party/tomcat/java/org/apache/coyote/http11/Http11Processor.java
+third_party/tomcat/java/org/apache/coyote/http11/Http11InputBuffer.java
 
 相關方法：
 
@@ -56,6 +57,10 @@ parser output 至少包括：
 - consumed bytes
 - parse result
 
+目前 executable slice 已落地 `c/http/ck_http_parser.[ch]`。parser 只擁有自己的 bounded header buffer；輸入可以分多次 feed，header 區塊完成後回傳本 request 的 consumed bytes，使 caller 能保留後續 body／pipeline bytes。
+
+目前 parser 已完成 request-line、header-field grammar、Content-Length normalization、Transfer-Encoding final-coding 判斷與 header-size bound；chunked body 的 chunk-size/data/trailer 解碼仍未完成。
+
 ## 5. 嚴格要求
 
 遇到 framing ambiguity（訊息框架歧義）時：
@@ -79,6 +84,8 @@ reject。
 - 非法數字
 - overflow（溢位）
 
+RFC 9112 允許收到多個 `Content-Length` 時，在可解析為逗號分隔 list 且所有值相同的情況下，以單一值處理；Ckarta parser 已採此 normalization，但任何不一致值都拒絕。
+
 在進入 proxy 或 Servlet 前必須完成 normalized result（正規化結果）。
 
 ## 7. Transfer-Encoding
@@ -91,7 +98,9 @@ reject。
 - 非法值
 - 與 Content-Length 的互動
 
-不得因 upstream 行為方便而放寬 parser。
+目前 Ckarta executable parser 的 framing consumer 只把最終 `chunked` 視為可接受的 request transfer framing；任何最終不是 `chunked` 的 request transfer coding 均拒絕。非 `chunked` transfer-coding 的實際 decoding 尚未實作，因此不能把此 parser slice 標示成完整 Transfer-Encoding implementation。
+
+若同時存在 `Transfer-Encoding` 與 `Content-Length`，Ckarta 使用 Transfer-Encoding 決定 framing，並設定 `connection_close_required`；這與 RFC 9112 對 request-smuggling risk 的處理方向一致，但正式 response/status 行為仍需接入完整 request state machine。
 
 ## 8. Chunked body
 
@@ -103,6 +112,8 @@ chunk size 必須：
 - 不允許越界
 - 不允許 parser state desynchronization（解析器狀態去同步）
 
+目前只完成 header framing 的 `chunked` mode recognition；chunk data、CRLF、last-chunk、trailer section 與 truncated-body handling 尚待下一個獨立 parser state-machine gate。
+
 ## 9. Proxy
 
 Ckarta 在轉送前應形成自己的 canonical request representation（正規請求表示）。
@@ -111,7 +122,20 @@ upstream parser 不得重新詮釋同一個模糊 framing。
 
 ## 10. 測試
 
-至少需要：
+目前 `tests/http/ck_http_parser_test.c` 已驗證：
+
+- incremental feed
+- request line token validation
+- Content-Length 正常值
+- identical duplicate Content-Length normalization
+- conflicting Content-Length rejection
+- Transfer-Encoding + Content-Length interaction
+- non-chunked final Transfer-Encoding rejection
+- oversized header buffer
+
+TCP integration test 另直接由 loopback accepted socket 讀取 HTTP bytes，再送入同一 parser，驗證 parser 並非只存在於 isolated unit test。
+
+仍需補齊：
 
 - duplicate Content-Length
 - conflicting Content-Length

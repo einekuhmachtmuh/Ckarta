@@ -21,6 +21,7 @@ CONNECTION_TEST := $(BIN_DIR)/ckarta-connection-test
 CONNECTION_REGISTRY_TEST := $(BIN_DIR)/ckarta-connection-registry-test
 EVENT_LOOP_TEST := $(BIN_DIR)/ckarta-event-loop-test
 TCP_EVENT_INTEGRATION_TEST := $(BIN_DIR)/ckarta-tcp-event-integration-test
+HTTP_PARSER_TEST := $(BIN_DIR)/ckarta-http-parser-test
 NATIVE_ASYNC_BRIDGE_TEST := $(BIN_DIR)/ckarta-native-async-bridge-smoke
 JAVA_NATIVE_ASYNC_BRIDGE_TEST := $(BIN_DIR)/ckarta-native-async-bridge-test
 
@@ -54,7 +55,7 @@ $(TARGET): c/core/main.c c/config/ck_config.c c/config/ck_config.h c/error/ck_er
 
 $(JAVA_SERVLET_REQUEST_ASYNC_TEST): tests/java/CkartaServletRequestAsyncTest.java java/org/ckarta/servlet/CkartaServletRequestAdapter.java java/org/ckarta/servlet/CkartaServletAsyncContext.java java/org/ckarta/servlet/CkartaAsyncContext.java java/org/ckarta/servlet/CkartaAsyncCycleBinding.java $(JAKARTA_SERVLET_API_JAR)
 	@mkdir -p $(BUILD_DIR)/java-test-classes
-	javac --release 21 -cp $(JAKARTA_SERVLET_API_JAR) -d $(BUILD_DIR)/java-test-classes tests/java/CkartaServletRequestAsyncTest.java java/org/ckarta/servlet/CkartaServletRequestAdapter.java java/org/ckarta/servlet/CkartaServletAsyncContext.java java/org/ckarta/servlet/CkartaAsyncContext.java java/org/ckarta/servlet/CkartaAsyncCycleBinding.java
+	javac --release 21 -cp $(JAKARTA_SERVLET_API_JAR) -d $(BUILD_DIR)/java-test-classes tests/java/CkartaServletRequestAsyncTest.java java/org/ckarta/servlet/CkartaServletRequestAdapter.java java/org/ckarta/servlet/CkartaServletAsyncContext.java java/org/ckarta/servlet/CkartaAsyncCycleBinding.java
 
 $(JAVA_ASYNC_TEST): tests/java/CkartaAsyncContextTest.java java/org/ckarta/servlet/CkartaAsyncContext.java java/org/ckarta/servlet/CkartaAsyncCycleBinding.java
 	@mkdir -p $(BUILD_DIR)/java-test-classes
@@ -100,6 +101,10 @@ $(TCP_EVENT_INTEGRATION_TEST): tests/net/ck_tcp_event_integration_test.c c/net/c
 	@mkdir -p $(BIN_DIR)
 	$(CC) $(CFLAGS) tests/net/ck_tcp_event_integration_test.c c/net/ck_tcp_listener.c c/event/ck_event_loop.c c/connection/ck_connection_registry.c c/connection/ck_connection.c -o $@
 
+$(HTTP_PARSER_TEST): tests/http/ck_http_parser_test.c c/http/ck_http_parser.c c/http/ck_http_parser.h
+	@mkdir -p $(BIN_DIR)
+	$(CC) $(CFLAGS) tests/http/ck_http_parser_test.c c/http/ck_http_parser.c -o $@
+
 $(JAVA_NATIVE_ASYNC_BRIDGE_TEST): tests/java/CkartaNativeAsyncBridgeTest.java java/org/ckarta/servlet/CkartaNativeAsyncBridge.java java/org/ckarta/servlet/CkartaServletRequestAdapter.java java/org/ckarta/servlet/CkartaServletAsyncContext.java java/org/ckarta/servlet/CkartaAsyncContext.java java/org/ckarta/servlet/CkartaAsyncCycleBinding.java $(JAKARTA_SERVLET_API_JAR)
 	@mkdir -p $(BUILD_DIR)/java-test-classes
 	javac --release 21 -cp $(JAKARTA_SERVLET_API_JAR) -d $(BUILD_DIR)/java-test-classes tests/java/CkartaNativeAsyncBridgeTest.java java/org/ckarta/servlet/CkartaNativeAsyncBridge.java java/org/ckarta/servlet/CkartaServletRequestAdapter.java java/org/ckarta/servlet/CkartaServletAsyncContext.java java/org/ckarta/servlet/CkartaAsyncContext.java java/org/ckarta/servlet/CkartaAsyncCycleBinding.java
@@ -115,7 +120,7 @@ $(CONFIG_TEST): tests/config_load_test.c c/config/ck_config.c c/config/ck_config
 clean:
 	rm -rf $(BUILD_DIR)
 
-test: all $(JAVA_ASYNC_TEST) $(JAVA_SERVLET_API_TEST) $(JAVA_SERVLET_REQUEST_ASYNC_TEST) $(JAVA_NATIVE_ASYNC_BRIDGE_TEST) $(ABI_TEST) $(CONFIG_TEST) $(ERROR_TEST) $(ERROR_RACE_TEST) $(TERMINAL_RACE_TEST) $(COMPLETION_QUEUE_TEST) $(CONNECTION_TEST) $(CONNECTION_REGISTRY_TEST) $(EVENT_LOOP_TEST) $(TCP_EVENT_INTEGRATION_TEST) $(NATIVE_ASYNC_BRIDGE_TEST)
+test: all $(JAVA_ASYNC_TEST) $(JAVA_SERVLET_API_TEST) $(JAVA_SERVLET_REQUEST_ASYNC_TEST) $(JAVA_NATIVE_ASYNC_BRIDGE_TEST) $(ABI_TEST) $(CONFIG_TEST) $(ERROR_TEST) $(ERROR_RACE_TEST) $(TERMINAL_RACE_TEST) $(COMPLETION_QUEUE_TEST) $(CONNECTION_TEST) $(CONNECTION_REGISTRY_TEST) $(EVENT_LOOP_TEST) $(TCP_EVENT_INTEGRATION_TEST) $(HTTP_PARSER_TEST) $(NATIVE_ASYNC_BRIDGE_TEST)
 	java -ea -cp $(BUILD_DIR)/java-test-classes org.ckarta.servlet.CkartaAsyncContextTest
 	java -ea -cp $(BUILD_DIR)/java-test-classes:$(JAKARTA_SERVLET_API_JAR) org.ckarta.servlet.CkartaServletAsyncContextTest
 	java -ea -cp $(BUILD_DIR)/java-test-classes:$(JAKARTA_SERVLET_API_JAR) org.ckarta.servlet.CkartaServletRequestAsyncTest
@@ -129,6 +134,7 @@ test: all $(JAVA_ASYNC_TEST) $(JAVA_SERVLET_API_TEST) $(JAVA_SERVLET_REQUEST_ASY
 	$(CONNECTION_REGISTRY_TEST)
 	$(EVENT_LOOP_TEST)
 	$(TCP_EVENT_INTEGRATION_TEST)
+	$(HTTP_PARSER_TEST)
 	$(NATIVE_ASYNC_BRIDGE_TEST)
 	! $(CONFIG_TEST) tests/config/invalid.conf
 	./tests/smoke_bootstrap.sh $(TARGET)

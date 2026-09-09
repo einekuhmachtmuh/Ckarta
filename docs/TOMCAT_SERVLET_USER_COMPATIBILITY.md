@@ -10,7 +10,7 @@
 
 ### 1.1 真人撰寫的 Tomcat／Servlet 開發筆記與心得
 
-1. **Roberto T.／Ben Vedder 等作者維護的《How Tomcat Works》電子書整理版**。該書明確表示目的在於先建立 Catalina 的大圖，再逐步拆解元件；其讀者包括 servlet/JSP programmer 與 Tomcat user。它特別把 servlet lifecycle、container component hierarchy、request processing 等作為理解 Tomcat 的入口。來源：https://l-webx.gitbooks.io/how_tomcat_works/content/
+1. **Budi Kurniawan、Paul Deck，《How Tomcat Works: A Guide to Developing Your Own Java Servlet Container》**。Apache Tomcat 的 resources 頁面列有此書；作者本人長期以 Tomcat 原始碼分析與 Servlet/JSP 開發角度介紹 Catalina、request/response、servlet lifecycle 與 container architecture。來源：https://tomcat.apache.org/resources.html 、 https://l-webx.gitbooks.io/how_tomcat_works/content/ 、 https://coderanch.com/u/81144/Budi-Kurniawan
 
 2. **yangykaifa，〈詳細介绍：Tomcat源码分析三(Tomcat请求源码分析)〉，2026-02-14**。作者從實際除錯 Spring MVC、自訂 Filter／Valve 常見問題切入，總結 Connector → CoyoteAdapter → StandardHostValve → StandardContextValve → StandardWrapperValve → ApplicationFilterChain → Servlet，並強調 Request 封裝、Context class-loader binding、Filter chain 與 Wrapper 對 servlet lifecycle 的責任。來源：https://www.cnblogs.com/yangykaifa/p/19616315
 
@@ -30,11 +30,11 @@
 
 1. Tomcat 11.0.25 Servlet 6.1 API：Servlet lifecycle、multithreaded execution 與 shared state 注意事項。來源：https://tomcat.apache.org/tomcat-11.0-doc/servletapi/jakarta/servlet/Servlet.html
 
-2. Tomcat 11.0.25 Servlet 6.1 API：`HttpServlet` 的 `service()` 負責依 HTTP method dispatch 到 `doGet()`、`doPost()` 等，並明確提醒 Servlet 在 multithreaded server 中處理 concurrent requests。來源：https://tomcat.apache.org/tomcat-11.0-doc/servletapi/jakarta/servlet/http/HttpServlet.html
+2. Tomcat 11.0.25 Servlet 6.1 API：`HttpServlet` 的 `service()` 依 HTTP method dispatch 到 `doGet()`、`doPost()` 等，並在 multithreaded server 中處理 concurrent requests。來源：https://tomcat.apache.org/tomcat-11.0-doc/servletapi/jakarta/servlet/http/HttpServlet.html
 
-3. Tomcat 11.0.25 Servlet 6.1 API：`ServletContext` 是每一個 web application 在 JVM 中的 context authority；不能把 distributed application 的 context 當成真正全域資料容器。來源：https://tomcat.apache.org/tomcat-11.0-doc/servletapi/jakarta/servlet/ServletContext.html
+3. Tomcat 11.0.25 Servlet 6.1 API：`ServletContext` 是每個 web application 在 JVM 中的 context authority。來源：https://tomcat.apache.org/tomcat-11.0-doc/servletapi/jakarta/servlet/ServletContext.html
 
-4. Tomcat 11.0.25／固定研究 commit `cbe6e15ee81e2fc6232954292a80cca5d1e84009` 的 `CoyoteAdapter`、`StandardWrapper`、`AsyncContextImpl` 等 upstream source：Coyote request 到 Catalina Request/Response 的轉換、container Pipeline 呼叫、request thread 記錄、async lifecycle、recycle 與 error processing。來源：
+4. Tomcat 11.0.25／固定研究 commit `cbe6e15ee81e2fc6232954292a80cca5d1e84009` 的 `CoyoteAdapter`、`StandardWrapper`、`AsyncContextImpl` 等 upstream source：Coyote request 到 Catalina Request/Response 的轉換、Container Pipeline、request thread、async lifecycle、recycle 與 error processing。來源：
    - https://github.com/apache/tomcat/blob/cbe6e15ee81e2fc6232954292a80cca5d1e84009/java/org/apache/catalina/connector/CoyoteAdapter.java
    - https://github.com/apache/tomcat/blob/cbe6e15ee81e2fc6232954292a80cca5d1e84009/java/org/apache/catalina/core/StandardWrapper.java
    - https://github.com/apache/tomcat/blob/cbe6e15ee81e2fc6232954292a80cca5d1e84009/java/org/apache/catalina/core/AsyncContextImpl.java
@@ -45,25 +45,25 @@
 
 真人筆記雖然對 Tomcat 內部層級的描述深淺不同，但高度集中於同一使用者視角：開發者寫的是 Servlet／Filter／Listener／Session 等 Java application components；Connector、Coyote、Pipeline、Valve 與 socket/I/O 是 container 的責任，而不是 Servlet 作者直接管理的責任。
 
-這與正式 Servlet API 的定位一致：Servlet interface 定義的是 container 與 servlet class 之間的 contract；`ServletRequest` 也是由 container 建立後交給 `service()`。來源：https://tomcat.apache.org/tomcat-11.0-doc/servletapi/jakarta/servlet/Servlet.html 、 https://tomcat.apache.org/tomcat-11.0-doc/servletapi/jakarta/servlet/ServletRequest.html
+這與正式 Servlet API 的定位一致：Servlet interface 定義的是 container 與 servlet class 之間的 contract；`ServletRequest` 由 container 建立後交給 `service()`。來源：https://tomcat.apache.org/tomcat-11.0-doc/servletapi/jakarta/servlet/Servlet.html 、 https://tomcat.apache.org/tomcat-11.0-doc/servletapi/jakarta/servlet/ServletRequest.html
 
 **對 Ckarta 的相容性含義：** C 不應把 socket／event-loop API 暴露為 Servlet programming model；Java 應看到 Servlet API 的 request/response/context，而不是 C connection object。
 
 ### 2.2 一次 HTTP request 不是直接「呼叫某個 Servlet」
 
-真人 source-reading 文章幾乎都把中間 routing chain 當成理解 Tomcat 的必要部分：Connector/Coyote → Engine → Host → Context → Wrapper → FilterChain → Servlet。這種講法的價值不在於要求新容器複製每一個 Java class，而在於讓使用者知道「URL mapping、virtual host、web application context、servlet mapping、filters」在 Servlet 到達前都有語意。
+真人 source-reading 文章幾乎都把中間 routing chain 當成理解 Tomcat 的必要部分：Connector/Coyote → Engine → Host → Context → Wrapper → FilterChain → Servlet。這種講法的價值不在於要求新容器複製每一個 Java class，而在於讓使用者知道 URL mapping、virtual host、web application context、servlet mapping、filters 都是 request 到達 servlet 前的必要語意層。
 
-Ckarta `main` 目前已經有相同的**概念性**分層：C data plane → route → Java semantic handoff → Java Container/Filter/Servlet target state；但實作上尚未完成 Engine/Host/Context/Wrapper 與正式 mapping。
+Ckarta `main` 目前已有相同的**概念性**分層：C data plane → route → Java semantic handoff → Java Container/Filter/Servlet target state；但實作上尚未完成 Engine/Host/Context/Wrapper 與正式 mapping。
 
 ### 2.3 Filter 是可終止的 request chain，不是單純前置 hook
 
-真人筆記最常重複的觀念是：`Filter#doFilter()` 可以選擇呼叫或不呼叫 `chain.doFilter()`；所以 filter 不只是「請求前執行的一段 callback」，而是可以終止、轉交、甚至對 response 做後置處理的 chain node。來源：https://blog.51cto.com/u_15060510/2640926 、 https://blog.51cto.com/u_14256/14887374
+真人筆記最常重複的觀念是：`Filter#doFilter()` 可以選擇呼叫或不呼叫 `chain.doFilter()`；所以 filter 不只是「請求前執行的一段 callback」，而是可以終止、轉交、並允許後置處理的 chain node。來源：https://blog.51cto.com/u_15060510/2640926 、 https://blog.51cto.com/u_14256/14887374
 
 **Ckarta 相容性要求：** 未來 Filter implementation 必須保留這個 semantics。C native pipeline 可以做安全檢查，但不能把 Filter 降級成只能在 Servlet 前執行一次的固定 middleware。
 
 ### 2.4 Servlet instance 與 request invocation 必須分開理解
 
-真人使用筆記與技術討論反覆指出：預設心智模型不是「每一 request `new Servlet()`」；Servlet instance 生命週期由 container 管理，而不同 request 可以 concurrent invocation 同一 instance。正式 Tomcat 11.0.25 `Servlet` 與 `HttpServlet` API 也明確提醒多請求並行，因此 instance fields／class fields 的 shared mutable state 必須由 application 自己處理同步。來源：https://tomcat.apache.org/tomcat-11.0-doc/servletapi/jakarta/servlet/Servlet.html 、 https://tomcat.apache.org/tomcat-11.0-doc/servletapi/jakarta/servlet/http/HttpServlet.html 、 https://coderanch.com/t/570543/application-servers/Tomcat-multithread-servlet
+真人使用筆記與技術討論反覆指出：預設心智模型不是「每一 request `new Servlet()`」；Servlet instance 生命週期由 container 管理，而不同 request 可以 concurrent invocation 同一 instance。正式 Tomcat 11.0.25 `Servlet` 與 `HttpServlet` API 也提醒多請求並行，因此 instance fields／class fields 的 shared mutable state 必須由 application 自己處理同步。來源：https://tomcat.apache.org/tomcat-11.0-doc/servletapi/jakarta/servlet/Servlet.html 、 https://tomcat.apache.org/tomcat-11.0-doc/servletapi/jakarta/servlet/http/HttpServlet.html 、 https://coderanch.com/t/570543/application-servers/Tomcat-multithread-servlet
 
 **Ckarta 相容性要求：** Java application 不應察覺到「C 每個 request 有自己的 native worker」就因此推導「Servlet instance 不共享」。request concurrency 與 Servlet instance lifecycle 必須仍由 Java container semantics 定義。
 
@@ -75,7 +75,7 @@ Tomcat source 與使用者心得都指出 request／response 可能 recycle/reus
 
 ### 2.6 AsyncContext 是「request 還活著，但原始 servlet invocation 可以結束」的模型
 
-真人 async Servlet 筆記常將 `startAsync()`、`AsyncContext.start()`、`complete()`、`AsyncListener` 視為完整生命週期，而非單一背景 thread helper。正式 Servlet 6.1 API 的 `AsyncListener` 把 `onComplete`、`onError`、`onTimeout`、`onStartAsync` 分開；Tomcat `AsyncContextImpl` 也維護 started/completion/error/recycle 的內部狀態。
+真人 async Servlet 筆記常將 `startAsync()`、`AsyncContext.start()`、`complete()`、`AsyncListener` 視為完整生命週期，而非單一背景 thread helper。正式 Servlet 6.1 API 的 `AsyncListener` 把 `onComplete`、`onError`、`onTimeout`、`onStartAsync` 分開；Tomcat `AsyncContextImpl` 也以 internal state、recycle flag 與 atomic error-processing guards 處理競合。來源：https://tomcat.apache.org/tomcat-11.0-doc/servletapi/jakarta/servlet/AsyncListener.html 、 https://github.com/apache/tomcat/blob/cbe6e15ee81e2fc6232954292a80cca5d1e84009/java/org/apache/catalina/core/AsyncContextImpl.java
 
 **Ckarta 相容性要求：** C request/connection lifetime 必須能長於一次 Java `service()` call；`service()` 返回不能自動視為 network response 已完成。
 
@@ -83,7 +83,7 @@ Tomcat source 與使用者心得都指出 request／response 可能 recycle/reus
 
 真人開發者常從 `ServletException`、`IOException`、Filter exceptions、async errors 等不同層面討論錯誤；Tomcat 也將 asynchronous error processing 與 completion/error listener 分開。
 
-**Ckarta 相容性要求：** 目前 `ck_error`／terminal publication 架構方向正確，但最終應再加上 Servlet-level Throwable / HTTP error response / connection I/O failure 的 mapping，不可只靠 C status code 代表完整 Servlet semantics。
+**Ckarta 相容性要求：** 目前 `ck_error`／terminal publication 架構方向正確，但最終仍需 Servlet-level Throwable / HTTP error response / connection I/O failure 的 mapping，不可只靠 C status code 代表完整 Servlet semantics。
 
 ### 2.8 ServletContext／Session／Listener 是 application scope semantics
 
@@ -98,7 +98,7 @@ Tomcat source 與使用者心得都指出 request／response 可能 recycle/reus
 | 外部入口 | container 接受 network request，再交給 Servlet container | C main 是程序入口，C data plane 預計承擔 network/event loop | **可相容**，只要 Java API 語意保持不變 |
 | HTTP parsing | Connector/Coyote 負責 | C planned | **未完成** |
 | Request object | container 建立 `HttpServletRequest` | C canonical descriptor + 尚未完成正式 Java request facade | **方向正確，未完成** |
-| Engine/Host/Context/Wrapper | 使用者不直接呼叫，但其 mapping semantics 會影響結果 | 只在文件／target architecture，尚未完成正式 container tree | **重大未完成項** |
+| Engine/Host/Context/Wrapper | mapping/dispatch 的 container semantics | 只在文件／target architecture，尚未完成正式 container tree | **重大未完成項** |
 | FilterChain | matching + ordered chain；Filter 可終止 chain | 文件有 Java Filter chain 目標，尚未正式實作 | **未完成** |
 | Servlet instance lifecycle | container 建立／初始化／管理；可被多 request concurrent invoke | Java container 尚未真正完成 | **未完成** |
 | Servlet thread safety | application 必須假設 concurrent requests | Java executor 已為 concurrent boundary，但目前 smoke 只有最小 task | **概念相容、語意未完成** |
@@ -110,7 +110,7 @@ Tomcat source 與使用者心得都指出 request／response 可能 recycle/reus
 | HTTP response | Servlet response object → connector/output | C output pipeline 尚未實作 | **未完成** |
 | Exception propagation | Java Throwable / ServletException / IOException / async error 有規定語意 | C structured error 已存在，但 Java Throwable translation 尚簡化 | **部分相容** |
 | Completion | request result 不等於 Java method return | native completion protocol 已完成 first executable slice | **架構相容** |
-| Cancellation | async/request/connection cancellation semantics 綁定 lifecycle | request cancellation已存在；connection/AsyncContext 尚未接通 | **部分相容** |
+| Cancellation | async/request/connection cancellation semantics 綁定 lifecycle | request cancellation + native connection ownership slice 已存在；AsyncContext 尚未接通 | **部分相容** |
 | Class loading / deployment | Java container 控制 webapp classloading/deployment | 尚未完成 | **未完成** |
 
 ## 4. 最重要的相容性差異
@@ -165,11 +165,13 @@ Ckarta 可以有 C event worker + Java executor；但 Servlet code 必須繼續�
 
 ### 真人文章／討論
 
-- How Tomcat Works — https://l-webx.gitbooks.io/how_tomcat_works/content/
+- Budi Kurniawan、Paul Deck — https://l-webx.gitbooks.io/how_tomcat_works/content/
+- Apache Tomcat Resources（列出《How Tomcat Works》）— https://tomcat.apache.org/resources.html
+- Budi Kurniawan 作者介紹 — https://coderanch.com/u/81144/Budi-Kurniawan
 - yangykaifa — https://www.cnblogs.com/yangykaifa/p/19616315
 - 959_1x — https://blog.51cto.com/c959c/5529851
 - wx63c373b99113d — https://blog.51cto.com/u_15942107/6019505
-- bhamaoth／01010011 — https://01010011.blog/2016/12/29/servlet%EC%9D%98-%EB%8F%99%EC%9E%91%EB%B0%A9%EC%8B%9D%EA%B3%BC-thread-safety/
+- bhupesh／01010011 — https://01010011.blog/2016/12/29/servlet%EC%9D%98-%EB%8F%99%EC%9E%91%EB%B0%A9%EC%8B%9D%EA%B3%BC-thread-safety/
 - Peter Cipov — https://www.petercipov.com/posts/not_only_servlet/
 - Coderanch discussion — https://coderanch.com/t/570543/application-servers/Tomcat-multithread-servlet
 - laojean — https://blog.51cto.com/u_14256/14887374

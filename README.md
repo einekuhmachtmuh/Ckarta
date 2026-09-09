@@ -40,6 +40,7 @@ Nginx 與 Apache Tomcat 不直接複製進 Ckarta repository，而是以 Git sub
 - docs/ARCHITECTURE.md：C/Java 邊界、資料流、並行模型、C 化決策與補充需求。
 - docs/HOT_PATH_REVIEW.md：Nginx／Tomcat hot path（熱路徑）與 whole path（完整路徑）基線。
 - docs/FUNCTION_TRACE.md：固定版本的逐函式 hot path 追蹤。
+- docs/CKARTA_FUNCTION_FLOW.md：Ckarta 自有函式呼叫流程、函式契約、ownership、error 與 lifecycle 實作規約。
 - docs/CONNECTION_OWNERSHIP.md：C 連線、Request、AsyncContext 與 JNI 所有權基線。
 - docs/DESIGN_DECISIONS.md：架構決策與證據矩陣。
 - docs/ENTRYPOINT_DESIGN.md：C main 入口與 JVM 啟動模型。

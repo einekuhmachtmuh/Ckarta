@@ -120,12 +120,14 @@ public final class CkartaServletAsyncContext implements AsyncContext
 	@Override
 	public ServletRequest getRequest()
 	{
+		checkActive();
 		return request;
 	}
 
 	@Override
 	public ServletResponse getResponse()
 	{
+		checkActive();
 		return response;
 	}
 
@@ -138,10 +140,6 @@ public final class CkartaServletAsyncContext implements AsyncContext
 	@Override
 	public void setTimeout(long timeout)
 	{
-		if (timeout < 0L)
-		{
-			throw new IllegalArgumentException("timeout must be non-negative");
-		}
 		this.timeout.set(timeout);
 	}
 
@@ -149,6 +147,15 @@ public final class CkartaServletAsyncContext implements AsyncContext
 	public boolean hasOriginalRequestAndResponse()
 	{
 		return originalRequestAndResponse;
+	}
+
+	private void checkActive()
+	{
+		if (core.state() != CkartaAsyncContext.State.ACTIVE)
+		{
+			throw new IllegalStateException(
+					"async context is no longer active");
+		}
 	}
 
 	private void fireListener(

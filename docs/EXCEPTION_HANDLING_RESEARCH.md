@@ -187,14 +187,41 @@ metrics 至少分開 parse errors、policy rejects、resource exhaustion、timeo
 
 ## 14. Academic grounding
 
-例外處理研究長期指出「正常路徑成本」與「例外傳播成本」是不同工程取捨。現代 PL 研究仍使用 zero-overhead principle：exception handler 不應使極少發生的 exceptional path 平白拖慢主要無例外路徑。
+### 14.1 Structured exception semantics
+
+John B. Goodenough, “Structured Exception Handling”, POPL 1975, pp. 204–224, DOI 10.1145/512976.512997；Barbara H. Liskov and Alan Snyder, “Exception Handling in CLU”, IEEE Transactions on Software Engineering 5(6), 1979, pp. 546–558, DOI 10.1109/TSE.1979.230191。兩者都把 exception 視為結構化的非局部控制流，並把 handler behavior 與模組可靠性／程式結構聯繫起來。
+
+來源：
+https://doi.org/10.1145/512976.512997
+https://doi.org/10.1109/TSE.1979.230191
+
+### 14.2 Java JIT exception implementation
+
+SeungIl Lee、Byung-Sun Yang、Soo-Mook Moon 等人的 Java JIT 研究指出，exception handlers 會影響 JIT optimization，並提出 on-demand translation 等方法，以降低正常路徑受 exception machinery 影響的程度。這支持 Ckarta 將 application exception handling 限制在 Java semantic plane，而不要把它擴散到 native HTTP hot path。
+
+可核實書目：SeungIl Lee, Byung-Sun Yang, Suhyun Kim, Seongbae Park, Soo-Mook Moon, Kemal Ebcioǧlu, Erik R. Altman, “Efficient Java exception handling in just-in-time compilation”, Java Grande 2000, pp. 1–8, DOI 10.1145/337449.337453；期刊擴充版：SeungIl Lee, Byung-Sun Yang, Soo-Mook Moon, Software: Practice and Experience 34(15), 2004, pp. 1463–1480, DOI 10.1002/spe.622。
+
+來源：
+https://doi.org/10.1145/337449.337453
+https://doi.org/10.1002/spe.622
+
+### 14.3 Zero-overhead principle
+
+Cong Ma、Zhaoyi Ge、Max Jung、Yizhou Zhang, “Zero-Overhead Lexical Effect Handlers”, Proceedings of the ACM on Programming Languages 9(OOPSLA2), Article 399, 2025, pp. 3533–3559, DOI 10.1145/3763177。該研究明確討論正常路徑與 exceptional path 的成本分離。
 
 來源：
 https://doi.org/10.1145/3763177
+https://cs.uwaterloo.ca/~yizhou/papers/zero-oopsla2025.pdf
 
-Ckarta 的含義不是「所有 exception 都零成本」，而是正常 HTTP hot path 不應為了極低頻的 Java exception 而增加不必要的跨層 machinery。
+Ckarta 的含義不是「所有 exception 都零成本」，而是正常 HTTP hot path 不應為低頻 Java exception 增加不必要的跨層 machinery。
 
-C++ exception-safety literature 則強調 exception propagation 與 resource ownership/cleanup 的關聯。此原則可移植到 Ckarta 的 lifetime proof，但不代表 Ckarta 應改用 C++ exception ABI。
+### 14.4 Recovery and dependability
+
+David Patterson、Aaron Brown、Pete Broadwell、George Candea、Mike Chen、James Cutler、Patricia Enriquez、Armando Fox、Emre Kiciman、Matthew Merzbacher、David Oppenheimer、Naveen Sastry、William Tetzlaff、Jonathan Traupman、Noah Treuhaft, “Recovery-Oriented Computing (ROC): Motivation, Definition, Techniques, and Case Studies”, U.C. Berkeley Computer Science Technical Report UCB/CSD-02-1175, 2002。George Candea、Aaron B. Brown、Armando Fox、David Patterson, “Recovery-Oriented Computing: Building Multitier Dependability”, IEEE Computer 37(11), 2004, pp. 60–67, DOI 10.1109/MC.2004.219。這些工作支持把 failure detection、diagnosis、recovery 與 state preservation 視為系統架構責任，而不只是語言層 exception syntax。
+
+來源：
+https://www2.eecs.berkeley.edu/Pubs/TechRpts/2002/5574.html
+https://doi.org/10.1109/MC.2004.219
 
 ## 15. 與現有 Ckarta lifecycle 的整合
 

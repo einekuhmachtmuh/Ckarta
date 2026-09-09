@@ -14,6 +14,7 @@ import java.util.concurrent.atomic.AtomicLong;
  */
 public final class CkartaAsyncCycleBinding
 {
+	private static final long MAX_CYCLE_ID = 0x0000FFFFFFFFFFFFL;
 	private static final AtomicLong NEXT_CYCLE_ID = new AtomicLong(1L);
 
 	private final long requestId;
@@ -36,10 +37,19 @@ public final class CkartaAsyncCycleBinding
 			throw new IllegalArgumentException("owner/lifetime token must be non-negative");
 		}
 
-		long generatedCycleId = NEXT_CYCLE_ID.getAndIncrement();
-		if (generatedCycleId <= 0L)
+		long generatedCycleId;
+		for (;;)
 		{
-			throw new IllegalStateException("async cycle id exhausted");
+			long current = NEXT_CYCLE_ID.get();
+			if (current <= 0L || current > MAX_CYCLE_ID)
+			{
+				throw new IllegalStateException("async cycle id exhausted");
+			}
+			if (NEXT_CYCLE_ID.compareAndSet(current, current + 1L))
+			{
+				generatedCycleId = current;
+				break;
+			}
 		}
 
 		this.requestId = requestId;

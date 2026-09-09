@@ -132,6 +132,10 @@ thread model 的 direct-attach 與 JNI bridge 差異見 docs/THREAD_MODEL.md。
 
 ## 15. Executor handoff slice
 
+目前 executable path 已由 Java-owned completion queue 改為 runtime-owned native completion queue：Java executor thread 完成 request 後透過 `RegisterNatives` 綁定的 `publishCompletion(long, long, long, long, long, int)` 直接發布 value-only record。Native callback 不保存 `JNIEnv*`、Java Throwable 或 Java object graph，只將固定整數欄位寫入 native queue。
+
+Java executor 必須使用有界工作佇列；native completion queue 另有獨立有界容量與 close-aware producer backpressure。Java producer 在 queue 滿時可阻塞等待 native consumer 釋放容量，但 C event loop 本身不得因此阻塞。
+
 目前 executable slice 使用 Java ThreadPoolExecutor 的有界工作佇列。C worker 僅負責 submission 後 detach；Java executor thread 建立 NativeRequest 並執行 smoke workload；C 以非阻塞 JNI poll 取得 completion。此 polling 仍是 smoke slice，正式 production event loop 尚需更高效率的通知／多請求 completion queue。
 
 Java executor 必須使用有界容量；飽和時不得 fallback 到 C event-loop thread 執行 Servlet application。

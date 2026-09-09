@@ -8,6 +8,7 @@
 int main(void)
 {
 	ck_connection_registry_t registry;
+	ck_connection_registry_reader_pin_t pin = {0};
 	ck_connection_handle_t handles[CK_CONNECTION_REGISTRY_CAPACITY];
 	ck_connection_handle_t first;
 	ck_connection_handle_t replacement;
@@ -24,10 +25,25 @@ int main(void)
 	assert(socketpair(AF_UNIX, SOCK_STREAM, 0, socket_pair) == 0);
 	assert(ck_connection_registry_attach_socket(
 			&registry, first, 11, 22, 33, socket_pair[0]) == 0);
+	assert(ck_connection_registry_reader_acquire(
+			&registry, first, 11, 22, 33, &pin) == 0);
+	assert(pin.connection != NULL);
+	assert(pin.reader == pin.connection->http_reader);
+	assert(pin.handle == first);
+	assert(ck_connection_registry_close(
+			&registry, first, 11, 22, 33) == 2);
+	assert(ck_connection_registry_retire(
+			&registry, first, 11, 22, 33) == 1);
+	assert(ck_connection_registry_reader_release(&registry, &pin) == 0);
+	assert(pin.connection == NULL);
+	assert(pin.reader == NULL);
+	assert(pin.handle == 0);
+	assert(ck_connection_registry_reader_release(&registry, &pin) == -1);
+
 	assert(ck_connection_registry_socket_fd(
 			&registry, first, 11, 22, 33) == socket_pair[0]);
-	assert(ck_connection_registry_attach_socket(
-			&registry, first, 11, 22, 34, socket_pair[1]) == -3);
+	assert(ck_connection_registry_close(
+			&registry, first, 11, 22, 33) == 1);
 	assert(ck_connection_registry_start_async_cycle(
 			&registry, first, 11, 22, 33, 42) == 0);
 	assert(ck_connection_registry_start_async_cycle(

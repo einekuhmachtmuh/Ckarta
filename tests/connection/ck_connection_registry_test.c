@@ -2,6 +2,8 @@
 
 #include <assert.h>
 #include <errno.h>
+#include <sys/socket.h>
+#include <unistd.h>
 
 int main(void)
 {
@@ -9,6 +11,8 @@ int main(void)
 	ck_connection_handle_t handles[CK_CONNECTION_REGISTRY_CAPACITY];
 	ck_connection_handle_t first;
 	ck_connection_handle_t replacement;
+	int socket_pair[2];
+	char byte;
 	unsigned int i;
 
 	assert(ck_connection_registry_init(&registry) == 0);
@@ -17,6 +21,13 @@ int main(void)
 	assert(ck_connection_registry_register(
 			&registry, 1, 11, 22, 33, &first) == 0);
 	assert(first != 0);
+	assert(socketpair(AF_UNIX, SOCK_STREAM, 0, socket_pair) == 0);
+	assert(ck_connection_registry_attach_socket(
+			&registry, first, 11, 22, 33, socket_pair[0]) == 0);
+	assert(ck_connection_registry_socket_fd(
+			&registry, first, 11, 22, 33) == socket_pair[0]);
+	assert(ck_connection_registry_attach_socket(
+			&registry, first, 11, 22, 34, socket_pair[1]) == -3);
 	assert(ck_connection_registry_start_async_cycle(
 			&registry, first, 11, 22, 33, 42) == 0);
 	assert(ck_connection_registry_start_async_cycle(
@@ -34,6 +45,10 @@ int main(void)
 			CK_CONNECTION_TERMINAL_TIMEOUT) == 2);
 	assert(ck_connection_registry_close(
 			&registry, first, 11, 22, 33) == 0);
+	assert(ck_connection_registry_socket_fd(
+			&registry, first, 11, 22, 33) == -1);
+	assert(recv(socket_pair[1], &byte, 1, 0) == 0);
+	assert(close(socket_pair[1]) == 0);
 	assert(ck_connection_registry_retire(
 			&registry, first, 11, 22, 33) == 0);
 	assert(ck_connection_registry_retire(

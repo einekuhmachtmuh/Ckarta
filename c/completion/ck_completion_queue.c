@@ -1,5 +1,6 @@
 #include "ck_completion_queue.h"
 
+#include <string.h>
 
 static int ck_completion_queue_lock(ck_completion_queue_t *queue)
 {

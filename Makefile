@@ -71,9 +71,9 @@ $(JAVA_SERVLET_API_TEST): tests/java/CkartaServletAsyncContextTest.java java/org
 	@mkdir -p $(BUILD_DIR)/java-test-classes
 	javac --release 21 -cp $(JAKARTA_SERVLET_API_JAR) -d $(BUILD_DIR)/java-test-classes tests/java/CkartaServletAsyncContextTest.java java/org/ckarta/servlet/CkartaServletAsyncContext.java java/org/ckarta/servlet/CkartaAsyncContext.java java/org/ckarta/servlet/CkartaAsyncCycleBinding.java
 
-$(ABI_TEST): tests/request_lifecycle_test.c c/jni/ck_request.c c/jni/ck_request.h c/error/ck_error.c c/error/ck_error.h
+$(ABI_TEST): tests/request_lifecycle_test.c c/jni/ck_request.c c/jni/ck_request.h c/error/ck_error.c c/error/ck_error.h c/http/ck_http_parser.c c/http/ck_http_parser.h
 	@mkdir -p $(BIN_DIR)
-	$(CC) $(CFLAGS) tests/request_lifecycle_test.c c/jni/ck_request.c c/error/ck_error.c -o $@
+	$(CC) $(CFLAGS) tests/request_lifecycle_test.c c/jni/ck_request.c c/error/ck_error.c c/http/ck_http_parser.c -o $@
 
 $(ERROR_TEST): tests/error/ck_error_test.c c/error/ck_error.c c/error/ck_error.h
 	@mkdir -p $(BIN_DIR)

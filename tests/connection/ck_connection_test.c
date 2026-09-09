@@ -58,6 +58,7 @@ int main(void)
 			== CK_CONNECTION_TERMINAL_ALREADY_DIFFERENT);
 	assert(ck_connection_close(&connection) == 0);
 	assert(ck_connection_socket_fd(&connection) == -1);
+	assert(ck_connection_http_reader(&connection) == NULL);
 	assert(ck_connection_close(&connection) == 1);
 	assert(ck_connection_state(&connection) == CK_CONNECTION_CLOSED);
 	assert(recv(socket_pair[1], &byte, 1, 0) == 0);
@@ -83,5 +84,6 @@ int main(void)
 			|| (disconnect.result == CK_CONNECTION_TERMINAL_ALREADY_DIFFERENT)
 			|| disconnect.result == CK_CONNECTION_TERMINAL_CLAIMED);
 	assert(ck_connection_close(&connection) == 0);
+	assert(ck_connection_http_reader(&connection) == NULL);
 	return 0;
 }

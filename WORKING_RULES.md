@@ -140,8 +140,23 @@ Nginx 與 Apache Tomcat 以 Git submodule（Git 子模組）固定於 third_part
 
 重大決策必須交叉比對固定版本的 Nginx、Tomcat、OpenJDK 與相關學術來源，不得依單一來源作結論。
 
+## 16. 例外與錯誤處理規則
+
+例外、error status、HTTP status、cancellation、timeout、client disconnect 與 process-fatal condition 不得混成單一錯誤通道；每一層必須有唯一主要 error authority，並明確定義 propagation、precedence、terminal transition 與 recovery 行為。跨層傳遞只能攜帶該層需要的 stable category/code/status 與有限診斷資訊，不得把另一層的私有 exception object、內部資料結構或錯誤字串格式變成 ABI。
+
+JNI 任何可能建立 pending Java exception 的操作，在進入下一個需要 JNI 狀態正確性的操作前，必須依 JDK 對應版本規格檢查 exception state；只有已明確決定由 native layer 接管時才可清除 pending exception。不得以無條件 ExceptionClear() 掩蓋錯誤，也不得把 ExceptionDescribe() 當成正式錯誤傳輸機制。Java Throwable 的 reference 若跨越 JNI、thread 或 queue 保存，必須遵守對應 JNI reference 類型的 ownership、scope、thread-affinity 與 lifetime 契約。
+
+任何 asynchronous error、completion 或 cancellation path 都必須定義 exactly-once terminal outcome，以及 late completion、duplicate completion、owner teardown、shutdown、timeout 與 cancellation race 的優先序；不得依 callback arrival order 或未定義 race 推測最終狀態。清理責任必須與 request／connection／buffer owner 綁定，且 error path 不得產生 use-after-free、double free、leak 或已失效 owner 上的 completion。
+
+client-visible error 與 internal diagnostic 必須分離。外部回應不得預設暴露 stack trace、server/build version、filesystem path、native pointer、credentials、TLS secret 或其他內部實作資訊；內部診斷則應使用 request／connection correlation identity 與 stable error code。錯誤回應不得直接把未驗證外部輸入拼入 log 或 dynamic error document。
+
+retry 不得由「發生 exception」單獨觸發；任何 retry 都必須先證明 operation semantics、idempotency、request replayability、bytes-sent state、timeout budget、upstream state 與 cancellation state 允許重試。非冪等請求不得因一般 exception/error path 自動 retry。
+
+所有新增 error category、status、exception translation、fatal path 或 recovery transition，都必須同步檢查 docs/EXCEPTION_HANDLING_RESEARCH.md 及受影響的 architecture、JNI、lifecycle、security、test 文件；長篇研究只在該權威文件保存一套完整定義。
+
 ## 16. 文件索引
 
+docs/EXCEPTION_HANDLING_RESEARCH.md
 docs/ARCHITECTURE.md
 docs/HOT_PATH_REVIEW.md
 docs/FUNCTION_TRACE.md

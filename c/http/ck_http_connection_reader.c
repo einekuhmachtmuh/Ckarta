@@ -99,6 +99,11 @@ ck_http_connection_read_result_t ck_http_connection_reader_drive(
 			reader->begin += consumed;
 			process_budget -= consumed;
 
+			if (ck_http_input_complete(&reader->input))
+			{
+				return CK_HTTP_CONNECTION_READ_REQUEST_COMPLETE;
+			}
+
 			read_result = map_input_result(input_result);
 			if (read_result == CK_HTTP_CONNECTION_READ_REQUEST_COMPLETE
 					|| read_result == CK_HTTP_CONNECTION_READ_BAD_REQUEST

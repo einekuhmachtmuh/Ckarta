@@ -128,6 +128,6 @@ CGI/FastCGI 定位：未來可掛接 application gateway module，不屬核心 r
 
 `ck_connection_t` 現已直接擁有 Linux/POSIX socket descriptor；C-driven JVM integration test 以 `socketpair()` 驗證 Java 不接觸 descriptor，terminal winner 之後由 native owner close socket，peer 收到 EOF，registry 再允許 retire。
 
-Linux `ck_event_loop` 也已有獨立 executable baseline：event loop 擁有 epoll instance、connection owner 擁有 socket descriptor；notification 只攜帶 opaque `uint64_t` cookie。這不是完整 TCP request path。
+Linux `ck_event_loop` 已有獨立 executable baseline，並已進一步完成 loopback TCP listener／accept integration smoke：event loop 擁有 epoll instance、connection owner 擁有 socket descriptor；notification 只攜帶 opaque `uint64_t` cookie，accepted socket 由 `accept4()` 以 nonblocking／close-on-exec 屬性建立。
 
-目前尚未完成：TCP listener／accept、nonblocking HTTP read/write state machine、HTTP request framing integration、response ownership、async dispatch、real timeout/client-disconnect source、shutdown drain、TCK、sanitizer/fuzz、Windows IOCP 與其他平台 event backend。
+目前尚未完成：正式多 worker listener/accept ownership、production connection event consumer、nonblocking HTTP read/write state machine、HTTP request framing integration、response ownership、async dispatch、real timeout source、完整 client-disconnect policy、shutdown drain、TCK、sanitizer/fuzz、Windows IOCP 與其他平台 event backend。

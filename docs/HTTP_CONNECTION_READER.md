@@ -11,18 +11,20 @@
 ```text
 ck_connection owner
     │
-    └── connection reader
+    └── heap-backed connection reader
             ├── fixed receive buffer
             └── ck_http_input state
 ```
 
-目前 `ck_http_connection_reader_t` 已直接嵌入 `ck_connection_t`，並在 `ck_connection_init()` 中完成初始化；`ck_connection_http_reader()` 只向已取得 connection ownership 的 caller 提供其 reader。
+目前 `ck_http_connection_reader_t` 不是按值嵌入 `ck_connection_t`；`ck_connection_t` 持有其 heap allocation 的唯一 owner pointer，並在 `ck_connection_init()` 建立，在 connection terminal close 成功後釋放。`ck_connection_http_reader()` 只向已取得 connection ownership 的 caller 提供 borrow pointer。
 
 reader buffer 由 connection-side owner 擁有。body sink callback 只借用 body span，必須在 callback 返回前完成同步消費；callback 不得保存該 pointer 到下一次 reader operation。
 
 `ck_http_request_t` 的 spans 受 `ck_http_input`／parser storage lifetime 約束。`ck_http_connection_reader_next_request()` 會 recycle current request state，因此 caller 不得在其後繼續使用舊 request span。
 
 registry 不直接暴露內部 `ck_connection_t *` 給未受控 caller；connection entry 的 lookup lifetime 仍由 registry mutex 保護。這避免以 reader integration 為由繞過 generation／entry lifetime contract。
+
+reader access 目前遵循 connection owner single-owner contract：持有 borrow pointer 的期間，不得同時由另一執行緒執行 connection terminal close 或其他可能釋放 reader 的操作。這不是 reader 本身的 thread-safe guarantee；正式跨執行緒 dispatch 必須先建立 registry-safe lifetime guard。
 
 ## 3. Read contract
 
@@ -83,7 +85,7 @@ Ckarta reader 不重新解釋這些規則，只執行已由 framing layer 決定
 已完成：
 
 - bounded connection-owned receive buffer
-- `ck_connection_t` 直接擁有 `ck_http_connection_reader_t`
+- `ck_connection_t` 持有 heap-backed reader owner pointer
 - non-blocking `recv()` consumer
 - HTTP header/body framing composition
 - Content-Length streaming body sink
@@ -94,6 +96,7 @@ Ckarta reader 不重新解釋這些規則，只執行已由 framing layer 決定
 - body sink failure boundary
 - fragmented chunk delimiter regression test
 - independent reader socketpair tests
+- connection close 後 reader lifetime invalidation test
 
 尚未完成：
 

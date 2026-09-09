@@ -140,7 +140,7 @@ Java executor 必須使用有界容量；飽和時不得 fallback 到 C event-lo
 
 目前 executable slice 使用 Java-owned bounded completion queue（Java 所有的有界完成佇列）。C worker 提交 request 後即可 detach；C 以短 JNI poll 呼叫取得 completion。輸出 DirectByteBuffer 固定 36 bytes：request handle 8 bytes、owner token 8 bytes、lifetime token 8 bytes、result 8 bytes、status 4 bytes，並以 native byte order（原生位元組序）寫入。
 
-此設計只驗證非阻塞交接的生命週期；多請求 smoke 已能以 request_id + owner_token + lifetime_token 路由兩個完成事件，但仍不是最終多 worker completion queue。正式實作前仍需避免每次 poll attach/detach，並完成 cancellation、shutdown drain 與通知機制。
+此設計只驗證非阻塞交接的生命週期；多請求 smoke 已能以 request_id + owner_token + lifetime_token 路由兩個完成事件。poll API 將 1 定義為新 terminal completion、0 為目前沒有 completion、2 為已消費但因 cancellation/duplicate 而沒有產生第二 terminal outcome、負值為 runtime/ABI error 或新 failure；此仍不是最終多 worker completion queue。正式實作前仍需避免每次 poll attach/detach，並完成 cancellation、shutdown drain 與通知機制。
 
 ## 17. 多請求 completion ownership
 

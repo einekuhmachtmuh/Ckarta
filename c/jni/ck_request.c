@@ -130,7 +130,7 @@ ck_request_state_t ck_request_state(const ck_request_t *request)
 {
 	if (request == NULL)
 	{
-		return CK_REQUEST_FAILED;
+		return CK_REQUEST_STATE_INVALID;
 	}
 
 	return (ck_request_state_t)atomic_load_explicit(

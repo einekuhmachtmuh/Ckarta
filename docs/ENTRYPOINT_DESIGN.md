@@ -90,36 +90,48 @@ Invocation API 要點：
 來源：
 https://docs.oracle.com/en/java/javase/21/docs/specs/jni/invocation.html
 
-## 9. JVM bootstrap thread 與 JNI bridge
+## 9. JVM bootstrap thread 與 JNI topology
 
-第一階段採：
+第一階段目前不固定 JNI bridge topology。
+
+固定不變的邊界是：
 
 C main
-→ create bootstrap pthread（建立啟動 pthread）
-→ bootstrap thread：JNI_CreateJavaVM
+→ 專用 bootstrap thread：JNI_CreateJavaVM()
 → Java bootstrap / container init
 → 發出 JAVA_CONTAINER_READY
-→ C main／control thread 收到 ready
-→ 建立 JNI bridge thread／pool
-→ 開放 network
+→ 完成必要 native runtime／worker 準備
+→ 開放 network admission
 
-C worker 不直接共享 `JNIEnv*`。第一階段暫不要求 C worker 永久 attach JVM；C worker 將完成解析的 request descriptor 放入 bounded JNI queue，再由 JNI bridge thread 取得當前 thread 的 `JNIEnv*` 執行粗粒度 JNI dispatch，最後以 completion record 回到原 owner worker。
+Servlet application code 只能由 Java executor／container thread 執行；C event-loop thread 不得直接執行 Servlet application code。
 
-這是 thread／ownership 的初步決策，不代表 bridge thread 一定比 C worker 直接 attach 更快；完整待測方案見 `docs/THREAD_MODEL.md`。
+JNI semantic handoff 的正式候選維持與 `docs/THREAD_MODEL.md` 一致：
 
-停止時：
+A. C worker long-lived AttachCurrentThread，僅作 JNI control／submission；
+B. worker-group 對應受控 JNI bridge；
+C. central bridge thread pool。
+
+若採 B/C，C→JNI queue 必須有界；若採 A，Java executor 本身仍必須有界。三者的 thread 數量、queue policy 與最終 topology 必須以相同 canonical request workload 的 benchmark 決定，不得由本文件預先指定。
+
+停止時的共同前置條件：
 
 stop admission
-→ stop／drain JNI dispatch
-→ finish/cancel Servlet work
-→ stop C workers
-→ detach remaining JNI-attached native threads
-→ terminate Java container
-→ DestroyJavaVM
-→ join bootstrap／bridge／worker threads
-→ native cleanup
+→ stop new Java dispatch
+→ drain／cancel outstanding request work
+→ 完成 AsyncContext／request cancellation
 
-真正的 thread join 順序、bridge thread 數量與 queue policy 必須以可執行測試及 benchmark 固定；本文件不假造尚未存在的 Ckarta API。
+之後依實際 topology：
+
+- bridge topology：drain／stop bridge queue → detach bridge threads；
+- attached-worker topology：確保 worker 不再進入 JNI → detach worker attachments。
+
+最後才進入：
+
+terminate Java container
+→ DestroyJavaVM
+→ join／cleanup remaining native resources
+
+本文件不再把「建立 central JNI bridge」描述為既定第一階段架構，避免與 thread model、benchmark plan 與工作現況產生第二套規則。
 
 ## 10. 與 Nginx／Tomcat／OpenJDK 的吸收
 

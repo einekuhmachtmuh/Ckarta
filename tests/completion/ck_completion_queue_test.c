@@ -24,6 +24,7 @@ static void *producer_main(void *arg)
 		record.request_id = args->base + i;
 		record.owner_token = 1000 + i;
 		record.lifetime_token = 2000 + i;
+		record.cycle_id = 1;
 		record.result = (int64_t)i;
 		record.status = 0;
 		if (ck_completion_queue_push(args->queue, &record) != 0)
@@ -93,6 +94,11 @@ int main(void)
 		for (i = 0; i < CK_COMPLETION_QUEUE_CAPACITY; i++)
 		{
 			record.request_id = 10000 + i;
+			record.owner_token = 100 + i;
+			record.lifetime_token = 200 + i;
+			record.cycle_id = 1;
+			record.result = 0;
+			record.status = 0;
 			assert(ck_completion_queue_push(&queue, &record) == 0);
 		}
 		record.request_id = 20000;

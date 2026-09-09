@@ -105,12 +105,13 @@ ck_http_connection_read_result_t ck_http_connection_reader_drive(
 			{
 				return CK_HTTP_CONNECTION_READ_TOO_LARGE;
 			}
-			if (reader->begin != reader->end)
 			{
-				return CK_HTTP_CONNECTION_READ_IO_ERROR;
+				size_t remaining = reader->end - reader->begin;
+				memmove(reader->buffer,
+						reader->buffer + reader->begin, remaining);
+				reader->begin = 0;
+				reader->end = remaining;
 			}
-			reader->begin = 0;
-			reader->end = 0;
 		}
 
 		{

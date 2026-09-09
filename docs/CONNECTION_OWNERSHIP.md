@@ -60,7 +60,7 @@ terminal reason：
 
 ## 4. C Request
 
-Request owner 是 connection，直到 request 被明確移交至 asynchronous owner。`owner_token` 與 `lifetime_token` 是驗證用識別，不取代實際 owner；native storage 的回收責任仍屬 owner。
+Request owner 是 connection，直到 request 被明確移交至 asynchronous owner。`owner_token`、`lifetime_token` 與每一 async cycle 的 `cycle_id` 是驗證用識別，不取代實際 owner；native storage 的回收責任仍屬 owner。`cycle_id` 必須在其 native 可表示範圍內，且同一 request 的不同 async cycle 不得共用相同 active cycle identity。
 
 Request 包含：
 

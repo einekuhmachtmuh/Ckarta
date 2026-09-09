@@ -4,6 +4,7 @@ CLASS_DIR := $(BUILD_DIR)/classes
 BIN_DIR := $(BUILD_DIR)/bin
 CLASS_STAMP := $(CLASS_DIR)/.stamp
 TARGET := $(BIN_DIR)/ckarta-smoke
+JAVA_ASYNC_TEST := $(BIN_DIR)/ckarta-async-context-test
 ABI_TEST := $(BIN_DIR)/ckarta-request-lifecycle-test
 CONFIG_TEST := $(BIN_DIR)/ckarta-config-test
 ERROR_TEST := $(BIN_DIR)/ckarta-error-test
@@ -33,6 +34,10 @@ $(CLASS_STAMP): $(JAVA_SOURCES)
 $(TARGET): c/core/main.c c/config/ck_config.c c/config/ck_config.h c/error/ck_error.c c/error/ck_error.h c/completion/ck_completion_queue.c c/completion/ck_completion_queue.h c/event/ck_completion_notification.c c/event/ck_completion_notification.h c/connection/ck_connection.c c/connection/ck_connection.h c/jni/ck_jni_runtime.c c/jni/ck_jni_runtime.h c/jni/ck_request.c c/jni/ck_request.h classes
 	@mkdir -p $(BIN_DIR)
 	$(CC) $(CFLAGS) $(CPPFLAGS) c/core/main.c c/config/ck_config.c c/error/ck_error.c c/completion/ck_completion_queue.c c/event/ck_completion_notification.c c/connection/ck_connection.c c/jni/ck_jni_runtime.c c/jni/ck_request.c -o $@ $(LDFLAGS)
+
+$(JAVA_ASYNC_TEST): tests/java/CkartaAsyncContextTest.java java/org/ckarta/servlet/CkartaAsyncContext.java
+	@mkdir -p $(BUILD_DIR)/java-test-classes
+	javac --release 21 -d $(BUILD_DIR)/java-test-classes $^
 
 $(ABI_TEST): tests/request_lifecycle_test.c c/jni/ck_request.c c/jni/ck_request.h c/error/ck_error.c c/error/ck_error.h
 	@mkdir -p $(BIN_DIR)
@@ -65,7 +70,8 @@ $(CONFIG_TEST): tests/config_load_test.c c/config/ck_config.c c/config/ck_config
 clean:
 	rm -rf $(BUILD_DIR)
 
-test: all $(ABI_TEST) $(CONFIG_TEST) $(ERROR_TEST) $(ERROR_RACE_TEST) $(TERMINAL_RACE_TEST) $(COMPLETION_QUEUE_TEST) $(CONNECTION_TEST)
+test: all $(JAVA_ASYNC_TEST) $(ABI_TEST) $(CONFIG_TEST) $(ERROR_TEST) $(ERROR_RACE_TEST) $(TERMINAL_RACE_TEST) $(COMPLETION_QUEUE_TEST) $(CONNECTION_TEST)
+	java -ea -cp $(BUILD_DIR)/java-test-classes org.ckarta.servlet.CkartaAsyncContextTest
 	$(ABI_TEST)
 	$(CONFIG_TEST) tests/config/valid.conf
 	$(ERROR_TEST)

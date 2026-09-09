@@ -147,3 +147,11 @@ PR #1 已合併至 `main`，merge commit `e501249ce91fd7c76c6625f1826ec0240d4d7d
 ## 11. 最新規則與 ABI 進度
 
 2026-09-08：`WORKING_RULES.md` 新增「精簡與整合檢查」及變數／欄位／狀態／handle／buffer reference 的 lifecycle／ownership 檢查，並完成自檢。JNI ownership/cancellation ABI 已進入可執行實作：process-local descriptor、owner/lifetime token、atomic lifecycle state、idempotent cancellation 與 lifecycle test 均已加入；真正 AsyncContext／connection cancellation integration 仍待完成。
+
+
+## Branch status
+
+- Purpose: JNI ownership、request descriptor、cancellation ABI與lifecycle smoke
+- Lifecycle status: CLOSED / MERGED
+- Relation to main: PR #2 merged into main; branch retained only as historical provenance.
+- This file is branch-specific state and must not be treated as main canonical state.

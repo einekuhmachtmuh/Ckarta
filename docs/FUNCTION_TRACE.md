@@ -14,7 +14,7 @@ Apache Tomcat：
 - commit cbe6e15ee81e2fc6232954292a80cca5d1e84009
 - repository https://github.com/apache/tomcat
 
-本文件只把已從這兩個精確 commit 讀取並確認的函式列入「已核對」。
+本文件只把已從這兩個精確 commit 讀取並確認的 upstream 函式列入「已核對」；Ckarta 自有函式與實作契約另見 `docs/CKARTA_FUNCTION_FLOW.md`。
 
 ## 2. Nginx 核心事件 Hot Path
 

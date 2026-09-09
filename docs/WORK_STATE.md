@@ -13,6 +13,7 @@
 - Nginx 參考版本：1.30.4，commit `017cf98dcce217946572a896f0992370475e189f`。
 - Apache Tomcat 參考版本：11.0.25，commit `cbe6e15ee81e2fc6232954292a80cca5d1e84009`。
 - 第一階段禁止 JVM 建立後 fork 讓子程序繼承 JVM。
+- Apache HTTP Server 2.4.68：tagged commit `736bb657405eb73fd68a64772c3a908807bdb887`，作外部研究基線，不進目前 submodule set。
 
 ## 2. 已落實的核心文件
 

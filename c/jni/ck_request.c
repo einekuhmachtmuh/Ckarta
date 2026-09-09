@@ -147,19 +147,17 @@ const ck_error_t *ck_request_error(const ck_request_t *request)
 	return &request->error;
 }
 
-int ck_request_finish(ck_request_t *request, ck_request_state_t terminal_state)
+int ck_request_finish(ck_request_t *request)
 {
 	uint32_t expected = CK_REQUEST_RUNNING;
 
-	if (request == NULL
-			|| (terminal_state != CK_REQUEST_COMPLETED
-					&& terminal_state != CK_REQUEST_FAILED))
+	if (request == NULL)
 	{
 		return -1;
 	}
 
 	if (atomic_compare_exchange_strong_explicit(
-			&request->state, &expected, (uint32_t)terminal_state,
+			&request->state, &expected, CK_REQUEST_COMPLETED,
 			memory_order_acq_rel, memory_order_acquire))
 	{
 		return 0;

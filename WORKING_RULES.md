@@ -154,7 +154,7 @@ retry 不得由「發生 exception」單獨觸發；任何 retry 都必須先證
 
 所有新增 error category、status、exception translation、fatal path 或 recovery transition，都必須同步檢查 docs/EXCEPTION_HANDLING_RESEARCH.md 及受影響的 architecture、JNI、lifecycle、security、test 文件；長篇研究只在該權威文件保存一套完整定義。
 
-## 16. 文件索引
+## 17. 文件索引
 
 docs/EXCEPTION_HANDLING_RESEARCH.md
 docs/ARCHITECTURE.md

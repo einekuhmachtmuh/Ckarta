@@ -467,3 +467,12 @@ GitHub Actions run `34346260455`、job `102448450125` 對 commit `b07e087de5a528
 本輪以當前 main HEAD 的測試檔為基礎重新套用已核實的 7-argument constructor。這不是新的 API 設計，也不新增 WORKING_RULES 規則；屬於既有函式 signature／引用與版本一致性規則所涵蓋的整合錯誤。
 
 此後新的 CI 必須先通過舊 regression，才可取得 native registry/JNI integration test 的真正執行結果。
+
+
+## 48. 2026-09-09 Java test target source/jar separation correction
+
+GitHub Actions run `34346327314`、job `102448663068` 的最新 failure 已實際定位：`JAVA_NATIVE_ASYNC_BRIDGE_TEST` 的 Makefile recipe 使用 `$^`，把正常作為 classpath dependency 的 `jakarta.servlet-api-6.1.0.jar` 一併傳給 `javac` source argument，導致 `error: invalid flag: build/deps/jakarta.servlet-api-6.1.0.jar`。Java source compilation 本身在此前已成功。
+
+本輪改為在 recipe 中明確列出六個 Java source，JAR 仍保留為 prerequisite 與 classpath dependency。這符合既有函式／dependency closure 規則，沒有新增工作守則。
+
+下一個 CI 必須驗證新增 C registry unit test 及 C-driven JVM JNI bridge 是否真正執行；目前為止尚未取得該 integration test 的成功執行證據。

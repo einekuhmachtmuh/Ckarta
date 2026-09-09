@@ -166,7 +166,8 @@ public final class CkartaServletRequestAdapter extends ServletRequestWrapper
 					{
 						asyncStarted.set(false);
 					}
-				});
+				},
+				binding);
 
 		CkartaServletAsyncContext context =
 				new CkartaServletAsyncContext(

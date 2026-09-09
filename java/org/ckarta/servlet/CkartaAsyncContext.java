@@ -49,6 +49,7 @@ public final class CkartaAsyncContext
 
 	private final Executor executor;
 	private final TerminalSink terminalSink;
+	private final CkartaAsyncCycleBinding cycleBinding;
 	private final AtomicReference<State> state =
 			new AtomicReference<>(State.ACTIVE);
 	private final AtomicBoolean listenerFired = new AtomicBoolean(false);
@@ -57,8 +58,17 @@ public final class CkartaAsyncContext
 
 	public CkartaAsyncContext(Executor executor, TerminalSink terminalSink)
 	{
+		this(executor, terminalSink, null);
+	}
+
+	public CkartaAsyncContext(
+			Executor executor,
+			TerminalSink terminalSink,
+			CkartaAsyncCycleBinding cycleBinding)
+	{
 		this.executor = Objects.requireNonNull(executor, "executor");
 		this.terminalSink = Objects.requireNonNull(terminalSink, "terminalSink");
+		this.cycleBinding = cycleBinding;
 	}
 
 	public State state()
@@ -184,6 +194,10 @@ public final class CkartaAsyncContext
 		{
 			fireListenerOnce(event, error);
 			state.set(State.COMPLETED);
+			if (cycleBinding != null)
+			{
+				cycleBinding.invalidate();
+			}
 		}
 
 		if (sinkFailure != null && failOnRace)

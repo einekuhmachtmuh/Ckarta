@@ -143,3 +143,11 @@ Codex 本機測試環境：
 此 slice 只驗證 topology A 的 lifecycle／JNI boundary，不代表 A 為最終 topology。真正 A/B/C benchmark 仍待接上 canonical request workload。
 
 目前 PR 尚未合併 `main`；CI 必須以實際 run 結果判定是否可進正式基線。
+
+
+## Branch status
+
+- Purpose: JVM bootstrap、OpenJDK 21u/JNI baseline與最小 executable bootstrap smoke slice
+- Lifecycle status: CLOSED / MERGED
+- Relation to main: PR #1 merged into main; branch retained only as historical provenance.
+- This file is branch-specific state and must not be treated as main canonical state.

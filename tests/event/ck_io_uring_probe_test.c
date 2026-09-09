@@ -15,8 +15,7 @@ int main(void)
 
 	if (!result.available)
 	{
-		printf("io_uring unavailable or blocked: errno=%d
-",
+		printf("io_uring unavailable or blocked: errno=%d\n",
 				result.error_number);
 		return 0;
 	}

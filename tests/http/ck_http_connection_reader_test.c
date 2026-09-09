@@ -365,7 +365,6 @@ static void test_body_queue_backpressure(void)
 			&body_queue, received, 32768U, &read)
 			== CK_HTTP_REQUEST_BODY_READ_DATA);
 	assert(read == 32768U);
-	memcpy(received, received, read);
 	received_total += read;
 
 	result = ck_http_connection_reader_drive(

@@ -155,3 +155,16 @@ Windows IOCP backend：尚未實作。
 正式 multi-worker network event consumer：尚未實作。
 正式 completion-to-event-loop wakeup：尚未實作。
 HTTP framing／request-response network path：尚未實作。
+
+
+## 17. Linux io_uring 受控 backend
+
+除現有 epoll readiness backend 外，Linux 可採 io_uring completion backend。此 backend 不使用 liburing，僅在 platform/event backend 內透過 `<linux/io_uring.h>`、`syscall()` 與 `SYS_io_uring_setup/enter/register` 使用 Linux documented UAPI。
+
+io_uring 與 epoll 並非同一 programming model：epoll 回報 readiness，io_uring 回報 operation completion。上層因此不得直接共享兩者的私有資料結構；應經 Ckarta-defined connection/completion contract 轉換。
+
+kernel version 只能作初步 deployment gate；正式啟用必須同時檢查 `io_uring_setup` 是否被 kernel/security policy 允許，以及 `IORING_REGISTER_PROBE` 回報的 required opcode 與 feature flags。不可 hard-code syscall number。
+
+目前產品策略仍是 epoll compatibility baseline + optional io_uring backend。preferred modern target 為 Linux 6.12+；5.7+ 可在實際 probe 通過時作初始 socket io_uring 相容層。若 setup 被 seccomp/container policy 拒絕或 required opcode 不存在，必須回退 epoll。
+
+詳見 `docs/IO_URING_BACKEND_RESEARCH.md`。

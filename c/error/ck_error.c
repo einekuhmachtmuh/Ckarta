@@ -45,6 +45,11 @@ int ck_error_set(ck_error_t *error, ck_error_category_t category,
 		return -1;
 	}
 
+	if ((flags & ~CK_ERROR_FLAG_MASK) != 0)
+	{
+		return -1;
+	}
+
 	error->abi_version = CK_ERROR_ABI_VERSION;
 	error->category = (uint32_t)category;
 	error->code = (uint32_t)code;

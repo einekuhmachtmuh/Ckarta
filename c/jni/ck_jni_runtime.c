@@ -377,157 +377,91 @@ int ck_runtime_dispatch_async_smoke(ck_runtime_t *runtime,
 int ck_runtime_poll_completion(ck_runtime_t *runtime, ck_request_t *requests,
 		size_t request_count)
 {
-	JNIEnv *env = NULL;
-	jclass runtime_class;
-	jmethodID method;
-	jobject output;
-	unsigned char storage[36];
-	void *native_output;
-	jint poll_result;
-	jlong request_handle;
-	jlong owner_token;
-	jlong lifetime_token;
-	jlong result_value;
-	jint status;
-	jint attach_result;
-	jint detach_result;
-	int finish_result;
+	ck_completion_record_t completion;
+	int result;
+	size_t i;
 
 	if (runtime == NULL || requests == NULL || request_count == 0
-			|| runtime->vm == NULL || runtime->shutdown_requested
-			|| runtime->shutdown_complete)
+			|| !runtime->completion_queue_initialized)
 	{
 		return -1;
 	}
 
-	attach_result = (*runtime->vm)->AttachCurrentThread(runtime->vm,
-			(void **)&env, NULL);
-	if (attach_result != JNI_OK)
+	result = ck_completion_queue_pop(&runtime->completion_queue, &completion);
+	if (result <= 0)
 	{
-		return -1;
+		return result;
 	}
 
-	runtime_class = (*env)->FindClass(env, "org/ckarta/bootstrap/CkartaRuntime");
-	if (ck_check_java_exception(env, "FindClass(pollCompletion)") != 0 ||
-			runtime_class == NULL)
+	for (i = 0; i < request_count; i++)
 	{
-		(void)(*runtime->vm)->DetachCurrentThread(runtime->vm);
-		return -1;
-	}
-
-	method = (*env)->GetStaticMethodID(env, runtime_class, "pollCompletion",
-			"(Ljava/nio/ByteBuffer;)I");
-	if (ck_check_java_exception(env, "GetStaticMethodID(pollCompletion)") != 0 ||
-			method == NULL)
-	{
-		(*env)->DeleteLocalRef(env, runtime_class);
-		(void)(*runtime->vm)->DetachCurrentThread(runtime->vm);
-		return -1;
-	}
-
-	memset(storage, 0, sizeof(storage));
-	native_output = storage;
-	output = (*env)->NewDirectByteBuffer(env, native_output, sizeof(storage));
-	if (ck_check_java_exception(env, "NewDirectByteBuffer(pollCompletion)") != 0 ||
-			output == NULL)
-	{
-		(*env)->DeleteLocalRef(env, runtime_class);
-		(void)(*runtime->vm)->DetachCurrentThread(runtime->vm);
-		return -1;
-	}
-
-	poll_result = (*env)->CallStaticIntMethod(env, runtime_class, method, output);
-	if (ck_check_java_exception(env, "CallStaticIntMethod(pollCompletion)") != 0)
-	{
-		(*env)->DeleteLocalRef(env, output);
-		(*env)->DeleteLocalRef(env, runtime_class);
-		(void)(*runtime->vm)->DetachCurrentThread(runtime->vm);
-		return -1;
-	}
-
-	(*env)->DeleteLocalRef(env, output);
-	(*env)->DeleteLocalRef(env, runtime_class);
-
-	detach_result = (*runtime->vm)->DetachCurrentThread(runtime->vm);
-	if (detach_result != JNI_OK)
-	{
-		return -1;
-	}
-
-	if (poll_result != 1)
-	{
-		return poll_result;
-	}
-
-	memcpy(&request_handle, storage, sizeof(request_handle));
-	memcpy(&owner_token, storage + 8, sizeof(owner_token));
-	memcpy(&lifetime_token, storage + 16, sizeof(lifetime_token));
-	memcpy(&result_value, storage + 24, sizeof(result_value));
-	memcpy(&status, storage + 32, sizeof(status));
-
-	{
-		size_t i;
-
-		for (i = 0; i < request_count; i++)
+		if (completion.request_id == requests[i].descriptor.request_id
+				&& completion.owner_token == requests[i].descriptor.owner_token
+				&& completion.lifetime_token == requests[i].descriptor.lifetime_token)
 		{
-			if (request_handle == (jlong)requests[i].descriptor.request_id
-					&& owner_token == (jlong)requests[i].descriptor.owner_token
-					&& lifetime_token == (jlong)requests[i].descriptor.lifetime_token)
+			printf("CKARTA_DISPATCH handle=%llu owner=%llu lifetime=%llu result=%lld status=%d\\n",
+					(unsigned long long)completion.request_id,
+					(unsigned long long)completion.owner_token,
+					(unsigned long long)completion.lifetime_token,
+					(long long)completion.result,
+					(int)completion.status);
+
+			if (completion.status == 0)
 			{
-				printf("CKARTA_DISPATCH handle=%lld owner=%lld lifetime=%lld result=%lld status=%d\\n",
-						(long long)request_handle, (long long)owner_token,
-						(long long)lifetime_token, (long long)result_value,
-						(int)status);
+				result = ck_request_finish(&requests[i]);
+				return result == 0 ? 1 : (result == 1 ? 2 : -1);
+			}
 
-				if (status == 0)
+			{
+				ck_error_t error;
+				ck_error_category_t category;
+				ck_error_code_t code;
+				int32_t http_status;
+
+				if (completion.status == -2)
 				{
-								finish_result = ck_request_finish(&requests[i]);
-					return finish_result == 0 ? 1 :
-							(finish_result == 1 ? 2 : -1);
+					category = CK_ERROR_CATEGORY_RESOURCE;
+					code = CK_ERROR_CODE_RESOURCE_EXHAUSTED;
+					http_status = 503;
+				}
+				else if (completion.status == -1)
+				{
+					category = CK_ERROR_CATEGORY_APPLICATION;
+					code = CK_ERROR_CODE_APPLICATION_EXCEPTION;
+					http_status = 500;
+				}
+				else
+				{
+					category = CK_ERROR_CATEGORY_INTERNAL;
+					code = CK_ERROR_CODE_INTERNAL_INVARIANT;
+					http_status = 500;
 				}
 
+				ck_error_init(&error);
+				if (ck_error_set(&error, category, code, http_status,
+						CK_ERROR_FLAG_CLIENT_VISIBLE, 2,
+						requests[i].descriptor.request_id) != 0)
 				{
-					ck_error_t error;
-					ck_error_category_t category;
-					ck_error_code_t code;
-					int32_t http_status;
-
-					if (status == -2)
-					{
-						category = CK_ERROR_CATEGORY_RESOURCE;
-						code = CK_ERROR_CODE_RESOURCE_EXHAUSTED;
-						http_status = 503;
-					}
-					else if (status == -1)
-					{
-						category = CK_ERROR_CATEGORY_APPLICATION;
-						code = CK_ERROR_CODE_APPLICATION_EXCEPTION;
-						http_status = 500;
-					}
-					else
-					{
-						category = CK_ERROR_CATEGORY_INTERNAL;
-						code = CK_ERROR_CODE_INTERNAL_INVARIANT;
-						http_status = 500;
-					}
-
-					ck_error_init(&error);
-					if (ck_error_set(&error, category, code, http_status,
-							CK_ERROR_FLAG_CLIENT_VISIBLE, 2,
-							requests[i].descriptor.request_id) != 0)
-					{
-						return -1;
-					}
-
-					finish_result = ck_request_fail(&requests[i], &error);
-					return finish_result == 0 ? -2 :
-							(finish_result == 1 ? 2 : -1);
+					return -1;
 				}
+
+				result = ck_request_fail(&requests[i], &error);
+				return result == 0 ? -2 : (result == 1 ? 2 : -1);
 			}
 		}
 	}
 
 	return -3;
+}
+
+int ck_runtime_completion_fd(const ck_runtime_t *runtime)
+{
+	if (runtime == NULL || !runtime->completion_queue_initialized)
+	{
+		return -1;
+	}
+
+	return ck_completion_queue_notify_fd(&runtime->completion_queue);
 }
 
 int ck_runtime_init(ck_runtime_t *runtime, const char *class_path)

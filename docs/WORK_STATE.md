@@ -230,4 +230,9 @@ Native module 暫定為 load-at-start、ABI/version/signature 驗證、dependenc
 
 ## 27. 2026-09-09 branch consolidation
 
+`main/WORKING_RULES.md` 現已是唯一工作守則來源；所有非-main branch 的 `WORKING_RULES.md` 均已移除。各 branch 的 `docs/WORK_STATE.md` 保留為 branch-specific state，不覆蓋或取代 main state。
+
+`codex/platform-apache-completion` 的有效研究內容已抽取至 `docs/WIN32_LINUX_PLATFORM_RESEARCH.md` 與 `docs/COMPLETION_NOTIFICATION_RESEARCH.md`。其 `third_party/httpd` submodule 與與現行來源模型衝突的工作樹修改沒有合併；Apache 2.4.68 僅保留為外部固定研究基線。PR #14 已於 2026-09-09 關閉為 superseded，避免與主線保持兩套 platform/reference 模型。
+
+
 `codex/platform-apache-completion` 的有效研究內容已抽取至 `docs/WIN32_LINUX_PLATFORM_RESEARCH.md` 與 `docs/COMPLETION_NOTIFICATION_RESEARCH.md`。其 `third_party/httpd` submodule 與與現行來源模型衝突的工作樹修改沒有合併；Apache 2.4.68 僅保留為外部固定研究基線。PR #14 已於 2026-09-09 關閉為 superseded，避免與主線保持兩套 platform/reference 模型。

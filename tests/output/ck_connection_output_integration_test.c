@@ -39,6 +39,8 @@ int main(void)
 	assert(ck_connection_registry_attach_socket(
 			&registry, handle, 70, 71, 72, sockets[0]) == 0);
 	assert(ck_event_loop_init(&loop) == 0);
+	assert(ck_connection_registry_start_async_cycle(
+			&registry, handle, 70, 71, 72, 42) == 0);
 
 	ck_http_response_init(&response);
 	assert(ck_http_response_set_status(&response, 200U) == 0);
@@ -107,7 +109,7 @@ int main(void)
 
 	assert(ck_event_loop_remove(&loop, socket_fd) == 0);
 	assert(ck_connection_registry_try_terminal(
-			&registry, handle, 70, 71, 72, 0,
+			&registry, handle, 70, 71, 72, 42,
 			CK_CONNECTION_TERMINAL_COMPLETE) == 0);
 	assert(ck_connection_registry_close(
 			&registry, handle, 70, 71, 72) == 0);

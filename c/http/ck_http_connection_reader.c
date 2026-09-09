@@ -1,6 +1,7 @@
 #include "ck_http_connection_reader.h"
 
 #include <errno.h>
+#include <string.h>
 #include <sys/socket.h>
 
 static ck_http_connection_read_result_t map_input_result(

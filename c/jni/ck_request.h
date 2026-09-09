@@ -21,7 +21,7 @@ typedef enum ck_request_state
 	CK_REQUEST_FAILING = 3,
 	CK_REQUEST_COMPLETED = 4,
 	CK_REQUEST_FAILED = 5,
-	CK_REQUEST_STATE_INVALID = UINT32_MAX
+	CK_REQUEST_STATE_INVALID = -1
 } ck_request_state_t;
 
 /* Process-local descriptor. Java never receives this struct or its pointers. */

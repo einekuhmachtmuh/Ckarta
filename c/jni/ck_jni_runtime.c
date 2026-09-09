@@ -271,6 +271,12 @@ int ck_runtime_dispatch_async_smoke(ck_runtime_t *runtime,
 		return -1;
 	}
 
+	if (runtime->vm == NULL || runtime->shutdown_requested
+			|| runtime->shutdown_complete)
+	{
+		return -1;
+	}
+
 	memset(&worker, 0, sizeof(worker));
 	worker.runtime = runtime;
 	worker.requests = requests;
@@ -304,7 +310,9 @@ int ck_runtime_poll_completion(ck_runtime_t *runtime, ck_request_t *requests,
 	jint detach_result;
 	int finish_result;
 
-	if (runtime == NULL || requests == NULL || request_count == 0)
+	if (runtime == NULL || requests == NULL || request_count == 0
+			|| runtime->vm == NULL || runtime->shutdown_requested
+			|| runtime->shutdown_complete)
 	{
 		return -1;
 	}

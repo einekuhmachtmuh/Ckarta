@@ -6,7 +6,7 @@
 
 ## 1. 為什麼需要 error record
 
-目前 `ck_request_state_t` 只有 PENDING、RUNNING、CANCELLING、COMPLETED、FAILED；單一 FAILED 無法保留 failure source。Java completion 目前只帶 `status`，也不足以區分 Java application exception、executor rejection、JNI failure、timeout 或 upstream/resource failure。
+目前 `ck_request_state_t` 包含 PENDING、RUNNING、CANCELLING、FAILING、COMPLETED、FAILED；其中 FAILING 是 private publication state，不是對外 terminal outcome；單一 FAILED 無法保留 failure source。Java completion 目前只帶 `status`，也不足以區分 Java application exception、executor rejection、JNI failure、timeout 或 upstream/resource failure。
 
 因此正式 request/completion boundary 需要一個小型、process-local、固定布局的 `ck_error_t`。它承載 stable category/code 與有限控制資訊；不保存 Java Throwable、stack trace、動態診斷字串或 owning heap pointer。
 

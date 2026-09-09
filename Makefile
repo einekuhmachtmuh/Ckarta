@@ -125,9 +125,9 @@ $(HTTP_INPUT_TEST): tests/http/ck_http_input_test.c c/http/ck_http_input.c c/htt
 	@mkdir -p $(BIN_DIR)
 	$(CC) $(CFLAGS) tests/http/ck_http_input_test.c c/http/ck_http_input.c c/http/ck_http_parser.c c/http/ck_http_chunked.c -o $@
 
-$(HTTP_CONNECTION_READER_TEST): tests/http/ck_http_connection_reader_test.c c/http/ck_http_connection_reader.c c/http/ck_http_connection_reader.h c/http/ck_http_input.c c/http/ck_http_input.h c/http/ck_http_parser.c c/http/ck_http_parser.h c/http/ck_http_chunked.c c/http/ck_http_chunked.h
+$(HTTP_CONNECTION_READER_TEST): tests/http/ck_http_connection_reader_test.c c/http/ck_http_connection_reader.c c/http/ck_http_connection_reader.h c/http/ck_http_request_body.c c/http/ck_http_request_body.h c/http/ck_http_input.c c/http/ck_http_input.h c/http/ck_http_parser.c c/http/ck_http_parser.h c/http/ck_http_chunked.c c/http/ck_http_chunked.h
 	@mkdir -p $(BIN_DIR)
-	$(CC) $(CFLAGS) tests/http/ck_http_connection_reader_test.c c/http/ck_http_connection_reader.c c/http/ck_http_input.c c/http/ck_http_parser.c c/http/ck_http_chunked.c -o $@
+	$(CC) $(CFLAGS) tests/http/ck_http_connection_reader_test.c c/http/ck_http_connection_reader.c c/http/ck_http_request_body.c c/http/ck_http_input.c c/http/ck_http_parser.c c/http/ck_http_chunked.c -o $@
 
 $(HTTP_RESPONSE_TEST): tests/output/ck_http_response_test.c c/output/ck_http_response.c c/output/ck_http_response.h
 	@mkdir -p $(BIN_DIR)

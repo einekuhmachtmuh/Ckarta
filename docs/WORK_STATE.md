@@ -415,3 +415,18 @@ Java CkartaServletRequestAdapter 現在建立 cycle binding 並傳入 CkartaAsyn
 最新 main CI run 34344027099（commit 76e75fead0eb51a3ed2c37e407fe06e02616c748）已開始執行；在此條目建立時尚未取得最終 conclusion，因此不得把它視為通過。前一個 run 34343985342 因 API test target 漏列 CkartaAsyncCycleBinding.java 而失敗，其失敗 log 已核實。
 
 研究交叉核對：Servlet 6.1 AsyncContext API 將每次 startAsync 視為 async cycle，且 repeated startAsync/dispatch semantics 取決於 cycle；Tomcat 11.0.25 AsyncContextImpl 對 per-cycle fields、recycle 與 concurrent access 使用 atomic guard；Nginx development guide 將 connection state、event、timer、posted event 與 event loop 分離；Herlihy/Wing linearizability 作為 terminal ownership correctness baseline；SEDA 作為 bounded explicit queue/load conditioning reference。
+
+
+## 44. 2026-09-09 strict main-branch audit and CI correction
+
+本次新工作階段以當前 main HEAD `e58be9f51db3063e67d99b83154804af627a817e` 重新讀取 `WORKING_RULES.md`、`docs/WORK_STATE.md` 與規則指定的架構、hot path、function trace、connection ownership 文件，再對目前 main 的 source tree、Makefile、tests、branch/PR 狀態與 GitHub Actions 結果做重新核對。
+
+當前 GitHub Actions run `34344069721`（commit `e58be9f51db3063e67d99b83154804af627a817e`）實際失敗於 `linux-openjdk-21` job 的 `make test`。runner 為 Ubuntu 24.04.5 LTS、Temurin/OpenJDK 21.0.12.1、GCC 13.3.0。失敗原因已由 job log 確認：`JAVA_SERVLET_REQUEST_ASYNC_TEST` target 漏列 `CkartaAsyncCycleBinding.java`，造成 `CkartaServletRequestAdapter`、`CkartaServletAsyncContext`、`CkartaAsyncContext` 與 request async test 的編譯依賴閉包不完整，並同時暴露 test 使用舊 constructor signature 的問題。
+
+本輪直接修正 Makefile 的 source dependency closure，並把 `tests/java/CkartaServletRequestAsyncTest.java` 的 constructor invocation 與目前 `CkartaServletRequestAdapter(ServletRequest, ServletResponse, Executor, TerminalSink, long, long, long)` 完整簽名對齊。此修正沒有新增工作守則；問題可由既有的函式簽名、完整引用、dependency closure 與變數生命週期規則直接處理。
+
+依 `docs/WORKING_TREE.md` 的實際工作樹規則，凡目錄已進入真正程式碼階段即不應保留 `.gitkeep`。本輪因此移除仍位於非空 code/test 目錄的 `c/.gitkeep`、`c/core/.gitkeep`、`c/jni/.gitkeep`、`java/org/ckarta/bootstrap/.gitkeep`、`java/org/ckarta/connector/.gitkeep`、`java/org/ckarta/servlet/.gitkeep`、`tests/java/.gitkeep`；仍為空的規劃目錄保留 `.gitkeep`。
+
+本輪未宣稱本機完整 `make test` 已通過：目前工作環境無法直接以 git clone 建立完整 checkout，因此以 GitHub repository API 與已存在的 CI execution evidence 驗證。修正提交後必須重新檢查新的 main CI conclusion，再決定是否可將本輪驗證標示為通過。
+
+目前仍不變的正式閘門：Servlet 6.1 TCK、production native connection registry/opaque binding、AsyncContext ↔ C connection cancellation、正式 HTTP/network data plane、shutdown drain、Windows IOCP backend、ASan/UBSan 與可重現 performance benchmark。這些不得因本次 build 修正而提前宣稱完成。

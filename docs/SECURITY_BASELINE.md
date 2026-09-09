@@ -150,7 +150,11 @@ master 與 worker 權限應可分離。
 
 管理平面應與公開 HTTP listener 分離。
 
-## 12. Security testing
+## 12. Error handling security
+
+例外與錯誤回應本身是 attack surface，必須防止 stack trace/version/path 洩漏、log injection、retry amplification、error-path memory leak、double completion 與 cancellation 後 use-after-free。完整錯誤架構與 disclosure policy 見 `docs/EXCEPTION_HANDLING_RESEARCH.md`。
+
+## 13. Security testing
 
 必須逐步建立：
 

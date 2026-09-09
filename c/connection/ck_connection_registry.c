@@ -108,6 +108,7 @@ int ck_connection_registry_register(
 		{
 			entry->generation = 1;
 		}
+		entry->reader_users = 0;
 
 		if (ck_connection_init(&entry->connection, connection_id,
 				request_id, owner_token, lifetime_token) != 0)
@@ -131,11 +132,11 @@ int ck_connection_registry_register(
 
 int ck_connection_registry_attach_socket(
 	ck_connection_registry_t *registry,
-		ck_connection_handle_t handle,
-		uint64_t request_id,
-		uint64_t owner_token,
-		uint64_t lifetime_token,
-		int socket_fd)
+	ck_connection_handle_t handle,
+	uint64_t request_id,
+	uint64_t owner_token,
+	uint64_t lifetime_token,
+	int socket_fd)
 {
 	ck_connection_registry_entry_t *entry;
 	int result;
@@ -171,10 +172,10 @@ int ck_connection_registry_attach_socket(
 
 int ck_connection_registry_socket_fd(
 	ck_connection_registry_t *registry,
-		ck_connection_handle_t handle,
-		uint64_t request_id,
-		uint64_t owner_token,
-		uint64_t lifetime_token)
+	ck_connection_handle_t handle,
+	uint64_t request_id,
+	uint64_t owner_token,
+	uint64_t lifetime_token)
 {
 	ck_connection_registry_entry_t *entry;
 	int result;
@@ -210,11 +211,11 @@ int ck_connection_registry_socket_fd(
 
 int ck_connection_registry_start_async_cycle(
 	ck_connection_registry_t *registry,
-		ck_connection_handle_t handle,
-		uint64_t request_id,
-		uint64_t owner_token,
-		uint64_t lifetime_token,
-		uint64_t cycle_id)
+	ck_connection_handle_t handle,
+	uint64_t request_id,
+	uint64_t owner_token,
+	uint64_t lifetime_token,
+	uint64_t cycle_id)
 {
 	ck_connection_registry_entry_t *entry;
 	int result;
@@ -250,12 +251,12 @@ int ck_connection_registry_start_async_cycle(
 
 int ck_connection_registry_try_terminal(
 	ck_connection_registry_t *registry,
-		ck_connection_handle_t handle,
-		uint64_t request_id,
-		uint64_t owner_token,
-		uint64_t lifetime_token,
-		uint64_t cycle_id,
-		ck_connection_terminal_event_t event)
+	ck_connection_handle_t handle,
+	uint64_t request_id,
+	uint64_t owner_token,
+	uint64_t lifetime_token,
+	uint64_t cycle_id,
+	ck_connection_terminal_event_t event)
 {
 	ck_connection_registry_entry_t *entry;
 	int result;
@@ -289,12 +290,110 @@ int ck_connection_registry_try_terminal(
 	return result;
 }
 
+int ck_connection_registry_reader_acquire(
+	ck_connection_registry_t *registry,
+	ck_connection_handle_t handle,
+	uint64_t request_id,
+	uint64_t owner_token,
+	uint64_t lifetime_token,
+	ck_connection_registry_reader_pin_t *pin)
+{
+	ck_connection_registry_entry_t *entry;
+
+	if (registry == NULL || !registry->initialized || pin == NULL)
+	{
+		return -1;
+	}
+
+	if (pin->connection != NULL || pin->reader != NULL || pin->handle != 0)
+	{
+		return -1;
+	}
+
+	if (pthread_mutex_lock(&registry->lock) != 0)
+	{
+		return -1;
+	}
+
+	entry = ck_connection_registry_find(registry, handle);
+	if (entry == NULL)
+	{
+		(void)pthread_mutex_unlock(&registry->lock);
+		return -2;
+	}
+
+	if (ck_connection_validate(&entry->connection,
+			request_id, owner_token, lifetime_token) != 0)
+	{
+		(void)pthread_mutex_unlock(&registry->lock);
+		return -3;
+	}
+
+	if (ck_connection_state(&entry->connection) == CK_CONNECTION_CLOSED
+			|| entry->connection.http_reader == NULL)
+	{
+		(void)pthread_mutex_unlock(&registry->lock);
+		return 1;
+	}
+
+	entry->reader_users++;
+	pin->connection = &entry->connection;
+	pin->reader = entry->connection.http_reader;
+	pin->handle = handle;
+
+	(void)pthread_mutex_unlock(&registry->lock);
+	return 0;
+}
+
+int ck_connection_registry_reader_release(
+	ck_connection_registry_t *registry,
+	ck_connection_registry_reader_pin_t *pin)
+{
+	size_t index;
+	uint32_t generation;
+	ck_connection_registry_entry_t *entry;
+	int result;
+
+	if (registry == NULL || !registry->initialized || pin == NULL
+			|| pin->connection == NULL || pin->reader == NULL
+			|| pin->handle == 0)
+	{
+		return -1;
+	}
+
+	if (ck_connection_registry_decode_handle(
+			pin->handle, &index, &generation) != 0)
+	{
+		return -1;
+	}
+
+	if (pthread_mutex_lock(&registry->lock) != 0)
+	{
+		return -1;
+	}
+
+	entry = &registry->entries[index];
+	if (!entry->active || entry->generation != generation
+			|| &entry->connection != pin->connection
+			|| entry->connection.http_reader != pin->reader
+			|| entry->reader_users == 0)
+	{
+		(void)pthread_mutex_unlock(&registry->lock);
+		return -2;
+	}
+
+	entry->reader_users--;
+	memset(pin, 0, sizeof(*pin));
+	result = pthread_mutex_unlock(&registry->lock);
+	return result;
+}
+
 int ck_connection_registry_close(
 	ck_connection_registry_t *registry,
-		ck_connection_handle_t handle,
-		uint64_t request_id,
-		uint64_t owner_token,
-		uint64_t lifetime_token)
+	ck_connection_handle_t handle,
+	uint64_t request_id,
+	uint64_t owner_token,
+	uint64_t lifetime_token)
 {
 	ck_connection_registry_entry_t *entry;
 	int result;
@@ -321,6 +420,12 @@ int ck_connection_registry_close(
 	{
 		(void)pthread_mutex_unlock(&registry->lock);
 		return -3;
+	}
+
+	if (entry->reader_users != 0)
+	{
+		(void)pthread_mutex_unlock(&registry->lock);
+		return 2;
 	}
 
 	result = ck_connection_close(&entry->connection);
@@ -330,10 +435,10 @@ int ck_connection_registry_close(
 
 int ck_connection_registry_retire(
 	ck_connection_registry_t *registry,
-		ck_connection_handle_t handle,
-		uint64_t request_id,
-		uint64_t owner_token,
-		uint64_t lifetime_token)
+	ck_connection_handle_t handle,
+	uint64_t request_id,
+	uint64_t owner_token,
+	uint64_t lifetime_token)
 {
 	ck_connection_registry_entry_t *entry;
 	int result;
@@ -362,7 +467,8 @@ int ck_connection_registry_retire(
 		return -3;
 	}
 
-	if (ck_connection_state(&entry->connection) != CK_CONNECTION_CLOSED
+	if (entry->reader_users != 0
+			|| ck_connection_state(&entry->connection) != CK_CONNECTION_CLOSED
 			|| ck_connection_socket_fd(&entry->connection) >= 0)
 	{
 		(void)pthread_mutex_unlock(&registry->lock);

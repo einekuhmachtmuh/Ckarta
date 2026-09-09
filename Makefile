@@ -131,9 +131,9 @@ $(HTTP_OUTPUT_WRITER_TEST): tests/output/ck_http_output_writer_test.c c/output/c
 	@mkdir -p $(BIN_DIR)
 	$(CC) $(CFLAGS) tests/output/ck_http_output_writer_test.c c/output/ck_http_output_writer.c c/output/ck_http_response.c c/event/ck_event_loop.c -o $@
 
-$(CONNECTION_OUTPUT_INTEGRATION_TEST): tests/output/ck_connection_output_integration_test.c c/connection/ck_connection_registry.c c/connection/ck_connection_registry.h c/connection/ck_connection.c c/connection/ck_connection.h c/output/ck_http_output_writer.c c/output/ck_http_output_writer.h c/output/ck_http_response.c c/output/ck_http_response.h c/event/ck_event_loop.c c/event/ck_event_loop.h
+$(CONNECTION_OUTPUT_INTEGRATION_TEST): tests/output/ck_connection_output_integration_test.c c/connection/ck_connection_registry.c c/connection/ck_connection_registry.h c/connection/ck_connection.c c/connection/ck_connection.h c/output/ck_http_output_writer.c c/output/ck_http_output_writer.h c/output/ck_http_response.c c/output/ck_http_response.h c/event/ck_event_loop.c c/event/ck_event_loop.h c/http/ck_http_connection_reader.c c/http/ck_http_connection_reader.h c/http/ck_http_input.c c/http/ck_http_input.h c/http/ck_http_parser.c c/http/ck_http_parser.h c/http/ck_http_chunked.c c/http/ck_http_chunked.h
 	@mkdir -p $(BIN_DIR)
-	$(CC) $(CFLAGS) tests/output/ck_connection_output_integration_test.c c/connection/ck_connection_registry.c c/connection/ck_connection.c c/output/ck_http_output_writer.c c/output/ck_http_response.c c/event/ck_event_loop.c -o $@
+	$(CC) $(CFLAGS) tests/output/ck_connection_output_integration_test.c c/connection/ck_connection_registry.c c/connection/ck_connection.c c/output/ck_http_output_writer.c c/output/ck_http_response.c c/event/ck_event_loop.c c/http/ck_http_connection_reader.c c/http/ck_http_input.c c/http/ck_http_parser.c c/http/ck_http_chunked.c -o $@
 
 $(JAVA_NATIVE_ASYNC_BRIDGE_TEST): tests/java/CkartaNativeAsyncBridgeTest.java java/org/ckarta/servlet/CkartaNativeAsyncBridge.java java/org/ckarta/servlet/CkartaServletRequestAdapter.java java/org/ckarta/servlet/CkartaServletAsyncContext.java java/org/ckarta/servlet/CkartaAsyncContext.java java/org/ckarta/servlet/CkartaAsyncCycleBinding.java $(JAKARTA_SERVLET_API_JAR)
 	@mkdir -p $(BUILD_DIR)/java-test-classes

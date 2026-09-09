@@ -7,6 +7,15 @@
 #include <stdlib.h>
 #include <string.h>
 
+static void ck_runtime_sync_fatal(const char *operation, int result)
+{
+	if (result != 0)
+	{
+		fprintf(stderr, "CKARTA_SYNC_ERROR=%s:%d\\n", operation, result);
+		abort();
+	}
+}
+
 static int ck_check_java_exception(JNIEnv *env, const char *operation)
 {
 	if (!(*env)->ExceptionCheck(env))
@@ -95,11 +104,11 @@ static void *ck_bootstrap_main(void *arg)
 			"-Djava.class.path=%s", runtime->class_path);
 	if (option_length < 0 || (size_t)option_length >= sizeof(option_string))
 	{
-		pthread_mutex_lock(&runtime->lock);
+		ck_runtime_sync_fatal("bootstrap.mutex_lock", pthread_mutex_lock(&runtime->lock));
 		runtime->bootstrap_status = JNI_EINVAL;
 		runtime->bootstrap_done = 1;
-		pthread_cond_broadcast(&runtime->condition);
-		pthread_mutex_unlock(&runtime->lock);
+		ck_runtime_sync_fatal("bootstrap.cond_broadcast", pthread_cond_broadcast(&runtime->condition));
+		ck_runtime_sync_fatal("bootstrap.mutex_unlock", pthread_mutex_unlock(&runtime->lock));
 		return NULL;
 	}
 
@@ -113,13 +122,13 @@ static void *ck_bootstrap_main(void *arg)
 
 	create_result = JNI_CreateJavaVM(&vm, (void **)&env, &args);
 
-	pthread_mutex_lock(&runtime->lock);
+	ck_runtime_sync_fatal("bootstrap.mutex_lock", pthread_mutex_lock(&runtime->lock));
 	if (create_result != JNI_OK)
 	{
 		runtime->bootstrap_status = create_result;
 		runtime->bootstrap_done = 1;
-		pthread_cond_broadcast(&runtime->condition);
-		pthread_mutex_unlock(&runtime->lock);
+		ck_runtime_sync_fatal("bootstrap.cond_broadcast", pthread_cond_broadcast(&runtime->condition));
+		ck_runtime_sync_fatal("bootstrap.mutex_unlock", pthread_mutex_unlock(&runtime->lock));
 		return NULL;
 	}
 
@@ -128,17 +137,17 @@ static void *ck_bootstrap_main(void *arg)
 
 	start_status = ck_call_start(env);
 
-	pthread_mutex_lock(&runtime->lock);
+	ck_runtime_sync_fatal("bootstrap.mutex_lock", pthread_mutex_lock(&runtime->lock));
 	runtime->bootstrap_status = start_status;
 	runtime->bootstrap_done = 1;
-	pthread_cond_broadcast(&runtime->condition);
+	ck_runtime_sync_fatal("bootstrap.cond_broadcast", pthread_cond_broadcast(&runtime->condition));
 
 	while (!runtime->shutdown_requested && start_status == 0)
 	{
-		pthread_cond_wait(&runtime->condition, &runtime->lock);
+		ck_runtime_sync_fatal("bootstrap.cond_wait", pthread_cond_wait(&runtime->condition, &runtime->lock));
 	}
 
-	pthread_mutex_unlock(&runtime->lock);
+	ck_runtime_sync_fatal("bootstrap.mutex_unlock", pthread_mutex_unlock(&runtime->lock));
 
 	if (start_status == 0)
 	{
@@ -413,8 +422,7 @@ int ck_runtime_poll_completion(ck_runtime_t *runtime, ck_request_t *requests,
 
 				if (status == 0)
 				{
-					finish_result = ck_request_finish(&requests[i],
-							CK_REQUEST_COMPLETED);
+								finish_result = ck_request_finish(&requests[i]);
 					return finish_result == 0 ? 1 : -2;
 				}
 
@@ -515,7 +523,10 @@ int ck_runtime_init(ck_runtime_t *runtime, const char *class_path)
 		}
 	}
 	result = runtime->bootstrap_status;
-	pthread_mutex_unlock(&runtime->lock);
+	if (pthread_mutex_unlock(&runtime->lock) != 0)
+	{
+		return -1;
+	}
 
 	if (result != 0)
 	{

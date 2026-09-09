@@ -225,3 +225,11 @@ Native module 暫定為 load-at-start、ABI/version/signature 驗證、dependenc
 - Servlet 6.1 TCK、ASan/UBSan CI 與正式 performance baseline。
 
 這些仍依既有工程閘門處理，未因本輪 audit 而新增另一套規則。
+
+
+## Branch status
+
+- Purpose: repository-wide audit、exception/error architecture與一致性修正
+- Lifecycle status: CLOSED / MERGED
+- Relation to main: PR #15 merged into main; branch retained only as historical provenance.
+- This file is branch-specific state and must not be treated as main canonical state.

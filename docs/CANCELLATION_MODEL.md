@@ -47,9 +47,15 @@ C connection
 → finish or cancel pending async work
 → release native resources
 
+目前 native connection slice 把上述 terminal ownership 具體化為：
+
+`OPEN | ASYNC_WAIT → CLOSING → CLOSED`
+
+第一個合法 terminal event 透過單一 atomic lifecycle word 取得 ownership；terminal reason 與 closing state 同時發布，後續競爭事件不得覆寫。
+
 ## 5. AsyncContext
 
-Servlet startAsync 後：
+Servlet `startAsync()` 後：
 
 Servlet invocation 可以結束，
 但 request/connection bridge 不得立即 free。
@@ -62,42 +68,45 @@ complete
 或 client disconnect
 或 shutdown
 
-其中一個合法 terminal event（終止事件）完成協定後才能釋放相關狀態。
+其中一個合法 terminal event 完成協定後才能釋放相關狀態。
 
-Tomcat 11.0.25 的 CoyoteAdapter.asyncDispatch() 是本設計的重要參考。
+目前 Ckarta 已有 native connection ownership state machine，但尚未把真正的 Jakarta Servlet 6.1 `AsyncContext` 事件接入；這是下一個 integration gate。
+
+Tomcat 11.0.25 的 `CoyoteAdapter.asyncDispatch()` 與 `AsyncContextImpl` 是本設計的重要 reference。Tomcat `AsyncContextImpl` 對 `complete()`、`timeout()`、`onError`、`onComplete`、recycle 與 concurrent-use protection 分別處理，不能簡化成一個背景 thread callback。
 
 ## 6. JNI exception
 
-Java exception 不直接穿透成 C pointer（指標）。
+Java exception 不直接穿透成 C pointer。
 
 JNI bridge 應轉換成明確的 completion/error record。
 
 ## 7. Idempotence
 
-cancel(operation) 必須是 idempotent（冪等）的。\n\n目前 `ck_request_cancel()` 對已取消／已終止 operation 重複呼叫無副作用；`ck_request_finish()` 不會覆寫已勝出的 cancellation。
+cancel(operation) 必須是 idempotent。`ck_request_cancel()` 對已取消／已終止 operation 重複呼叫無副作用；`ck_request_finish()` 不會覆寫已勝出的 cancellation。
 
-第二次 cancel 回傳非 ownership result，不改變現有狀態；
+connection terminal ownership 同樣只能取得一次；`ck_connection_close()` 第二次呼叫回傳 non-owner result，不重複關閉 native resource。
 
-不能 double free；
-不能重複呼叫 Servlet lifecycle callback；
-不能重複關閉同一 native resource。
+不能 double free；不能重複呼叫 Servlet lifecycle callback；不能重複關閉同一 native resource。
 
 ## 8. Shutdown
 
 worker shutdown：
 
 停止新 request dispatch
-→ drain（排空）可完成工作
+→ drain 可完成工作
 → cancel deadline-expired work
 → cancel AsyncContext
 → close connections
 → destroy worker
+
+正式實作仍需把 native completion queue close、Java executor stop、AsyncContext cancellation 與 connection close 的順序固定下來；不能依 thread timing 猜測。
 
 ## 9. 研究依據
 
 Tomcat：
 
 CoyoteAdapter.asyncDispatch()
+AsyncContextImpl
 NioEndpoint.SocketProcessor.doRun()
 
 Nginx：
@@ -108,12 +117,16 @@ ngx_http_request.c 中的 request finalize／close 路徑。
 
 Zeldovich 等人的事件驅動多處理器研究支持以明確事件與 ownership 降低並行控制複雜度；Clarke、Potter、Noble 的 ownership types 研究提供 alias／ownership containment 的形式化背景。本專案不把這些研究視為 JNI correctness proof。
 
+Herlihy／Wing 的 linearizability 可作 concurrent terminal arbitration 的 correctness baseline；目前 connection CAS 只是可檢驗的線性化點候選，並非形式化 proof。
+
 來源：
 
 https://github.com/apache/tomcat/blob/cbe6e15ee81e2fc6232954292a80cca5d1e84009/java/org/apache/catalina/connector/CoyoteAdapter.java
+https://github.com/apache/tomcat/blob/cbe6e15ee81e2fc6232954292a80cca5d1e84009/java/org/apache/catalina/core/AsyncContextImpl.java
 https://github.com/nginx/nginx/blob/017cf98dcce217946572a896f0992370475e189f/src/http/ngx_http_request.c
 https://www.usenix.org/conference/2003-usenix-annual-technical-conference/multiprocessor-support-event-driven-programs
+https://doi.org/10.1145/78969.78972
 
 ## 10. Current implementation boundary
 
-目前 C request lifecycle 已具備 atomic state、idempotent cancellation 與 terminal ownership gate；真正 Servlet AsyncContext 的跨執行緒 cancellation、connection close 與 Java completion 整合仍待 integration test。
+目前 C request lifecycle 已具備 atomic state、idempotent cancellation 與 terminal ownership gate；`c/connection/ck_connection.[ch]` 已提供 connection-level native ownership gate 與 token validation；Java Servlet AsyncContext 的跨執行緒 cancellation、connection close、response ownership 與 recycle-compatible invalidation 仍待 integration test。

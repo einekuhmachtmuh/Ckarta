@@ -155,7 +155,7 @@ https://www.usenix.org/legacy/publications/library/proceedings/usenix-nt97/usage
 
 因此 Ckarta 應採平台原生通知，而不是假定一種 primitive 在兩平台均最佳。
 
-## 9. 最終候選
+## 9. 最終候選與目前實作狀態
 
 Linux：
 epoll + eventfd + bounded completion queue

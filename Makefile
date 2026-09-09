@@ -43,6 +43,10 @@ $(ERROR_RACE_TEST): tests/error/request_error_race_test.c c/jni/ck_request.c c/j
 	@mkdir -p $(BIN_DIR)
 	$(CC) $(CFLAGS) tests/error/request_error_race_test.c c/jni/ck_request.c c/error/ck_error.c -o $@
 
+$(COMPLETION_QUEUE_TEST): tests/completion/ck_completion_queue_test.c c/completion/ck_completion_queue.c c/completion/ck_completion_queue.h
+	@mkdir -p $(BIN_DIR)
+	$(CC) $(CFLAGS) tests/completion/ck_completion_queue_test.c c/completion/ck_completion_queue.c -o $@
+
 $(CONFIG_TEST): tests/config_load_test.c c/config/ck_config.c c/config/ck_config.h
 	@mkdir -p $(BIN_DIR)
 	$(CC) $(CFLAGS) tests/config_load_test.c c/config/ck_config.c -o $@

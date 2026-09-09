@@ -48,6 +48,10 @@ $(TARGET): c/core/main.c c/config/ck_config.c c/config/ck_config.h c/error/ck_er
 	$(CC) $(CFLAGS) $(CPPFLAGS) c/core/main.c c/config/ck_config.c c/error/ck_error.c c/completion/ck_completion_queue.c c/event/ck_completion_notification.c c/connection/ck_connection.c c/jni/ck_jni_runtime.c c/jni/ck_request.c -o $@ $(LDFLAGS)
 
 
+$(JAVA_SERVLET_REQUEST_ASYNC_TEST): tests/java/CkartaServletRequestAsyncTest.java java/org/ckarta/servlet/CkartaServletRequestAdapter.java java/org/ckarta/servlet/CkartaServletAsyncContext.java java/org/ckarta/servlet/CkartaAsyncContext.java $(JAKARTA_SERVLET_API_JAR)
+	@mkdir -p $(BUILD_DIR)/java-test-classes
+	javac --release 21 -cp $(JAKARTA_SERVLET_API_JAR) -d $(BUILD_DIR)/java-test-classes tests/java/CkartaServletRequestAsyncTest.java java/org/ckarta/servlet/CkartaServletRequestAdapter.java java/org/ckarta/servlet/CkartaServletAsyncContext.java java/org/ckarta/servlet/CkartaAsyncContext.java
+
 $(JAVA_ASYNC_TEST): tests/java/CkartaAsyncContextTest.java java/org/ckarta/servlet/CkartaAsyncContext.java
 	@mkdir -p $(BUILD_DIR)/java-test-classes
 	javac --release 21 -d $(BUILD_DIR)/java-test-classes $^

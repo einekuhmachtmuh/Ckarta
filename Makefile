@@ -55,7 +55,7 @@ $(CLASS_STAMP): $(JAVA_SOURCES) $(JAKARTA_SERVLET_API_JAR)
 
 $(TARGET): c/core/main.c c/config/ck_config.c c/config/ck_config.h c/error/ck_error.c c/error/ck_error.h c/completion/ck_completion_queue.c c/completion/ck_completion_queue.h c/event/ck_completion_notification.c c/event/ck_completion_notification.h c/event/ck_event_loop.c c/event/ck_event_loop.h c/connection/ck_connection.c c/connection/ck_connection.h c/jni/ck_jni_runtime.c c/jni/ck_jni_runtime.h c/jni/ck_request.c c/jni/ck_request.h c/http/ck_http_connection_reader.c c/http/ck_http_connection_reader.h c/http/ck_http_input.c c/http/ck_http_input.h c/http/ck_http_parser.c c/http/ck_http_parser.h c/http/ck_http_chunked.c c/http/ck_http_chunked.h classes
 	@mkdir -p $(BIN_DIR)
-	$(CC) $(CFLAGS) $(CPPFLAGS) c/core/main.c c/config/ck_config.c c/error/ck_error.c c/completion/ck_completion_queue.c c/event/ck_completion_notification.c c/event/ck_event_loop.c c/connection/ck_connection.c c/jni/ck_jni_runtime.c c/jni/ck_request.c c/http/ck_http_connection_reader.c c/http/ck_http_input.c c/http/ck_http_parser.c c/http/ck_http_chunked.c -o $@ $(LDFLAGS)
+	$(CC) $(CFLAGS) $(CPPFLAGS) c/core/main.c c/config/ck_config.c c/error/ck_error.c c/completion/ck_completion_queue.c c/event/ck_event_loop.c c/event/ck_completion_notification.c c/connection/ck_connection.c c/jni/ck_jni_runtime.c c/jni/ck_request.c c/http/ck_http_connection_reader.c c/http/ck_http_input.c c/http/ck_http_parser.c c/http/ck_http_chunked.c -o $@ $(LDFLAGS)
 
 $(JAVA_SERVLET_REQUEST_ASYNC_TEST): tests/java/CkartaServletRequestAsyncTest.java java/org/ckarta/servlet/CkartaServletRequestAdapter.java java/org/ckarta/servlet/CkartaServletAsyncContext.java java/org/ckarta/servlet/CkartaAsyncContext.java java/org/ckarta/servlet/CkartaAsyncCycleBinding.java $(JAKARTA_SERVLET_API_JAR)
 	@mkdir -p $(BUILD_DIR)/java-test-classes
@@ -79,7 +79,7 @@ $(ERROR_TEST): tests/error/ck_error_test.c c/error/ck_error.c c/error/ck_error.h
 
 $(ERROR_RACE_TEST): tests/error/request_error_race_test.c c/jni/ck_request.c c/jni/ck_request.h c/error/ck_error.c c/error/ck_error.h
 	@mkdir -p $(BIN_DIR)
-	$(CC) $(CFLAGS) tests/error/request_error_race_test.c c/jni/ck_request.c c/error/ck_request.c c/error/ck_error.c -o $@
+	$(CC) $(CFLAGS) tests/error/request_error_race_test.c c/jni/ck_request.c c/error/ck_error.c -o $@
 
 $(TERMINAL_RACE_TEST): tests/error/request_terminal_race_test.c c/jni/ck_request.c c/jni/ck_request.h c/error/ck_error.c c/error/ck_error.h
 	@mkdir -p $(BIN_DIR)

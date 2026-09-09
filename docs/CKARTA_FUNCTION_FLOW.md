@@ -187,3 +187,12 @@ Apache HTTP Server 2.4.68：startup/config/MPM 研究見 `docs/STARTUP_CONFIGURA
 真人 Tomcat/Servlet 使用者心智模型與 Ckarta 相容性比較見 `docs/TOMCAT_SERVLET_USER_COMPATIBILITY.md`；該文件不是實作規格。
 
 學術依據主要包括 SEDA、Capriccio、ownership types、recovery-oriented computing、exception-handling literature 與 Herlihy/Wing linearizability；各來源完整書目由對應專題文件保存。
+
+
+## 13. Java async semantic core
+
+目前新增 java/org/ckarta/servlet/CkartaAsyncContext.java 作為正式 Jakarta API adapter 前的 semantic core。它不宣稱實作 jakarta.servlet.AsyncContext，只固定目前可獨立驗證的 application-visible lifecycle concepts：start(Runnable)、complete、timeout、error、client disconnect、shutdown、listener exactly-once notification 與 recycle invalidation。
+
+ACTIVE → COMPLETING|TIMING_OUT|ERRORED 的 CAS 是 async terminal ownership 的單一 linearization point；application 的 complete() 在輸家情況回傳 IllegalStateException，container/internal timeout、error、disconnect、shutdown 的競爭者則只保留唯一 winner，不把正常 race 變成未處理例外。
+
+此 core 仍缺正式 ServletRequest.startAsync()、ServletResponse、AsyncContext.dispatch()、AsyncListener API、ServletContext/classloader 綁定與 native connection bridge。這些必須在正式 Jakarta Servlet 6.1 API dependency 進入 build/test 後逐項接入。

@@ -64,8 +64,7 @@ int main(void)
 				== CK_ERROR_CODE_APPLICATION_EXCEPTION);
 		assert(ck_request_finish(&request) == 1);
 	}
-	assert(ck_request_finish(&request) == 1);
-	assert(ck_request_state(&request) == CK_REQUEST_COMPLETED);
+	assert(ck_request_state(&request) == CK_REQUEST_FAILED);
 	assert(ck_request_cancel(&request) == 0);
 
 	return 0;

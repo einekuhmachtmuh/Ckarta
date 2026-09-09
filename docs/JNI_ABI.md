@@ -117,7 +117,7 @@ Clarke、Potter、Noble 的 *Ownership Types for Flexible Alias Protection* 將 
 
 ## 14. Error record boundary
 
-`c/error/ck_error.[ch]` 已提供第一個 process-local structured error record 與 layout/validation test。它不是 Java Throwable ABI，也不是 runtime-loadable module ABI；正式 request/completion publication 前不得把可變 `ck_error_t` 直接寫入共享 request state 而未證明 atomic publication 或唯一 owner。
+`c/error/ck_error.[ch]` 已提供 process-local structured error record 與 layout/validation test。`ck_request_t` 目前已內含此 record；failure publication 使用 `RUNNING → FAILING` CAS，由唯一勝出者寫入 error，再以 release-store 發布 `FAILED`；讀者在 acquire-load 看到 `FAILED` 後才可取得 error record。它不是 Java Throwable ABI，也不是 runtime-loadable module ABI。
 
 完整 state matrix 見 `docs/ERROR_STATE_MATRIX.md`。
 

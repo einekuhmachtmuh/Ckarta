@@ -27,13 +27,13 @@ $(CLASS_STAMP): $(JAVA_SOURCES)
 	javac --release 21 -d $(CLASS_DIR) $(JAVA_SOURCES)
 	@touch $@
 
-$(TARGET): c/core/main.c c/config/ck_config.c c/config/ck_config.h c/jni/ck_jni_runtime.c c/jni/ck_jni_runtime.h c/jni/ck_request.c c/jni/ck_request.h classes
+$(TARGET): c/core/main.c c/config/ck_config.c c/config/ck_config.h c/error/ck_error.c c/error/ck_error.h c/jni/ck_jni_runtime.c c/jni/ck_jni_runtime.h c/jni/ck_request.c c/jni/ck_request.h classes
 	@mkdir -p $(BIN_DIR)
-	$(CC) $(CFLAGS) $(CPPFLAGS) c/core/main.c c/config/ck_config.c c/jni/ck_jni_runtime.c c/jni/ck_request.c -o $@ $(LDFLAGS)
+	$(CC) $(CFLAGS) $(CPPFLAGS) c/core/main.c c/config/ck_config.c c/error/ck_error.c c/jni/ck_jni_runtime.c c/jni/ck_request.c -o $@ $(LDFLAGS)
 
-$(ABI_TEST): tests/request_lifecycle_test.c c/jni/ck_request.c c/jni/ck_request.h
+$(ABI_TEST): tests/request_lifecycle_test.c c/jni/ck_request.c c/jni/ck_request.h c/error/ck_error.c c/error/ck_error.h
 	@mkdir -p $(BIN_DIR)
-	$(CC) $(CFLAGS) tests/request_lifecycle_test.c c/jni/ck_request.c -o $@
+	$(CC) $(CFLAGS) tests/request_lifecycle_test.c c/jni/ck_request.c c/error/ck_error.c -o $@
 
 $(ERROR_TEST): tests/error/ck_error_test.c c/error/ck_error.c c/error/ck_error.h
 	@mkdir -p $(BIN_DIR)

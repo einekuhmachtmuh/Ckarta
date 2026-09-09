@@ -12,7 +12,8 @@
 ├── docs/
 ├── third_party/
 │   ├── nginx/
-│   └── tomcat/
+│   ├── tomcat/
+│   └── httpd/
 ├── c/
 ├── java/
 ├── tests/
@@ -122,6 +123,7 @@ java/
 第三方參考原始碼：
 third_party/nginx/
 third_party/tomcat/
+third_party/httpd/
 
 研究文件：
 docs/
@@ -151,3 +153,7 @@ docs/WORK_STATE.md 保存重要的跨對話工程現況、已驗證事項、目�
 ## 12. 啟動配置
 
 c/config/ 保存啟動配置 parser（解析器）與其驗證邊界；conf/ 保存預設主設定檔。配置模組不擁有 JVM 或 network runtime；設定快照由 C main 在不可逆 runtime 初始化前建立與驗證。
+
+## 13. 平台實作
+
+Win32／Linux platform backend（平台後端）預計集中於 c/platform/ 或等價單一邊界；上層不得散落使用 _WIN32／__linux__。目前尚未建立正式平台實作。

@@ -81,7 +81,7 @@ Windows undocumented syscall 不採用。
 
 ## 10. Ckarta platform event contract
 
-第一個可執行 Linux backend 現已以 `c/event/ck_event_loop.[ch]` 落地，但仍維持平台中立的上層概念：register、modify、remove、wait、destroy，以及 opaque cookie 回傳。
+第一個可執行 Linux backend 現已以 `c/event/ck_event_loop.[ch]` 落地，並進一步以 loopback TCP 驗證 listener／accept integration。上層維持平台中立概念：register、modify、remove、wait、destroy，以及 opaque cookie 回傳。
 
 Linux 實作：
 
@@ -90,8 +90,9 @@ Linux 實作：
 - `epoll_wait()`。
 - level-triggered readiness。
 - `uint64_t` opaque cookie；backend 不保存可被 registry retire 的 connection pointer。
+- loopback listener 使用 `accept4(..., SOCK_CLOEXEC | SOCK_NONBLOCK)` 建立 accepted descriptor。
 
-正式 API 目前命名為 `ck_event_loop_*`，而不是把 epoll 專有名稱外洩至上層。未來可在不破壞上層 contract 的前提下，再把實作整理成更完整的 platform backend layering。
+正式 API 目前命名為 `ck_event_loop_*`，而不是把 epoll 專有名稱外洩至上層。正式多 worker platform backend layering 尚未完成。
 
 Windows 候選：IOCP + PostQueuedCompletionStatus。
 Linux completion notification 候選：eventfd + epoll，現有 `ck_completion_notification` 已具備 eventfd 實作，但尚未與 `ck_event_loop` 建立正式 wakeup integration。
@@ -100,7 +101,7 @@ Linux completion notification 候選：eventfd + epoll，現有 `ck_completion_n
 
 目前多請求 completion routing 已經攜帶 request identity。下一步可把 completion notification 接至 platform event backend：Linux 以 eventfd 喚醒 epoll；Windows 以 PostQueuedCompletionStatus 注入 completion packet。
 
-目前 Linux epoll event backend 已完成獨立 smoke slice；正式 completion-to-event-loop wakeup 仍未整合。
+目前 Linux epoll event backend 與 loopback TCP transport 已有獨立 executable smoke slice；正式 completion-to-event-loop wakeup 仍未整合。
 
 ## 12. filesystem 與 Unicode
 
@@ -149,5 +150,8 @@ Linux raw syscall numbers：目前不採用。
 Windows undocumented syscall：不採用。
 IOCP 與 epoll：各自實作相同 Ckarta event contract。
 Linux `ck_event_loop` baseline：已實作並由 GitHub Actions 驗證。
+Linux loopback TCP listener／accepted connection integration：已實作並由 GitHub Actions 驗證。
 Windows IOCP backend：尚未實作。
-正式 network listener／accepted connection integration：尚未實作。
+正式 multi-worker network event consumer：尚未實作。
+正式 completion-to-event-loop wakeup：尚未實作。
+HTTP framing／request-response network path：尚未實作。

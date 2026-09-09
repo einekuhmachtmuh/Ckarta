@@ -9,6 +9,7 @@ import jakarta.servlet.AsyncContext;
 import jakarta.servlet.ServletRequest;
 import jakarta.servlet.ServletRequestWrapper;
 import jakarta.servlet.ServletResponse;
+import jakarta.servlet.ServletResponseWrapper;
 
 /**
  * ServletRequest adapter that owns the application-facing async-cycle binding.
@@ -77,6 +78,27 @@ public final class CkartaServletRequestAdapter extends ServletRequestWrapper
 		return context;
 	}
 
+
+	private boolean acceptsAsyncRequest(ServletRequest request)
+	{
+		if (request == getRequest())
+		{
+			return true;
+		}
+		return request instanceof ServletRequestWrapper wrapper
+				&& wrapper.isWrapperFor(getRequest());
+	}
+
+	private boolean acceptsAsyncResponse(ServletResponse response)
+	{
+		if (response == originalResponse)
+		{
+			return true;
+		}
+		return response instanceof ServletResponseWrapper wrapper
+				&& wrapper.isWrapperFor(originalResponse);
+	}
+
 	private AsyncContext startAsync(
 			ServletRequest request,
 			ServletResponse response,
@@ -86,6 +108,12 @@ public final class CkartaServletRequestAdapter extends ServletRequestWrapper
 		{
 			throw new IllegalStateException(
 					"asynchronous processing is not supported");
+		}
+
+		if (!acceptsAsyncRequest(request) || !acceptsAsyncResponse(response))
+		{
+			throw new IllegalStateException(
+					"request or response is not from this dispatch");
 		}
 
 		if (!asyncStarted.compareAndSet(false, true))

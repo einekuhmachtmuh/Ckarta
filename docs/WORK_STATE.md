@@ -369,3 +369,15 @@ Makefile 已固定 Jakarta Servlet 6.1 API dependency，並將 Java async semant
 API binding 後續 CI 曾依序抓出並修正：1) async core 舊 `checkUsable()` 引用；2) API test source set 漏列 `CkartaAsyncContext.java`；3) test `main()` 未宣告 `ServletException`；4) API adapter test 對 `createListener()` 的位置假設不理想。這些都屬既有 lifecycle／函式引用／exception contract 規則可處理的問題，沒有新增重複工作規則。
 
 最新 `main` commit `19899e2e31d4bcb0fb07242d5455f0a813045d4e` 的 GitHub Actions run `34341969040`、job `102434414989` 已成功。CI 實際下載 `jakarta.servlet-api-6.1.0.jar`，SHA-256 驗證通過，並成功編譯／執行 Jakarta API adapter test、Java async core test、全部 C unit/race tests 與 native smoke。此結果只證明 API boundary prototype 的 build/test 正確，不等於 Servlet 6.1 TCK 通過。
+
+## 41. 2026-09-09 ServletRequest.startAsync binding validation
+
+新增 `java/org/ckarta/servlet/CkartaServletRequestAdapter.java`，以 `ServletRequestWrapper` 形式建立第一個真正的 `ServletRequest.startAsync()` binding slice。它驗證 `isAsyncSupported()`、同一 dispatch 不得第二次 startAsync、`getAsyncContext()` 僅在 async started 狀態有效，並檢查 supplied request/response 是否為本 dispatch 原始物件或合法 wrapper。`isAsyncStarted()` 在 complete 後恢復 false，但 async cycle consumption 另以獨立狀態追蹤；由於目前尚無 AsyncContext.dispatch implementation，本輪沒有假造新的 dispatch cycle。
+
+`CkartaServletAsyncContext` 目前保持薄 adapter：`complete`、`start`、request/response access、timeout、listener registration、listener creation 已與 semantic core 綁定；dispatch 仍明確 unsupported。native client disconnect／shutdown 不被誤映射為 Servlet `onComplete`。
+
+Servlet 6.1 規格明確要求 `startAsync()` 受 asyncSupported、same-dispatch 與 response closed 等條件限制；Tomcat 11.0.25 `Request`／`RequestFacade` 與 `AsyncContextImpl` 的對應路徑亦將 Request facade、async context 初始化與 container-internal async processing 分開。Ckarta 採語意，不複製 Tomcat private classes。
+
+測試 `tests/java/CkartaServletRequestAsyncTest.java` 已加入 `make test`，驗證 original request/response、合法 wrapper rejection、async state 與 `getAsyncContext()` lifecycle。最新程式碼 commit `efe25c40064cbca3d3e93f1febee94b3571f9ab1` 的 GitHub Actions run `34343191270`、job `102438557460` 已完整通過 `make test`；runner 為 Ubuntu 24.04 / Temurin OpenJDK 21.0.12.1 / GCC 13.3.0。
+
+後續正式 integration gate：將此 adapter 與實際 Servlet request/response facade、Servlet mapping/container lifecycle、native connection correlation、timeout/error dispatch、AsyncListener cycle 與 TCK 逐項接合。不得把本 prototype 標示為 Servlet 6.1 相容。

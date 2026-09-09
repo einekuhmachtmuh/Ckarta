@@ -1,4 +1,4 @@
-#include "../c/jni/ck_error.h"
+#include "../../c/error/ck_error.h"
 
 #include <assert.h>
 #include <stdint.h>

@@ -24,6 +24,7 @@ public final class CkartaServletRequestAdapter extends ServletRequestWrapper
 	private final AtomicReference<CkartaServletAsyncContext> asyncContext =
 			new AtomicReference<>();
 	private final AtomicBoolean asyncStarted = new AtomicBoolean(false);
+	private final AtomicBoolean asyncCycleStarted = new AtomicBoolean(false);
 
 	public CkartaServletRequestAdapter(
 			ServletRequest request,
@@ -43,7 +44,8 @@ public final class CkartaServletRequestAdapter extends ServletRequestWrapper
 	@Override
 	public AsyncContext startAsync()
 	{
-		return startAsync(this, originalResponse, true);
+		return startAsync(getRequest(), originalResponse,
+				true);
 	}
 
 	@Override
@@ -92,6 +94,13 @@ public final class CkartaServletRequestAdapter extends ServletRequestWrapper
 					"request is already in asynchronous mode");
 		}
 
+		if (!asyncCycleStarted.compareAndSet(false, true))
+		{
+			asyncStarted.set(false);
+			throw new IllegalStateException(
+					"request cannot start async processing again in this dispatch");
+		}
+
 		CkartaAsyncContext core = new CkartaAsyncContext(
 				asyncExecutor,
 				(event, error) ->
@@ -102,10 +111,7 @@ public final class CkartaServletRequestAdapter extends ServletRequestWrapper
 					}
 					finally
 					{
-						if (event != CkartaAsyncContext.TerminalEvent.ERROR)
-						{
-							asyncStarted.set(false);
-						}
+						asyncStarted.set(false);
 					}
 				});
 

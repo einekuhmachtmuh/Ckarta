@@ -119,7 +119,7 @@ public final class CkartaRuntime
 				}
 
 				int publishStatus = publishCompletion(queueHandle,
-						requestHandle, ownerToken, lifetimeToken, result, status);
+						requestHandle, ownerToken, lifetimeToken, 1L, result, status);
 				if (publishStatus != 0 && publishStatus != 2)
 				{
 					throw new IllegalStateException(
@@ -141,5 +141,5 @@ public final class CkartaRuntime
 
 	private static native int publishCompletion(long queueHandle,
 		long requestHandle, long ownerToken, long lifetimeToken,
-		long result, int status);
+		long cycleId, long result, int status);
 }

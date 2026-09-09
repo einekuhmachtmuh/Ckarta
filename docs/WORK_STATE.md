@@ -204,7 +204,7 @@ Native module 暫定為 load-at-start、ABI/version/signature 驗證、dependenc
 
 ## 25. 2026-09-09 error record implementation gate
 
-`c/error/ck_error.[ch]` 已建立 process-local error/outcome record 骨架，包含 category、stable code、HTTP status、flags、phase、request_id 與固定 layout assertion；`tests/error/ck_error_test.c` 已加入初始化、合法值與 bounds/flag validation。此 record 尚未接入 request/completion，因為 concurrent failure publication 與 request state 的同步語意尚需正式 terminal primitive。
+`c/error/ck_error.[ch]` 已建立 process-local error/outcome record，並接入 `ck_request_t`；`tests/error/ck_error_test.c` 與 `tests/error/request_error_race_test.c` 驗證初始化、bounds/flag validation，以及兩個併發 failure publisher 只有一個 winner 並能取得 winner 的 error record。
 
 ## 26. 2026-09-09 repository audit
 

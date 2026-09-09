@@ -17,21 +17,19 @@
 
 ## 2. 已落實的核心文件
 
-- `WORKING_RULES.md`：工程基線、MD 一致性檢查、離線 fallback、工作成果持久化、新工作階段重新讀取、變更衝突／版本一致性、規則衝突處理與最小 wrapper 規則。
-- `docs/ENTRYPOINT_DESIGN.md`
-- `docs/STARTUP_STATE_MACHINE.md`
-- `docs/CONCURRENCY_MODEL.md`
-- `docs/THREAD_MODEL.md`
-- `docs/THREAD_BENCHMARK_PLAN.md`
-- `docs/GATEWAY_SERVLET_NATIVE_BRIDGE_RESEARCH.md`
-- `docs/OPENJDK_21U_SOURCE_AUDIT.md`
-- `docs/JNI_ABI.md`
-- `docs/JNI_COST_MODEL.md`
-- `docs/CONNECTION_OWNERSHIP.md`
-- `docs/CANCELLATION_MODEL.md`
-- `docs/CKARTA_FUNCTION_FLOW.md`
-- `docs/COMPLETION_NOTIFICATION_RESEARCH.md`
-- `docs/TOMCAT_SERVLET_USER_COMPATIBILITY.md`
+- `WORKING_RULES.md`：工程基線、MD 一致性檢查、離線 fallback（替代方法）、工作成果持久化、新工作階段重新讀取、變更衝突／版本一致性、規則衝突處理與最小 wrapper 規則。
+- `docs/ENTRYPOINT_DESIGN.md`：C main 與專用 JVM bootstrap thread。
+- `docs/STARTUP_STATE_MACHINE.md`：啟動／停止狀態機。
+- `docs/CONCURRENCY_MODEL.md`：整體並行原則。
+- `docs/THREAD_MODEL.md`：thread model 權威研究文件。
+- `docs/THREAD_BENCHMARK_PLAN.md`：thread topology 與 JNI bridge/direct-attach 實驗定義。
+- `bench/jni/`：獨立 JNI thread benchmark harness。
+- `docs/GATEWAY_SERVLET_NATIVE_BRIDGE_RESEARCH.md`：CGI／FastCGI／Tomcat Servlet／CGIServlet／OpenJDK HotSpot／Ckarta JNI 邊界研究。
+- `docs/OPENJDK_21U_SOURCE_AUDIT.md`：JDK 21.0.8 與 21.0.11 fixed-tag HotSpot source audit。
+- `docs/JNI_ABI.md`：JNI 邊界與 ownership。
+- `docs/JNI_COST_MODEL.md`：OpenJDK 21 JNI 成本研究。
+- `docs/CONNECTION_OWNERSHIP.md`：C connection、Java facade、buffer lifetime。
+- `docs/CANCELLATION_MODEL.md`：跨層取消與資源釋放。
 
 ## 3. 目前 thread model 決策
 
@@ -67,13 +65,15 @@ Tomcat 標準 Servlet 路徑主要留在 JVM／Java thread execution；Tomcat `C
 
 Ckarta JNI 與 FastCGI 的主要差別在邊界位置：Ckarta 是 in-process HotSpot/JNI，而 FastCGI 是 protocol/socket/upstream boundary。因此不能因為 FastCGI 的 gateway pattern 有價值，就把 socket／protocol serialization 原封不動放進同程序 JNI。
 
+OpenJDK 21 HotSpot 的 JNI method invocation 最終進入 `JavaCalls::call` 等 runtime machinery；`NewObjectA/V` 則涉及 instance allocation、JNI handle 與 constructor invocation。因此 C request struct 不應逐欄物件化為大量 Java mirror fields。
+
 詳細權威研究見 `docs/GATEWAY_SERVLET_NATIVE_BRIDGE_RESEARCH.md`。
 
 ## 5. 本機可重現驗證
 
 Codex 本機測試環境曾成功建置並執行獨立 `bench/jni` harness。測試環境為 Linux x86_64、GCC 14.2.0、OpenJDK 21.0.11。
 
-該 harness 僅作低階 JNI invocation、thread attachment 與 queue handoff 的可執行性／成本拆解工具；先前校驗樣本沒有完整保存 Ckarta commit、kernel、完整硬體隔離、warm-up、repetitions 與 tail-latency 統計，因此本工作狀態不保存其性能數字，也不將其視為正式 benchmark 證據。
+該 harness 僅作低階 JNI invocation、thread attachment 與 queue handoff 的可執行性／成本拆解工具；先前校驗樣本沒有完整保存 Ckarta commit、kernel、完整硬體隔離、warm-up、repetitions 與 tail-latency 統計，因此本工作狀態不再保存其性能數字，也不將其視為正式 benchmark 證據。
 
 ## 6. 尚待完成的 thread 實驗
 
@@ -86,48 +86,245 @@ Codex 本機測試環境曾成功建置並執行獨立 `bench/jni` harness。測
 - C canonical request、opaque handle、DirectByteBuffer 與 Java facade workload。
 - shutdown、cancellation、AsyncContext 與 connection ownership 的整合測試。
 
-## 7. 歷史工程閘門與已完成 slice
+## 7. 下一個工程閘門
 
-PR #1、#2、#8 等既有 bootstrap/JNI/completion slices 已進入 main；CGI/FastCGI 仍是獨立未實作 gateway module 方向。
+1. 以 bounded semantic handoff 為架構基線，完成 Java executor submission 與 completion ownership。
+2. 實作 Servlet 6.1 request／response facade 的最小必要邊界；不得讓 C event-loop thread 執行 Servlet application code。
+3. 將 AsyncContext lifecycle 接到 C request cancellation／connection ownership。
+4. 建立 bounded JNI queue／completion queue 的正式 contract。
+5. 將 attached submission、worker-group bridge、central bridge pool 接到相同 canonical request workload。
+6. 執行 p50／p95／p99、queue wait、JNI latency、Java scheduling、allocation／GC、CPU utilization 與 memory footprint benchmark。
 
-## 8. Branch status registry
+不得因局部 JNI smoke test、request lifecycle test 或理論分析而宣稱正式 Servlet runtime 或最終 thread topology 已完成。
 
-此章節是 main 對所有現存非-main branch 的 canonical 狀態索引；每個 branch 自身的 `docs/WORK_STATE.md` 仍是該 branch 的詳細 branch-specific state。所有非-main branch 均沒有 open PR；branch refs 僅保留為 provenance；所有非-main branch 的 `WORKING_RULES.md` 均已移除。
+## 8. 新工作階段接手規則
 
-## 9. Tomcat Servlet 使用者相容性研究
+新工作階段應依序讀取：
 
-2026-09-09：新增 `docs/TOMCAT_SERVLET_USER_COMPATIBILITY.md`。本文件只作使用者心智模型與相容性研究，不直接授權修改 Ckarta 實作。研究以真人 Tomcat／Servlet source-reading notes、正式 Servlet 6.1 API、固定 Tomcat 11.0.25 source 三層交叉驗證。
+1. `WORKING_RULES.md`
+2. 本文件
+3. `docs/GATEWAY_SERVLET_NATIVE_BRIDGE_RESEARCH.md`
+4. `docs/OPENJDK_21U_SOURCE_AUDIT.md`
+5. `docs/THREAD_MODEL.md`
+6. `docs/THREAD_BENCHMARK_PLAN.md`
+7. 與當前任務直接相關的架構／JNI／lifecycle 文件
+8. 必要時重新核對固定版本 Nginx、Tomcat、OpenJDK 與學術來源
 
-真人筆記反覆呈現的使用者心智模型包括：Servlet 是 container-managed application component；request 必須經 mapping/container chain 才到 Servlet；FilterChain 可 short-circuit；Servlet instance 與 concurrent request invocation 是不同概念；request/response 有 container lifetime；`startAsync()` 使 application invocation lifetime 與 request lifetime 分離；ServletContext/Session/Listener 屬 Java container semantics。
+## 9. OpenJDK 21u 版本稽核結果
 
-相容性結論：Ckarta 可以重新設計底層 I/O/event-loop，但不能因 C/JNI 內部架構而改變上述 application-visible Servlet semantics。真人文章只作心智模型證據，不作規格證據；正式判定仍以 Servlet 6.1 與固定 Tomcat source 為準。
+固定 `jdk-21.0.8-ga` 與 `jdk-21.0.11-ga` 後，核心 `runtime/javaCalls.cpp` blob SHA 相同；`prims/jni.cpp` 的差異未改動本專案依賴的 JNI invocation、object construction、DirectByteBuffer 路徑。權威稽核見 `docs/OPENJDK_21U_SOURCE_AUDIT.md`。
 
-## 10. Native connection ownership slice
+因此 architecture-level JNI path 已可定案；absolute performance 仍須 exact-build benchmark。
 
-2026-09-09：新增 `c/connection/ck_connection.[ch]` 與 `tests/connection/ck_connection_test.c`。native connection lifecycle 為：
+## 10. Executable bootstrap／JNI slice
 
-```text
-OPEN → ASYNC_WAIT → CLOSING → CLOSED
-```
+已建立 PR `#1`（branch `codex/bootstrap-jdk21-audit`），包含最小可執行：
 
-`ck_connection_try_terminal()` 將 state 與 terminal reason 放在同一 atomic 64-bit lifecycle word，以一次 CAS 發布 terminal ownership，避免先寫 state 再寫 reason 的競態。terminal reason 包括 COMPLETE、CLIENT_DISCONNECT、TIMEOUT、ERROR、SHUTDOWN。
+- C `main()`。
+- JVM bootstrap pthread。
+- `JNI_CreateJavaVM()`。
+- C worker `AttachCurrentThread()`／`DetachCurrentThread()`。
+- `NewDirectByteBuffer()`。
+- one Java request facade。
+- Makefile、smoke test、GitHub Actions build smoke。
 
-`request_id`、`owner_token`、`lifetime_token` 只作 native correlation/validation identity；它們不取代實際 owner，也不構成 Servlet application ABI。
+此 slice 只驗證 topology A 的 lifecycle／JNI boundary，不代表 A 為最終 topology。真正 A/B/C benchmark 仍待接上 canonical request workload。
 
-測試已涵蓋 token validation、ASYNC_WAIT transition、completion vs client-disconnect race 與 idempotent close。非空 `c/connection` 目錄的 obsolete `.gitkeep` 已移除。
+PR #1 已合併至 `main`，merge commit `e501249ce91fd7c76c6625f1826ec0240d4d7d95`；其 executable bootstrap slice 已通過 GitHub Actions smoke build。
 
-## 11. AsyncContext/connection bridge 下一閘門
+## 11. 最新規則與 ABI 進度
 
-真正 Servlet 6.1 `AsyncContext` 尚未接入。下一階段以 Tomcat 11.0.25 `AsyncContextImpl` 為 implementation reference、Servlet 6.1 API 為 semantics authority，逐項接通：
+2026-09-08：`WORKING_RULES.md` 新增「精簡與整合檢查」及變數／欄位／狀態／handle／buffer reference 的 lifecycle／ownership 檢查，並完成自檢。JNI ownership/cancellation ABI 已進入可執行實作：process-local descriptor、owner/lifetime token、atomic lifecycle state、idempotent cancellation 與 lifecycle test 均已加入；真正 AsyncContext／connection cancellation integration 仍待完成。
 
-- `complete()` → native completion candidate
-- `AsyncListener.onTimeout()` → timeout candidate
-- `AsyncListener.onError()` → error candidate
-- client disconnect → client-disconnect candidate
-- server shutdown → shutdown candidate
+## 12. 最新 ABI 進度
 
-必須另外證明 Java AsyncContext reference lifetime、native connection owner handoff、timeout/error/disconnect precedence、response ownership、cross-thread cancellation、post-recycle invalidation 與 shutdown drain；不得因現在已有 native CAS 就宣稱 async Servlet 已完成。
+PR #2 已於 2026-09-08 squash-merge 至 `main`，merge commit `2638bc5017093b5f6e28478c347c95b77009a8cc`。其 CI 已驗證 request lifecycle ABI、JNI dispatch、DirectByteBuffer 與 shutdown smoke path；下一階段是把此 process-local lifecycle model 接入真正 Servlet AsyncContext／connection ownership。
 
-## 12. 下一個工程閘門
+## 13. Web server theory 結論
 
-正式下一個工程 slice 是 AsyncContext ↔ connection ownership integration，以及對應的 Servlet 6.1 compatibility tests；Windows IOCP backend、正式 HTTP data plane、Servlet container hierarchy、TCK、sanitizer/fuzz 与 production benchmark 仍是獨立閘門。
+2026-09-08：Servlet 6.1、固定 Nginx/Tomcat 原始碼與事件／排隊理論比較後，Ckarta 整體方向維持，但正式架構語意更新為「C event-driven network data plane + bounded semantic handoff + Java Servlet semantic plane」。C event-loop thread 不得執行 Servlet application code；attached worker 只能作 JNI control／submission。完整研究見 `docs/WEB_SERVER_THEORY_SERVLET_NGINX.md`。
+
+## 14. Servlet critique 與 executor progress
+
+2026-09-08：完成 Servlet 6.1 的中立技術批判。結論是保持 Servlet container 身份與高相容性語意，但不讓 Servlet object model 成為全系統 internal representation。新增 `docs/SERVLET_6_1_CRITIQUE.md`。
+
+同日：Java executor handoff 已接入 smoke path，改用固定 1 thread + 有界 queue + AbortPolicy；C 端 completion 取得採非阻塞 poll，但每次 poll 的 attach/detach 仍是 smoke-only 實作，production C event loop 尚不能把此 polling 方式當作最終通知機制。
+
+## 15. CGI／FastCGI 狀態
+
+2026-09-08：完成 CGI/1.1、Nginx FastCGI、PHP-FPM 與 Tomcat CGIServlet 交叉研究。暫定產品方向為：CGI 作為可選外部 application gateway；PHP 優先 FastCGI／PHP-FPM；純 C 可執行程式可經 CGI。尚未實作 process lifecycle、pipe backpressure、reaping、sandbox 或 gateway protocol。
+
+下一個仍待完成的上一階段閘門是 Java executor → 非阻塞 completion → C owner；本次 CGI 研究不取代該閘門。
+
+## 16. CGI/FastCGI 模組化決策
+
+2026-09-08：CGI/FastCGI 正式定位為未來可掛接 application gateway module，不納入核心 request execution。效能研究已把「不存在／存在未命中／實際命中」三種成本分離；學術比較顯示 CGI 的 process creation 是結構性成本，FastCGI 將其移至長生命週期 application process。尚未實作 module loader、CGI process lifecycle 或 FastCGI client。
+
+## 17. 2026-09-08 CGI 模組與非阻塞交接狀態
+
+CGI/FastCGI 已正式定位為未來可掛接 application gateway module，不進核心 request execution；完整效能比較見 `docs/CGI_FASTCGI_RESEARCH.md`。
+
+Java executor handoff 的 v2 smoke slice 使用 bounded Java completion queue，C 不再 Future.get() 阻塞。PR #8 已於 2026-09-08 squash-merge；其 GitHub Actions Build and test 已成功。此 slice 仍只代表單一 in-flight smoke request，不代表正式多請求 completion queue。
+
+## 18. 本輪 CI 錯誤與規則檢查
+
+本輪非阻塞交接實作曾依序發現：20-byte completion record 被錯誤配置成 16 bytes；舊 synchronous dispatch 定義殘留；既有 smoke 腳本要求保留 CKARTA_DISPATCH 診斷輸出。三者均已有現行函式簽名、型態轉換、邊界與全 repository 引用檢查規則涵蓋，因此未新增重複規則；實際改正後 PR #8 的 Build and test 成功。
+
+## 19. 啟動配置研究與實作
+
+2026-09-08：完成 Apache HTTP Server 2.4.68、Nginx 1.30.4、Tomcat 11.0.25 的啟動配置交叉研究。決策為：C main 先載入 native 主設定檔，語法／語意驗證通過後形成 C-owned configuration snapshot，再建立 JVM 與 network runtime；未來 reload 採新快照 prepare→switch→drain。完整研究見 `docs/STARTUP_CONFIGURATION_RESEARCH.md`。
+
+目前已加入最小設定載入器與預設 conf/ckarta.conf；支援 -c、-t、-T、-h 與 class_path 指令。啟動前配置載入已接到 C main → JVM bootstrap，並有 valid/invalid configuration test。此範圍尚未實作一般 network、TLS、worker、module loader 或 reload 設定。
+
+## 20. 多請求 completion 下一閘門
+
+2026-09-09：request_id、owner_token、lifetime_token、overflow、late/duplicate completion、cancellation、shutdown drain 與 owner teardown 的多請求 routing contract 已完成並由 smoke slice 驗證。下一步是把此 contract 接入正式多 worker producer／owner routing，再選擇通知原語；不先綁定 Linux-specific primitive。
+
+## 21. 核心設定與 native module 研究
+
+2026-09-09：完成 Apache HTTP Server、Nginx、Tomcat 的核心設定候選與 native module 架構交叉研究。研究結果持久化於 `docs/CORE_CONFIGURATION_CANDIDATES.md` 與 `docs/MODULE_ARCHITECTURE_RESEARCH.md`；目前不實作新的 core config options 或 module loader。候選分為 P0 程序／路徑／listener、P1 安全／資源／併行、P2 靜態／代理／觀測、P3 平台調校。
+
+Native module 暫定為 load-at-start、ABI/version/signature 驗證、dependency DAG、module-owned configuration、request route pre-resolution；不做 runtime unload。完整 module benchmark 尚未建立。
+
+## 22. 多請求 completion smoke
+
+2026-09-09：多請求 completion routing 已完成第一個可執行 smoke slice。兩個 C request 可在同一 Java executor completion queue 完成，completion 帶 request_id、owner_token、lifetime_token、result、status，C 不依賴完成順序進行 routing。此 slice 仍由 smoke worker 建立後 join，未代表正式 event-loop 非阻塞 producer，也未使用高效率事件通知原語。
+
+## 23. 2026-09-09 exception handling research
+
+完成 Ckarta exception/error handling architecture 研究並建立唯一權威文件 `docs/EXCEPTION_HANDLING_RESEARCH.md`。研究交叉核對 Nginx 1.30.4、Tomcat 11.0.25、Apache HTTP Server 2.4.68、OpenJDK 21 JNI specification，以及 Goodenough 1975、Liskov/Snyder 1979、Lee et al. 2000/2004、Patterson et al. 2002、Candea et al. 2004、Ma et al. 2025 等已核實文獻。
+
+決策：exception、native error、HTTP status、cancellation、timeout 與 fatal state 分層；JNI pending exception 必須在明確邊界檢查與有責任地清除；異步 error/completion/cancellation 必須 exactly once；client-visible error 與 internal diagnostic 分離；retry 不得僅因 exception 觸發。
+
+## 24. 2026-09-09 error state matrix and ck_error decision
+
+依 exception taxonomy 與現有 `ck_request` / completion / cancellation 狀態重新逐狀態分析後，確定需要一個小型 process-local `ck_error_t`，因為單一 `CK_REQUEST_FAILED` 及現有 completion `status` 無法保留 failure source。`docs/ERROR_STATE_MATRIX.md` 已固定 lifecycle／owner／HTTP outcome matrix；已加入獨立 `c/error/ck_error.[ch]` 與 layout/validation test。
+
+`ck_error_t` 已直接內含於 `ck_request_t`，並由 `RUNNING → FAILING → FAILED` publication gate 保護：唯一 failure winner 先寫 error record，再以 release-store 發布 FAILED；`ck_request_error()` 只有在 acquire-load 確認 FAILED 後才回傳該 record。
+
+## 25. 2026-09-09 error record implementation gate
+
+`c/error/ck_error.[ch]` 已建立 process-local error/outcome record，並接入 `ck_request_t`；`tests/error/ck_error_test.c` 與 `tests/error/request_error_race_test.c` 驗證初始化、bounds/flag validation，以及兩個併發 failure publisher 只有一個 winner 並能取得 winner 的 error record。
+
+## 26. 2026-09-09 repository audit
+
+本輪依 `WORKING_RULES.md` 完成全 repository 結構、原始碼、研究文件、測試、CI、設定與固定 upstream gitlink 交叉檢查。已修正：
+
+- JNI DirectByteBuffer descriptor 的 `body`／`body_length` 前置條件，避免把 NULL address 或超過 Java `Integer.MAX_VALUE` 的 capacity 交給 `NewDirectByteBuffer`。
+- JVM bootstrap error path 的 mutex／condition lifecycle，並避免持鎖執行 Java container start call。
+- `ENTRYPOINT_DESIGN.md` 對 JNI bridge topology 的過時固定描述，重新與 A/B/C benchmark 候選及 `THREAD_MODEL.md` 對齊。
+- `THREAD_BENCHMARK_PLAN.md` 與 `bench/jni/README.md` 對目前低階 JNI harness 的能力邊界，移除缺少完整 reproducibility metadata 的性能數字作為證據。
+- `WORKING_RULES.md` 文件索引漏列的 gateway／CGI 研究文件，以及 `ARCHITECTURE.md`、`THREAD_BENCHMARK_PLAN.md`、本文件的章節編號／狀態描述失配。
+
+目前仍刻意不定案：
+
+- formal A/B/C thread topology；
+- production multi-worker completion notification primitive；
+- AsyncContext ↔ C connection cancellation integration；
+- production poll／event notification path；
+- CGI/FastCGI implementation；
+- Servlet 6.1 TCK、ASan/UBSan CI 與正式 performance baseline。
+
+這些仍依既有工程閘門處理，未因本輪 audit 而新增另一套規則。
+
+## 28. 2026-09-09 function flow and error publication
+
+完成 Ckarta 自有函式逐函式流程與契約梳理，持久化於 `docs/CKARTA_FUNCTION_FLOW.md`。已修正：invalid request state 與 FAILED 混淆、runtime shutdown/destroy lifecycle guards、request failure 的 `FAILING → FAILED` publication、Java completion failure taxonomy mapping，以及對應 Makefile dependencies/tests。同步更新 JNI／error matrix／startup 文件，避免 upstream trace 與 Ckarta implementation contract 混在同一權威文件。
+
+目前仍未實作 C network/event backend、HTTP parser、real Servlet container、AsyncContext bridge、production completion notification、正式 public module ABI、Servlet 6.1 TCK、sanitizer/fuzz integration；這些仍是獨立工程閘門。
+
+## 29. 2026-09-09 branch consolidation
+
+`main/WORKING_RULES.md` 現已是唯一工作守則來源；所有非-main branch 的 `WORKING_RULES.md` 均已移除。各 branch 的 `docs/WORK_STATE.md` 只描述該 branch 自身狀態，不覆蓋或取代 main state。
+
+`codex/platform-apache-completion` 的有效研究內容已抽取至 `docs/WIN32_LINUX_PLATFORM_RESEARCH.md` 與 `docs/COMPLETION_NOTIFICATION_RESEARCH.md`。其 `third_party/httpd` submodule 與現行來源模型衝突，因此沒有整枝合併；Apache 2.4.68 僅保留為外部固定研究基線。PR #14 已於 2026-09-09 關閉為 superseded。
+
+## 30. 2026-09-09 branch workflow and function-flow baseline
+
+本輪已完成所有現存非-main branch 的 WORKING_RULES 比對；其仍有效且可泛化的內容已整合到 main/WORKING_RULES.md。非-main branch 不再保存 WORKING_RULES。
+
+新增 `docs/CKARTA_FUNCTION_FLOW.md` 作為 Ckarta 自有實作函式流程與契約的權威文件；`docs/FUNCTION_TRACE.md` 僅保存固定 Nginx/Tomcat upstream function-level trace。
+
+本輪已把 request failure publication 固定為 `RUNNING → FAILING → FAILED`，其中只有成功取得 FAILING 的 publisher 可以寫 error record，再以 release-store 發布 FAILED；reader 以 acquire-load 後讀取 error。
+
+目前仍未實作 C network/event backend、HTTP parser、real Servlet container、AsyncContext bridge、production completion notification、formal public module ABI、Servlet 6.1 TCK 與 sanitizer/fuzz integration。
+
+## 31. 2026-09-09 main-only rules and function-flow consolidation
+
+本輪完成所有現存非-main branch 的 `WORKING_RULES.md` 逐項比對；其仍有效內容已依保留後整合原則合併至 main/WORKING_RULES.md，所有非-main branch 的 `WORKING_RULES.md` 均已移除。非-main `docs/WORK_STATE.md` 仍保留並只描述各自 branch-specific state；沒有以其他 branch 的 WORK_STATE 覆蓋 main。
+
+分支處理：PR #6、#13、#14 已因後續成果取代而關閉；#14 的有效 Win32/Linux 與 completion-notification 研究已抽取至 main，與現行 Apache external fixed-source policy 衝突的 `third_party/httpd` submodule 沒有合併。其餘歷史 branch 仍保留 Git provenance，但不再視為待合併成果；沒有 API 能安全刪除 branch refs 時，不做假刪除。
+
+本輪新增 `docs/CKARTA_FUNCTION_FLOW.md`，統一描述目前 Ckarta 自有可執行函式流程與 ownership/error/lifecycle contract；`docs/FUNCTION_TRACE.md` 僅保存固定 Nginx/Tomcat upstream trace。
+
+`ck_request` failure publication 已固定為 `RUNNING → FAILING → FAILED`，error record 在 FAILING 唯一 winner 中完成寫入，再以 release-store 發布 FAILED；reader 以 acquire-load 後取得 error。`ck_request_finish()` 現為 success-only completion API，避免未攜帶 error record 的 FAILED 路徑。
+
+runtime shutdown 已加入 initialized/started/completed lifecycle guards 與 sequential idempotence；dispatch/poll 在 shutdown 開始後拒絕新操作。同步原語的內部 invariant failure 走明確 fatal path。
+
+目前下一個主要工程閘門仍是 production completion notification / AsyncContext cancellation / event backend；本輪沒有提前定案 Linux epoll/eventfd 或 Windows IOCP 為唯一正式實作，也沒有宣稱完整 Servlet runtime 已完成。
+
+## Branch status registry
+
+此章節是 main 對所有現存非-main branch 的 canonical 狀態索引；每個 branch 自身的 `docs/WORK_STATE.md` 仍是該 branch 的詳細 branch-specific state。
+
+| Branch | Purpose | Lifecycle status | Relation to main |
+|---|---|---|---|
+| codex/bootstrap-jdk21-audit | JVM bootstrap / OpenJDK 21u / JNI smoke | CLOSED / MERGED | PR #1 merged；僅保留 provenance |
+| codex/cgi-interface-research | CGI/FastCGI gateway research | CLOSED / SUPERSEDED | PR #5 closed；有效研究已在 main |
+| codex/cgi-nonblocking-completion | early nonblocking completion prototype | CLOSED / SUPERSEDED | 無 active PR；已被後續 completion model 取代 |
+| codex/completion-contract | multi-request completion contract research | CLOSED / SUPERSEDED | PR #10 closed；有效語意已在 main |
+| codex/completion-routing-impl | completion routing implementation prototype | CLOSED / SUPERSEDED | 無 active PR；後續 smoke/contract 已取代 |
+| codex/core-config-module-research | core configuration / native module research | CLOSED / SUPERSEDED | PR #11 closed；研究已在 main |
+| codex/jni-ownership-abi | JNI ownership / cancellation ABI | CLOSED / MERGED | PR #2 merged；僅保留 provenance |
+| codex/multi-request-completion | multi-request completion routing slice | CLOSED / SUPERSEDED | PR #12 closed；有效 routing contract 已在 main |
+| codex/nonblocking-completion | first nonblocking JNI completion slice | CLOSED / SUPERSEDED | PR #6 closed；後續模型已取代 |
+| codex/nonblocking-completion-v2 | bounded executor / nonblocking completion v2 | CLOSED / SUPERSEDED | PR #8 closed；有效成果已在 main |
+| codex/platform-apache-completion | Win32/Linux + Apache reference/completion research | CLOSED / SUPERSEDED | PR #14 closed；有效研究在 main，httpd submodule 未納入 |
+| codex/repo-audit-20260909 | repository audit / exception-error architecture | CLOSED / MERGED | PR #15 merged；僅保留 provenance |
+| codex/rules-cgi-module | CGI module/function safety rules | CLOSED / SUPERSEDED | PR #7 closed；有效規則已在 main |
+| codex/servlet-critique-executor-slice | Servlet critique / Java executor handoff | CLOSED / SUPERSEDED | PR #4 closed；有效成果已在 main |
+| codex/startup-config-loader | startup configuration parser / validation | CLOSED / SUPERSEDED | PR #9 closed；有效成果已在 main |
+| codex/web-server-theory-servlet-analysis | Web server / Servlet / Nginx / Tomcat theory | CLOSED / SUPERSEDED | PR #3 closed；研究已在 main |
+| codex/win32-research-notification | Win32 / completion notification research | CLOSED / SUPERSEDED | PR #13 closed；有效研究已後續整合 |
+
+No non-main branch currently has an open PR. Branch refs are retained only where useful for historical provenance; they are not active development baselines.
+
+## 32. 2026-09-09 terminal publication protocol
+
+本輪完成 terminal publication 的第一階段 executable contract：`ck_request_cancel()` 回傳 0 表示本次 CAS 取得 CANCELLING ownership、1 表示已有其他 cancellation/failure/completion winner；`ck_request_finish()` 僅允許 RUNNING → COMPLETED；`ck_request_fail()` 使用 RUNNING → FAILING → FAILED publication gate。completion poll 對新成功 terminal 回傳 1、無事件回傳 0、late/duplicate/cancelled completion 被消費但不產生第二 terminal outcome 回傳 2、新發布 failure 回傳 -2，runtime/identity error 回傳負值。
+
+新增 `tests/error/request_terminal_race_test.c`，驗證 cancellation vs completion、failure vs completion 的 terminal ownership race；`tests/error/request_error_race_test.c` 驗證 concurrent failure publisher 只有一個 winner 並保留 winner error record。
+
+學術 correctness 基線新增 Herlihy/Wing linearizability 與 Michael/Scott non-blocking queue references；目前不據此預設採 lock-free completion queue，因為 memory reclamation、overflow、shutdown drain 與 owner lifetime 仍需獨立證明。
+
+目前已完成第一個完整的 executable native completion integration path：Java executor completion → registered JNI publisher → runtime-owned bounded native ring queue → Linux eventfd notification → C epoll wake → native dequeue / request terminal publication。queue 具 close-aware bounded backpressure、overflow/closed semantics、notification coalescing 與 epoll-compatible fd，並有 multi-producer/overflow/drain/close tests。它仍不是完整 Servlet connection data plane 或跨平台最終 backend。
+
+下一個正式閘門改為：owner/lifetime validation 的 production connection integration、queue shutdown drain 的完整 connection semantics、Windows IOCP backend，以及之後的 AsyncContext ↔ C connection cancellation integration。
+
+## 33. 2026-09-09 Tomcat Servlet user compatibility research
+
+新增 `docs/TOMCAT_SERVLET_USER_COMPATIBILITY.md`。研究先搜尋真人作者撰寫的 Tomcat／Servlet 開發筆記、source-reading notes 與技術討論，再與正式 Servlet 6.1 API 及固定 Tomcat 11.0.25 source 交叉核對。文件明確指出真人文章只用於使用者心智模型，不取代規格，也不直接授權修改實作。
+
+研究反覆出現的 user model：Servlet 是 container-managed application component；request 到 Servlet 前必須經 mapping/container chain；Filter 的 `chain.doFilter()` 具有短路與後置處理語意；Servlet instance lifecycle 與 concurrent request invocation 是不同概念；request/response 有 container lifetime；`startAsync()` 可使 request lifetime 超出原 synchronous `service()` invocation；ServletContext/Session/Listener 屬 Java container semantics。
+
+相容性結論：Ckarta 可以改變 network/event-loop/I/O implementation，但不能因此改變 application-visible Servlet lifecycle、mapping、FilterChain、concurrency、async、context/session semantics。真人筆記中使用 Tomcat 私有 class（例如 Valve/Coyote internals）的部分只能作 reference implementation 心智模型，不能直接變成 Ckarta ABI。
+
+## 34. 2026-09-09 native connection ownership slice
+
+新增 `c/connection/ck_connection.[ch]`、`tests/connection/ck_connection_test.c`，並將 connection test 加入 `make test`。native state 為 `OPEN → ASYNC_WAIT → CLOSING → CLOSED`；terminal reason 與 state 以單一 atomic 64-bit lifecycle word 發布，避免 state/reason 分開寫造成 publication race。
+
+terminal reason：COMPLETE、CLIENT_DISCONNECT、TIMEOUT、ERROR、SHUTDOWN。`request_id`、`owner_token`、`lifetime_token` 只作 native correlation/validation，不是 Servlet application ABI。測試驗證 token validation、ASYNC_WAIT transition、completion vs client-disconnect race 與 idempotent close。
+
+本輪亦移除已非空的 `c/connection/.gitkeep` 與 `c/event/.gitkeep`，以符合 WORKING_TREE 對 `.gitkeep` 的用途。
+
+## 35. 2026-09-09 AsyncContext bridge boundary
+
+目前沒有正式 Jakarta Servlet implementation 可供直接接入，故本輪沒有建立假的 `AsyncContext` API 或把 Tomcat 私有 API 變成 Ckarta ABI。下一步應以 Servlet 6.1 API 作 semantics authority、Tomcat 11.0.25 `AsyncContextImpl` 作 reference implementation，逐項實作 Java AsyncContext → native connection event bridge。
+
+候選 mapping：`AsyncContext.complete()` → COMPLETE candidate；`AsyncListener.onTimeout()` → TIMEOUT candidate；`AsyncListener.onError()` → ERROR candidate；client disconnect → CLIENT_DISCONNECT candidate；server shutdown → SHUTDOWN candidate。所有 candidate 必須進入同一 native terminal arbitration，且 Java AsyncContext reference lifetime、native connection lifetime、response ownership 與 recycle invalidation 必須分開證明。
+
+Tomcat 11.0.25 `AsyncContextImpl` 明確處理 complete/timeout/error/onComplete/onError/recycle 與 concurrent-use protection；因此 Ckarta 目前的 connection CAS 是必要的 native ownership primitive，但不是完整 AsyncContext semantics。
+
+## 36. 2026-09-09 validation status
+
+目前 repository 變更已以最新 main head 進行 CI；`c/connection` 測試已接入 `make test`。本輪若 CI 尚未對最新 HEAD 完成，不得把舊 run 當成最新 connection implementation 的通過證據。

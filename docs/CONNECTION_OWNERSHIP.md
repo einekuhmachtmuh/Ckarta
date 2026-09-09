@@ -290,3 +290,24 @@ terminal owner 成功把 lifecycle 從 `CLOSING` 推至 `CLOSED` 後，只有該
 `tests/connection/ck_connection_test.c` 與 `tests/connection/ck_connection_registry_test.c` 使用 `socketpair(AF_UNIX, SOCK_STREAM, ...)` 驗證 attach ownership、wrong-token rejection、terminal close、descriptor invalidation、peer EOF 與 close/retire ordering。
 
 Linux event backend 的獨立驗證見 `docs/EVENT_BACKEND.md` 與 `tests/event/ck_event_loop_test.c`；該 test 尚未證明 connection registry 與 epoll registration 的完整 lifetime ordering。
+
+
+## 19. Native response writer ownership
+
+`ck_connection_t` 現同時持有 heap-backed `ck_http_connection_reader_t` 與 `ck_http_output_writer_t`。兩者都屬 connection resource，均在 connection 初始化時建立，並於 terminal close 後由 connection owner 回收。
+
+output writer 借用同一 `socket_fd`；writer 本身不得 close socket。socket descriptor 的唯一 close authority 仍是 connection owner。
+
+registry 現提供獨立 `ck_connection_registry_output_pin_t`。output pin 的取得只在 registry mutex 內完成 handle/generation/identity validation 與 user counter increment，取得後即釋放 registry mutex；真正 `send()` 不得在 registry mutex 內執行。只要 output pin 存在，registry `close()` 與 `retire()` 均不得回收 connection。
+
+因此 response writable notification 的安全路徑為：
+
+epoll cookie
+→ registry identity validation
+→ output pin acquire
+→ unlock registry
+→ bounded non-blocking writer drive
+→ output pin release
+→ 必要時更新 EPOLLOUT interest
+
+這只保護 native writer/connection lifetime，不等同 writer thread-safe；同一 connection output state 仍以單一 worker owner 推進為原則。

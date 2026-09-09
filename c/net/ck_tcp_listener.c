@@ -1,3 +1,5 @@
+#define _GNU_SOURCE
+
 #include "ck_tcp_listener.h"
 
 #include <errno.h>
@@ -14,10 +16,6 @@ int ck_tcp_listener_init(ck_tcp_listener_t *listener, unsigned short port)
 	if (listener == NULL)
 	{
 		return EINVAL;
-	}
-	if (port == 0)
-	{
-		port = 0;
 	}
 
 	socket_fd = socket(AF_INET, SOCK_STREAM | SOCK_CLOEXEC, 0);
@@ -47,21 +45,6 @@ int ck_tcp_listener_init(ck_tcp_listener_t *listener, unsigned short port)
 	}
 
 	if (listen(socket_fd, 128) != 0)
-	{
-		int error = errno;
-		(void)close(socket_fd);
-		return error;
-	}
-
-	if (port != 0)
-	{
-		listener->socket_fd = socket_fd;
-		listener->initialized = 1;
-		return 0;
-	}
-
-	if (getsockname(socket_fd, (struct sockaddr *)&address,
-			not sizeof(address)) != 0)
 	{
 		int error = errno;
 		(void)close(socket_fd);

@@ -18,6 +18,7 @@ static void test_content_length_body_and_pipeline(void)
 	const unsigned char *body;
 	size_t body_length;
 	size_t consumed;
+	size_t body_consumed;
 	ck_http_input_result_t result;
 	const char *next_request;
 	const char next_request_text[] =
@@ -29,8 +30,11 @@ static void test_content_length_body_and_pipeline(void)
 			header_length + 5 + strlen(next_request_text), &consumed,
 			&body, &body_length);
 	assert(result == CK_HTTP_INPUT_COMPLETE);
-	assert(consumed == header_length + 5);
+	assert(consumed == header_length);
 	assert(body_length == 5);
+	assert(ck_http_input_ack_body(&input, &body_consumed) == 0);
+	assert(body_consumed == 5);
+	consumed += body_consumed;
 	assert(memcmp(body, "hello", 5) == 0);
 	assert(ck_http_input_complete(&input));
 	assert(input.request.method.length == 4);
@@ -70,16 +74,21 @@ static void test_content_length_fragmented_and_eof(void)
 	result = ck_http_input_feed(&input, body_part, strlen(body_part),
 			&consumed, &body, &body_length);
 	assert(result == CK_HTTP_INPUT_BODY);
-	assert(consumed == 2);
+	assert(consumed == 0);
 	assert(body_length == 2);
 	assert(memcmp(body, "he", 2) == 0);
+	assert(ck_http_input_ack_body(&input, &body_consumed) == 0);
+	assert(body_consumed == 2);
 
 	result = ck_http_input_feed(&input, body_rest, strlen(body_rest),
 			&consumed, &body, &body_length);
-	assert(result == CK_HTTP_INPUT_COMPLETE);
-	assert(consumed == 3);
+	assert(result == CK_HTTP_INPUT_BODY);
+	assert(consumed == 0);
 	assert(body_length == 3);
 	assert(memcmp(body, "llo", 3) == 0);
+	assert(ck_http_input_ack_body(&input, &body_consumed) == 0);
+	assert(body_consumed == 3);
+	assert(ck_http_input_complete(&input));
 
 	ck_http_input_next_request(&input);
 	result = ck_http_input_eof(&input, &body, &body_length);
@@ -102,6 +111,7 @@ static void test_chunked_body_and_pipeline(void)
 	size_t consumed;
 	size_t offset = 0;
 	size_t total_body = 0;
+	size_t body_consumed = 0;
 	ck_http_input_result_t result;
 
 	ck_http_input_init(&state);
@@ -118,6 +128,9 @@ static void test_chunked_body_and_pipeline(void)
 		if (body_length != 0)
 		{
 			total_body += body_length;
+			assert(ck_http_input_ack_body(&state, &body_consumed) == 0);
+			assert(body_consumed <= feed_length - consumed);
+			consumed += body_consumed;
 		}
 		offset += consumed;
 		if (result == CK_HTTP_INPUT_COMPLETE)

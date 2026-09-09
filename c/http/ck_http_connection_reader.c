@@ -81,8 +81,20 @@ ck_http_connection_read_result_t ck_http_connection_reader_drive(
 			}
 			if (body_length != 0)
 			{
-				if (body_sink == NULL
-						|| body_sink(body_sink_context, body_data, body_length) != 0)
+				int sink_result;
+
+				if (body_sink == NULL)
+				{
+					return CK_HTTP_CONNECTION_READ_SINK_ERROR;
+				}
+
+				sink_result = body_sink(
+						body_sink_context, body_data, body_length);
+				if (sink_result == CK_HTTP_BODY_SINK_WOULD_BLOCK)
+				{
+					return CK_HTTP_CONNECTION_READ_BODY_BACKPRESSURE;
+				}
+				if (sink_result != 0)
 				{
 					return CK_HTTP_CONNECTION_READ_SINK_ERROR;
 				}

@@ -249,3 +249,17 @@ Native module 暫定為 load-at-start、ABI/version/signature 驗證、dependenc
 本輪已把 request failure publication 固定為 `RUNNING → FAILING → FAILED`，其中只有成功取得 FAILING 的 publisher 可以寫 error record，再以 release-store 發布 FAILED；reader 以 acquire-load 後讀取 error。
 
 目前仍未實作 C network/event backend、HTTP parser、real Servlet container、AsyncContext bridge、production completion notification、formal public module ABI、Servlet 6.1 TCK 與 sanitizer/fuzz integration。
+
+## 31. 2026-09-09 main-only rules and function-flow consolidation
+
+本輪完成所有現存非-main branch 的 `WORKING_RULES.md` 逐項比對；其仍有效內容已依保留後整合原則合併至 main/WORKING_RULES.md，所有非-main branch 的 `WORKING_RULES.md` 均已移除。非-main `docs/WORK_STATE.md` 仍保留並只描述各自 branch-specific state；沒有以其他 branch 的 WORK_STATE 覆蓋 main。
+
+分支處理：PR #6、#13、#14 已因後續成果取代而關閉；#14 的有效 Win32/Linux 與 completion-notification 研究已抽取至 main，與現行 Apache external fixed-source policy 衝突的 `third_party/httpd` submodule 沒有合併。其餘歷史 branch 仍保留為 Git provenance，但不再視為待合併成果；沒有 API 能力可安全刪除 branch refs 時，不做假刪除。
+
+本輪新增 `docs/CKARTA_FUNCTION_FLOW.md`，統一描述目前 Ckarta 自有可執行函式流程與 ownership/error/lifecycle contract；`docs/FUNCTION_TRACE.md` 僅保存固定 Nginx/Tomcat upstream trace。
+
+`ck_request` failure publication 已固定為 `RUNNING → FAILING → FAILED`，error record 在 FAILING 唯一 winner 中完成寫入，再以 release-store 發布 FAILED；reader 以 acquire-load 後取得 error。`ck_request_finish()` 現為 success-only completion API，避免未攜帶 error record 的 FAILED 路徑。
+
+runtime shutdown 已加入 initialized/started/completed lifecycle guards 與 sequential idempotence；dispatch/poll 在 shutdown 開始後拒絕新操作。同步原語的內部 invariant failure 走明確 fatal path。
+
+目前下一個主要工程閘門仍是 production completion notification / AsyncContext cancellation / event backend；本輪沒有提前定案 Linux epoll/eventfd 或 Windows IOCP 為唯一正式實作，也沒有宣稱完整 Servlet runtime 已完成。

@@ -22,6 +22,7 @@ public final class CkartaServletRequestAdapter extends ServletRequestWrapper
 	private final ServletResponse originalResponse;
 	private final Executor asyncExecutor;
 	private final CkartaAsyncContext.TerminalSink terminalSink;
+	private final CkartaAsyncCycleBinding.NativeTerminalBridge nativeBridge;
 	private final long requestId;
 	private final long ownerToken;
 	private final long lifetimeToken;
@@ -41,6 +42,20 @@ public final class CkartaServletRequestAdapter extends ServletRequestWrapper
 			long ownerToken,
 			long lifetimeToken)
 	{
+		this(request, originalResponse, asyncExecutor, terminalSink,
+				requestId, ownerToken, lifetimeToken, null);
+	}
+
+	public CkartaServletRequestAdapter(
+			ServletRequest request,
+			ServletResponse originalResponse,
+			Executor asyncExecutor,
+			CkartaAsyncContext.TerminalSink terminalSink,
+			long requestId,
+			long ownerToken,
+			long lifetimeToken,
+			CkartaAsyncCycleBinding.NativeTerminalBridge nativeBridge)
+	{
 		super(Objects.requireNonNull(request, "request"));
 		this.originalResponse =
 				Objects.requireNonNull(originalResponse, "originalResponse");
@@ -48,6 +63,7 @@ public final class CkartaServletRequestAdapter extends ServletRequestWrapper
 				Objects.requireNonNull(asyncExecutor, "asyncExecutor");
 		this.terminalSink =
 				Objects.requireNonNull(terminalSink, "terminalSink");
+		this.nativeBridge = nativeBridge;
 		if (requestId <= 0L)
 		{
 			throw new IllegalArgumentException("requestId must be positive");
@@ -151,7 +167,7 @@ public final class CkartaServletRequestAdapter extends ServletRequestWrapper
 
 		CkartaAsyncCycleBinding binding =
 				new CkartaAsyncCycleBinding(
-						requestId, ownerToken, lifetimeToken);
+						requestId, ownerToken, lifetimeToken, nativeBridge);
 		cycleBinding.set(binding);
 
 		CkartaAsyncContext core = new CkartaAsyncContext(

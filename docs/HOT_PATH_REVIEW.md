@@ -280,3 +280,20 @@ DOI：https://doi.org/10.1016/S0140-3664(02)00221-9
 Ckarta 採「C event-driven network data plane + bounded semantic handoff + Java Servlet semantic plane」。這保留 Nginx 的 I/O scalability（輸入輸出可擴展性）與 Tomcat／Servlet 的 application semantics，同時避免把 C event-loop thread 誤用成 Servlet execution thread。
 
 理論依據與數學模型見 docs/WEB_SERVER_THEORY_SERVLET_NGINX.md。
+
+
+## 13. 2026-09-09 native async bridge slice
+
+新增研究／實作 path：
+
+C connection registry
+→ opaque generation handle
+→ JNI async bridge
+→ CkartaAsyncCycleBinding
+→ CkartaAsyncContext terminal gate
+→ native terminal arbitration
+→ Java local async outcome
+
+固定 Tomcat 11.0.25 source 顯示 `AsyncContextImpl` 將 application-facing `check()` 與 container-internal timeout/error/dispatch/recycle 分開；`Request.startAsync()` 建立／重用 async context 並以 per-cycle state 重新初始化。固定 Nginx event model 則把 connection/event/timer/posted-event 分層。Ckarta 因此採 native registry 作 ownership lookup、Java core 作 Servlet semantics，而沒有把 Tomcat private classes 或 Nginx data structures 直接變成 ABI。
+
+此 slice 尚未進入 HTTP socket hot path，不能用它推導端到端效能。

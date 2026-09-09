@@ -1,0 +1,67 @@
+#ifndef CKARTA_CONNECTION_REGISTRY_H
+#define CKARTA_CONNECTION_REGISTRY_H
+
+#include <pthread.h>
+#include <stddef.h>
+#include <stdint.h>
+
+#include "ck_connection.h"
+
+#define CK_CONNECTION_REGISTRY_ABI_VERSION 1u
+#define CK_CONNECTION_REGISTRY_CAPACITY 256u
+
+typedef uint64_t ck_connection_handle_t;
+
+typedef struct ck_connection_registry_entry
+{
+	ck_connection_t connection;
+	uint32_t generation;
+	int active;
+} ck_connection_registry_entry_t;
+
+typedef struct ck_connection_registry
+{
+	pthread_mutex_t lock;
+	ck_connection_registry_entry_t entries[CK_CONNECTION_REGISTRY_CAPACITY];
+	int initialized;
+} ck_connection_registry_t;
+
+int ck_connection_registry_init(ck_connection_registry_t *registry);
+int ck_connection_registry_register(
+		ck_connection_registry_t *registry,
+		uint64_t connection_id,
+		uint64_t request_id,
+		uint64_t owner_token,
+		uint64_t lifetime_token,
+		ck_connection_handle_t *handle);
+int ck_connection_registry_start_async_cycle(
+		ck_connection_registry_t *registry,
+		ck_connection_handle_t handle,
+		uint64_t request_id,
+		uint64_t owner_token,
+		uint64_t lifetime_token,
+		uint64_t cycle_id);
+int ck_connection_registry_try_terminal(
+		ck_connection_registry_t *registry,
+		ck_connection_handle_t handle,
+		uint64_t request_id,
+		uint64_t owner_token,
+		uint64_t lifetime_token,
+		uint64_t cycle_id,
+		ck_connection_terminal_event_t event);
+int ck_connection_registry_close(
+		ck_connection_registry_t *registry,
+		ck_connection_handle_t handle,
+		uint64_t request_id,
+		uint64_t owner_token,
+		uint64_t lifetime_token);
+int ck_connection_registry_retire(
+		ck_connection_registry_t *registry,
+		ck_connection_handle_t handle,
+		uint64_t request_id,
+		uint64_t owner_token,
+		uint64_t lifetime_token);
+int ck_connection_registry_active_count(ck_connection_registry_t *registry);
+int ck_connection_registry_destroy(ck_connection_registry_t *registry);
+
+#endif

@@ -130,3 +130,12 @@ https://doi.org/10.1145/78969.78972
 ## 10. Current implementation boundary
 
 目前 C request lifecycle 已具備 atomic state、idempotent cancellation 與 terminal ownership gate；`c/connection/ck_connection.[ch]` 已提供 connection-level native ownership gate 與 token validation；Java Servlet AsyncContext 的跨執行緒 cancellation、connection close、response ownership 與 recycle-compatible invalidation 仍待 integration test。
+
+
+## 11. Cross-layer terminal arbitration implementation
+
+本輪將取消／完成／timeout／error／client disconnect／shutdown 的第一個跨層 arbitration primitive 落實為 native registry + Java terminal gate。native connection registry 對每一 async cycle 先做 identity validation，再以 `ck_connection_try_terminal()` 決定 CLAIMED、ALREADY_SAME 或 ALREADY_DIFFERENT。
+
+Java `CkartaAsyncContext` 在有 native capability 時，必須先通過 `TerminalGate`；native LOST 不得進入 Java local terminal transition。只有 CLAIMED 或 ALREADY_SAME 才可把 Java state 推進至 local terminal state。這使 native owner 成為跨層 terminal authority，而 Java state 是對合法 native outcome 的語意反映。
+
+此設計與 Servlet 6.1 AsyncContext 的 per-cycle 模型一致，但目前只驗證 cycle identity 與 terminal ownership，不包含完整 timeout scheduling、error dispatch、async dispatch、新 cycle reinitialization、response close 或 real client disconnect。

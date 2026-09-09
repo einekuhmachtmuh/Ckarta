@@ -112,3 +112,16 @@ CGI/FastCGI 定位：未來可掛接 application gateway module，不屬核心 r
 
 
 啟動配置：正式程序先由 C main 讀取 conf/ckarta.conf，再建立已驗證的 native configuration snapshot；JVM 與後續 runtime 不應讀取未驗證的外部設定值。
+
+## Native async ownership bridge status
+
+目前已完成可執行的 native connection registry／opaque handle／JNI async terminal arbitration slice：
+
+`ServletRequest.startAsync()
+→ CkartaAsyncCycleBinding
+→ package-private native bridge
+→ native connection registry
+→ terminal arbitration
+→ Java AsyncContext semantic state`
+
+此功能已有 native registry unit test 與 C 驅動 JVM 的 JNI integration test。它仍不是完整 Servlet 6.1 runtime；HTTP socket data plane、真正 container request lifecycle、response ownership、async dispatch、real timeout source、client-disconnect event source、shutdown drain、TCK 與 sanitizer/fuzz 均未完成。

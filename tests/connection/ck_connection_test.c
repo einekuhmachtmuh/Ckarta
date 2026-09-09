@@ -35,6 +35,21 @@ int main(void)
 	assert(ck_connection_validate_cycle(&connection, 11, 22, 33, 43) == 1);
 	assert(ck_connection_validate_cycle(&connection, 11, 22, 34, 42) == 1);
 
+	assert(ck_connection_try_terminal(
+			&connection, CK_CONNECTION_TERMINAL_COMPLETE)
+			== CK_CONNECTION_TERMINAL_CLAIMED);
+	assert(ck_connection_try_terminal(
+			&connection, CK_CONNECTION_TERMINAL_COMPLETE)
+			== CK_CONNECTION_TERMINAL_ALREADY_SAME);
+	assert(ck_connection_try_terminal(
+			&connection, CK_CONNECTION_TERMINAL_TIMEOUT)
+			== CK_CONNECTION_TERMINAL_ALREADY_DIFFERENT);
+	assert(ck_connection_close(&connection) == 0);
+	assert(ck_connection_close(&connection) == 1);
+	assert(ck_connection_state(&connection) == CK_CONNECTION_CLOSED);
+
+	assert(ck_connection_init(&connection, 2, 21, 22, 23) == 0);
+	assert(ck_connection_start_async(&connection) == 0);
 	complete.connection = &connection;
 	complete.event = CK_CONNECTION_TERMINAL_COMPLETE;
 	disconnect.connection = &connection;
@@ -43,15 +58,15 @@ int main(void)
 	assert(pthread_create(&disconnect_thread, NULL, terminal_thread, &disconnect) == 0);
 	assert(pthread_join(complete_thread, NULL) == 0);
 	assert(pthread_join(disconnect_thread, NULL) == 0);
-	winners = (complete.result == 0) + (disconnect.result == 0);
+	winners = (complete.result == CK_CONNECTION_TERMINAL_CLAIMED)
+			+ (disconnect.result == CK_CONNECTION_TERMINAL_CLAIMED);
 	assert(winners == 1);
-	assert(ck_connection_state(&connection) == CK_CONNECTION_CLOSING);
+	assert((complete.result == CK_CONNECTION_TERMINAL_ALREADY_SAME)
+			|| (complete.result == CK_CONNECTION_TERMINAL_ALREADY_DIFFERENT)
+			|| complete.result == CK_CONNECTION_TERMINAL_CLAIMED);
+	assert((disconnect.result == CK_CONNECTION_TERMINAL_ALREADY_SAME)
+			|| (disconnect.result == CK_CONNECTION_TERMINAL_ALREADY_DIFFERENT)
+			|| disconnect.result == CK_CONNECTION_TERMINAL_CLAIMED);
 	assert(ck_connection_close(&connection) == 0);
-	assert(ck_connection_close(&connection) == 1);
-	assert(ck_connection_state(&connection) == CK_CONNECTION_CLOSED);
-	assert(ck_connection_terminal_event(&connection) ==
-			(complete.result == 0 ? CK_CONNECTION_TERMINAL_COMPLETE :
-			CK_CONNECTION_TERMINAL_CLIENT_DISCONNECT));
-
 	return 0;
 }

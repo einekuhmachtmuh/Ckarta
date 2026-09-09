@@ -253,3 +253,10 @@ https://doi.org/10.1109/MC.2004.219
 `ck_error_t` 已接入 `ck_request_t`。失敗路徑採 `RUNNING → FAILING → FAILED`：CAS 唯一決定 failure winner，winner 寫入 error record，最後以 release-store 發布 `FAILED`；讀者 acquire-load 看到 `FAILED` 後才可讀取 error。這避免先前的 error payload publication data race。
 
 它仍不是 Java exception hierarchy，也不是 externally loadable plugin ABI。正式 completion queue 與 cross-thread owner routing 仍需沿用同一 publication contract。
+
+
+## 23. Native async bridge error translation
+
+跨層 terminal arbitration 的 negative registry/JNI result 不得與正常 terminal race 混同。Java bridge 對 native return 0/1/2 分別視為 claimed/same/different；negative value 則視為 bridge error。application-facing `complete()` 在 bridge error 情況只產生 generic `IllegalStateException`，而 container diagnostic 應另外記錄 stable bridge category/code；不把 registry pointer、native address、內部字串或 Java Throwable 變成 ABI。
+
+因此本輪沒有新增 error category；existing JNI/INTERNAL categories 足以涵蓋 bridge failure，且 no-retry policy 仍適用。late same-event 與 conflicting-event 都不是 exception 本身，而是 terminal arbitration result。

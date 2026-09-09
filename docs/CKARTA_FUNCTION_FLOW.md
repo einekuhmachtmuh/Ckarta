@@ -200,3 +200,14 @@ ACTIVE → COMPLETING|TIMING_OUT|ERRORED 的 CAS 是 async terminal ownership �
 
 
 目前 java/org/ckarta/servlet/CkartaServletAsyncContext.java 已建立 Jakarta Servlet 6.1 API binding prototype。它只把 complete、start、request/response access、timeout 與 listener 註冊映射到 Ckarta async core；dispatch 目前明確回傳 UnsupportedOperationException，因正式 request mapping/container dispatch 尚不存在。API adapter 不持有或暴露 native connection pointer、queue 或 lifetime token。故此階段是 API boundary validation，不是 Servlet 6.1 compatibility implementation。
+
+
+## 14. Native connection registry / async JNI bridge
+
+目前新增可執行的 process-local native connection registry。registry 以固定容量表保存 C connection object，對外只產生 generation-protected 64-bit opaque handle；lookup 必須在 registry mutex 保護下完成，stale handle 在 retire 後不可重新指向新 connection。Java 不取得或操作 `ck_connection_t *`。
+
+跨層 async path 現在為：ServletRequest.startAsync → CkartaAsyncCycleBinding 產生 cycle_id → container-internal CkartaNativeAsyncBridge → JNI nativeStartAsyncCycle → registry identity/cycle validation → native ASYNC_WAIT；terminal path 則由 complete/timeout/error/client-disconnect/shutdown candidate 進入同一 native terminal arbitration，再由 Java semantic core 反映結果。
+
+`ck_connection_try_terminal()` 現在明確區分：0=本次取得 terminal ownership、1=同一 terminal event 已先發布、2=不同 terminal event 已先發布、負值=invalid state/input。這使 delayed duplicate notification 與 conflicting terminal event 不再混成同一回傳語意。
+
+此 path 目前由獨立 JNI integration test 驗證，尚未由真正 C HTTP connection creation、Servlet container mapping 與 production request lifecycle 建立 capability injection；因此不得視為完整 AsyncContext bridge。

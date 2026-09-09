@@ -430,3 +430,20 @@ Java CkartaServletRequestAdapter 現在建立 cycle binding 並傳入 CkartaAsyn
 本輪未宣稱本機完整 `make test` 已通過：目前工作環境無法直接以 git clone 建立完整 checkout，因此以 GitHub repository API 與已存在的 CI execution evidence 驗證。修正提交後必須重新檢查新的 main CI conclusion，再決定是否可將本輪驗證標示為通過。
 
 目前仍不變的正式閘門：Servlet 6.1 TCK、production native connection registry/opaque binding、AsyncContext ↔ C connection cancellation、正式 HTTP/network data plane、shutdown drain、Windows IOCP backend、ASan/UBSan 與可重現 performance benchmark。這些不得因本次 build 修正而提前宣稱完成。
+
+
+## 45. 2026-09-09 native connection registry / JNI async terminal arbitration
+
+本輪依 WORKING_RULES.md 先重新核對 main、WORK_STATE、architecture/hot-path/function/lifecycle/JNI/error 文件，再交叉檢查固定 Nginx 1.30.4、Tomcat 11.0.25 與 Servlet 6.1 AsyncContext semantics。Tomcat AsyncContextImpl 的 application/internal path 分離、per-cycle state、recycle ordering；Nginx 的 connection/event/timer 分層；以及 Herlihy/Wing linearizability、SEDA、Zeldovich event-driven parallelism 文獻，共同支持「native owner 先決定 terminal，Java state 再反映 outcome」的設計；這些來源不是 Ckarta 的形式化證明，也不提供 Ckarta 的效能保證。
+
+新增 c/connection/ck_connection_registry.[ch]：固定容量 256、generation-protected opaque 64-bit handle、registry mutex、active/retire lifecycle。stale handle 在 retire 後失效；slot reuse 以 generation 遞增避免舊 capability 命中新 owner。registry 不把 ck_connection_t *作為 Java application ABI。
+
+新增 c/jni/ck_async_bridge.[ch] 與 package-private CkartaNativeAsyncBridge。JNI method descriptors 已由 C 驅動 JVM integration test 實際註冊與呼叫。Java CkartaAsyncCycleBinding 在建立 cycle 時可註冊 native cycle；CkartaAsyncContext 在有 native capability 時先通過 native terminal gate，再發布自身 local terminal state。
+
+ck_connection_try_terminal() 現明確回傳 0=CLAIMED、1=ALREADY_SAME、2=ALREADY_DIFFERENT；negative value 是 invalid/error。這使 delayed same-event notification 不再與 conflicting terminal event 混同。native different-winner 情況下，Java complete() 不會覆寫 C outcome；相同事件之後才抵達 Java 時可安全反映既有 native terminal outcome。
+
+測試新增 tests/connection/ck_connection_registry_test.c 與 tests/native_async_bridge_smoke.c；前者驗證 capacity、stale handle、generation、identity/cycle 與 retire；後者實際建立 OpenJDK 21 JVM、RegisterNatives、執行 Java ServletRequest.startAsync binding、native terminal claim、conflicting terminal rejection 與 delayed same-event notification。
+
+本輪未宣稱 production AsyncContext bridge 完成。真正 C HTTP connection creation、Servlet request/container injection、response/output ownership、real timeout source、client disconnect event source、async dispatch/new-cycle reinitialization、shutdown drain 與 Servlet 6.1 TCK 仍是後續 gate。JNI bridge 的 capability values 目前只存在 process-local container-internal integration test；正式 product path 尚需由 native connection owner 安全注入。
+
+本輪沒有新增 WORKING_RULES 規則，因所有生命週期、ownership、函式簽名、error、競合與文件一致性要求均可由既有規則直接涵蓋。

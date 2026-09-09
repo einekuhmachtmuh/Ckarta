@@ -22,6 +22,13 @@ typedef enum ck_connection_terminal_event
 	CK_CONNECTION_TERMINAL_SHUTDOWN = 4
 } ck_connection_terminal_event_t;
 
+typedef enum ck_connection_terminal_result
+{
+	CK_CONNECTION_TERMINAL_CLAIMED = 0,
+	CK_CONNECTION_TERMINAL_ALREADY_SAME = 1,
+	CK_CONNECTION_TERMINAL_ALREADY_DIFFERENT = 2
+} ck_connection_terminal_result_t;
+
 typedef struct ck_connection
 {
 	uint64_t connection_id;

@@ -493,3 +493,12 @@ CGI／FastCGI 可以作為獨立的 external application gateway（外部應用�
 CGI/1.1 與 FastCGI 定位為未來可掛接的 application gateway module，不屬於 Ckarta 核心 request execution path。核心只提供足以讓模組掛接的 handler／route 邊界，不硬編碼 CGI/FastCGI 語意。
 
 依 Nginx 1.30.4 的模組／phase 架構，模組存在、模組啟用但未命中、以及真正進入 FastCGI handler 是三種不同成本；因此 Ckarta benchmark 必須分別量測。完整研究見 docs/CGI_FASTCGI_RESEARCH.md。
+
+
+## 26. Native async ownership boundary implementation
+
+Ckarta 現已具備第一個可執行的 C↔Java async ownership boundary：C process-local connection registry → generation-protected opaque handle → package-private Java native bridge → CkartaAsyncCycleBinding → CkartaAsyncContext terminal gate。這個 boundary 不將 native socket、TLS state、memory pool 或 connection pointer 暴露給 Servlet application。
+
+native registry 的 mutex 只保護 capability lookup 與 entry lifetime；connection terminal state 仍以 atomic packed lifecycle word 做 publication。C event loop 尚未建立，因此此 registry mutex 不代表 C event-loop 可執行任意 blocking operation；未來正式 network owner 必須在非阻塞 control path 使用同一 contract。
+
+此實作是 integration gate，而非完整 production Servlet container。真正 C request creation、Servlet mapping、response ownership、AsyncContext dispatch、timeout scheduler、client disconnect event source、shutdown drain 與 TCK 尚待接合。

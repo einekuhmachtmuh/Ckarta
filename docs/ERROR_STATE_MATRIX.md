@@ -123,3 +123,15 @@ Herlihy and Wing 的 *Linearizability: A Correctness Condition for Concurrent Ob
 Michael and Scott 的 *Simple, Fast, and Practical Non-Blocking and Blocking Concurrent Queue Algorithms* 說明非阻塞 queue 可用 universal atomic primitive 建立並行 enqueue/dequeue，但其 memory reclamation 仍是獨立問題；因此 Ckarta 尚未因該研究而預設採 lock-free completion queue，未來必須另外證明 reclamation、overflow、shutdown drain 與 benchmark benefit。來源：https://doi.org/10.1145/248052.248106
 
 完整 exception semantics 見 `docs/EXCEPTION_HANDLING_RESEARCH.md`。
+
+## 11. Cross-layer terminal result matrix
+
+native connection terminal result 現分成三種非錯誤結果：
+
+| Result | 意義 | Java 行為 |
+|---|---|---|
+| CLAIMED | 此呼叫取得 native terminal ownership | 可發布 Java local terminal |
+| ALREADY_SAME | 同一 terminal event 已由其他 path 先發布 | 可把 delayed notification 視為同一 outcome，不建立第二次 terminal |
+| ALREADY_DIFFERENT | 另一 terminal event 已先發布 | 不得覆寫 native outcome，不發布 Java second terminal |
+
+negative result 代表 registry/identity/state error，不得被解讀為一般 race。這區分了「同一事件晚到」與「不同事件競爭失敗」，符合 exactly-once terminal outcome 的既有模型。

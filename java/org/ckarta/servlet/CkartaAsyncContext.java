@@ -11,8 +11,8 @@ import java.util.concurrent.atomic.AtomicReference;
  *
  * <p>This class deliberately does not implement jakarta.servlet.AsyncContext yet.
  * It contains only container-side lifecycle semantics that do not require the
- * Jakarta Servlet API artifact. A future Jakarta-facing adapter must map the
- * official API to this core without exposing native connection state.</p>
+ * Jakarta Servlet API artifact. A Jakarta-facing adapter maps the official API
+ * to this core without exposing native connection state.</p>
  */
 public final class CkartaAsyncContext
 {
@@ -35,6 +35,20 @@ public final class CkartaAsyncContext
 		RECYCLED
 	}
 
+	public enum TerminalDecision
+	{
+		CLAIMED,
+		ALREADY_CLAIMED,
+		LOST,
+		ERROR
+	}
+
+	@FunctionalInterface
+	public interface TerminalGate
+	{
+		TerminalDecision tryTerminal(TerminalEvent event);
+	}
+
 	@FunctionalInterface
 	public interface TerminalSink
 	{
@@ -50,6 +64,7 @@ public final class CkartaAsyncContext
 	private final Executor executor;
 	private final TerminalSink terminalSink;
 	private final CkartaAsyncCycleBinding cycleBinding;
+	private final TerminalGate terminalGate;
 	private final AtomicReference<State> state =
 			new AtomicReference<>(State.ACTIVE);
 	private final AtomicBoolean listenerFired = new AtomicBoolean(false);
@@ -69,6 +84,8 @@ public final class CkartaAsyncContext
 		this.executor = Objects.requireNonNull(executor, "executor");
 		this.terminalSink = Objects.requireNonNull(terminalSink, "terminalSink");
 		this.cycleBinding = cycleBinding;
+		this.terminalGate = cycleBinding == null
+				? null : cycleBinding.terminalGate();
 	}
 
 	CkartaAsyncCycleBinding cycleBinding()
@@ -165,6 +182,24 @@ public final class CkartaAsyncContext
 	private boolean tryTerminate(
 			TerminalEvent event, Throwable error, boolean failOnRace)
 	{
+		if (terminalGate != null)
+		{
+			TerminalDecision decision = terminalGate.tryTerminal(event);
+			if (decision == TerminalDecision.ERROR)
+			{
+				if (failOnRace)
+				{
+					throw new IllegalStateException(
+							"native async terminal arbitration failed");
+				}
+				return false;
+			}
+			if (decision == TerminalDecision.LOST)
+			{
+				return false;
+			}
+		}
+
 		State terminalState = switch (event)
 		{
 			case COMPLETE -> State.COMPLETING;
@@ -174,18 +209,9 @@ public final class CkartaAsyncContext
 
 		if (!state.compareAndSet(State.ACTIVE, terminalState))
 		{
-			if (failOnRace)
-			{
-				return false;
-			}
 			return false;
 		}
 
-		/*
-		 * The ACTIVE -> terminal-state CAS is the single linearization point.
-		 * Internal terminal contenders that lose the race are intentionally
-		 * ignored; application-facing complete() reports IllegalStateException.
-		 */
 		RuntimeException sinkFailure = null;
 		try
 		{

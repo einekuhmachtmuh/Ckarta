@@ -161,6 +161,11 @@ public final class CkartaServletAsyncContext implements AsyncContext
 		return cycleBinding;
 	}
 
+	void notifyClientDisconnect()
+	{
+		core.clientDisconnect();
+	}
+
 	private void checkActive()
 	{
 		if (core.state() != CkartaAsyncContext.State.ACTIVE)

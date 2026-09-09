@@ -159,3 +159,19 @@ C runtime 使用 runtime-owned bounded completion queue + platform notification 
 C event worker 應可依 request_id 將完成事件送回唯一 connection／request owner；Java executor 不得持有 C-owned request memory 的裸指標。若未來採 native callback（原生回呼）通知，callback context 必須是 process-local opaque token，並由 C 端明確驗證 token 尚未失效。
 
 正式多請求 completion queue 必須定義：enqueue、dequeue、overflow、shutdown drain、cancellation、duplicate completion、late completion 與 owner disappearance 的語意；單一 smoke poll 不再足以代表此 ABI。
+
+
+## 15. Container-internal native async capability
+
+native connection registry 現提供固定容量 process-local ownership table。Java side 僅可透過 package-private `CkartaNativeAsyncBridge` 持有兩個 opaque `long` capability values：registry capability 與 generation-protected connection handle；Java 不能解參照、運算或轉型為 native pointer，也不屬 application-facing Servlet ABI。
+
+JNI native methods：
+
+- `nativeStartAsyncCycle(long,long,long,long,long,long): int`
+- `nativeTryTerminal(long,long,long,long,long,long,int): int`
+
+C side 先驗證 capability、request_id、owner_token、lifetime_token、cycle_id 與 event range，再進入 registry；registry lookup、identity validation 與 connection state transition 皆受明確 ownership 規則約束。
+
+terminal return contract：0=CLAIMED；1=ALREADY_SAME；2=ALREADY_DIFFERENT；負值=bridge/identity/state error。Java semantic core 將 1 視為可安全反映的同事件 delayed notification，將 2 視為已由另一 terminal winner 取得 ownership，將負值視為 bridge error；application-facing `complete()` 因此不會覆寫 native winner。
+
+這個 capability 目前是 container-internal testable boundary，不是 public plugin ABI；正式 container 注入與 lifecycle teardown 尚待實作。

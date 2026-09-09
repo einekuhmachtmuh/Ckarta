@@ -254,3 +254,14 @@ Java side currently has a CkartaAsyncContext semantic core, but not yet the publ
 The next integration must establish an explicit correlation binding between AsyncContext cycle and the native connection owner. The binding must carry request_id/owner_token/lifetime_token or an equivalent validated opaque identity, and must remain valid until the async cycle reaches exactly-once terminal publication and the response/native buffers are no longer borrowed.
 
 The Java semantic core is deliberately not treated as the owner of native memory. The native connection owner remains responsible for native resource release; Java only requests a terminal transition through the controlled bridge.
+
+
+## 16. Native connection registry and opaque handle
+
+C connection object 現由 process-local registry 管理 lifecycle lookup。registry 是 connection capability 的唯一 lookup authority；Java 只保存 opaque generation handle，不取得 `ck_connection_t *`，也不取得 socket/TLS/native pool ownership。
+
+handle layout 為低 32 bits slot identifier、高 32 bits generation。retire 後 entry inactive；重新使用 slot 時 generation 遞增，因此舊 handle 不得命中新 connection。registry 在所有 lookup、identity validation、start-cycle、terminal、close、retire 操作上使用同一 mutex 保護 entry lifetime；connection 的 lifecycle state 仍由 atomic packed word 發布。
+
+跨層 terminal ordering 為：先 native registry terminal arbitration，再由 Java semantic core 更新 local async state。若 native 已先因相同 event 取得 terminal ownership，Java 後續收到同一 event 時可回傳 ALREADY_SAME 並正常完成 local publication；若不同 event 已先勝出，Java 不得建立第二個 terminal outcome；若 registry/identity 發生錯誤，必須走獨立 bridge error path。
+
+JNI integration test 已驗證 stale handle、capacity、cycle identity、complete winner、client-disconnect winner 與 delayed same-event notification。仍未接入真正 socket/TLS owner，也未證明完整 Servlet response lifetime。

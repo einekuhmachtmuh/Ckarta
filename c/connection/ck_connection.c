@@ -26,7 +26,8 @@ static int32_t ck_connection_unpack_event(uint64_t lifecycle)
 {
 	return (lifecycle & (CK_CONNECTION_EVENT_MASK << CK_CONNECTION_EVENT_SHIFT))
 			== (UINT64_C(0xff) << CK_CONNECTION_EVENT_SHIFT) ? -1
-			: (int32_t)((lifecycle >> CK_CONNECTION_EVENT_SHIFT) & CK_CONNECTION_EVENT_MASK);
+			: (int32_t)((lifecycle >> CK_CONNECTION_EVENT_SHIFT)
+				& CK_CONNECTION_EVENT_MASK);
 }
 
 static uint64_t ck_connection_unpack_cycle(uint64_t lifecycle)
@@ -89,11 +90,12 @@ int ck_connection_start_async(ck_connection_t *connection)
 }
 
 int ck_connection_try_terminal(ck_connection_t *connection,
-		ck_connection_terminal_event_t event)
+	ck_connection_terminal_event_t event)
 {
 	uint64_t current;
 	uint64_t desired;
 	uint32_t state;
+	int32_t current_event;
 
 	if (connection == NULL || !ck_connection_valid_event(event))
 	{
@@ -107,7 +109,10 @@ int ck_connection_try_terminal(ck_connection_t *connection,
 		state = ck_connection_unpack_state(current);
 		if (state == CK_CONNECTION_CLOSING || state == CK_CONNECTION_CLOSED)
 		{
-			return 1;
+			current_event = ck_connection_unpack_event(current);
+			return current_event == (int32_t)event
+					? CK_CONNECTION_TERMINAL_ALREADY_SAME
+					: CK_CONNECTION_TERMINAL_ALREADY_DIFFERENT;
 		}
 
 		if (state != CK_CONNECTION_OPEN && state != CK_CONNECTION_ASYNC_WAIT)
@@ -121,7 +126,7 @@ int ck_connection_try_terminal(ck_connection_t *connection,
 				&connection->lifecycle, &current, desired,
 				memory_order_acq_rel, memory_order_acquire))
 		{
-			return 0;
+			return CK_CONNECTION_TERMINAL_CLAIMED;
 		}
 	}
 }
@@ -193,7 +198,7 @@ ck_connection_state_t ck_connection_state(const ck_connection_t *connection)
 }
 
 ck_connection_terminal_event_t ck_connection_terminal_event(
-		const ck_connection_t *connection)
+	const ck_connection_t *connection)
 {
 	int32_t event;
 

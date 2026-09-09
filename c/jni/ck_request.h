@@ -50,7 +50,7 @@ int ck_request_init(ck_request_t *request,
 		const ck_request_descriptor_t *descriptor);
 int ck_request_begin(ck_request_t *request);
 int ck_request_cancel(ck_request_t *request);
-int ck_request_finish(ck_request_t *request, ck_request_state_t terminal_state);
+int ck_request_finish(ck_request_t *request);
 ck_request_state_t ck_request_state(const ck_request_t *request);
 int ck_request_fail(ck_request_t *request, const ck_error_t *error);
 const ck_error_t *ck_request_error(const ck_request_t *request);

@@ -396,3 +396,22 @@ completion record 新增 cycle_id；JNI publisher 亦攜帶此欄位。現有 sm
 本輪測試另發現並修正 completion record 新增欄位後 test producer 未初始化 cycle_id；此類錯誤可由既有 WORKING_RULES 的變數／欄位生命週期規則直接預防，因此沒有新增工作守則。
 
 下一個正式閘門：建立 native connection registry/opaque binding handle 或等價受控 JNI boundary，使 startAsync 能把 Java cycle binding 真正註冊到正確 native connection owner；其後再做 AsyncContext.complete / timeout / error / client disconnect 的跨層 terminal arbitration。不得把 Java 與 native 各自存在的 correlation objects 視為已完成 bridge。
+
+
+## 43. 2026-09-09 async cycle / native correlation protocol implementation
+
+本輪在前一階段的 ServletRequest.startAsync binding 基礎上完成 cycle identity protocol foundation。新增 CkartaAsyncCycleBinding，為每個 async cycle 產生唯一 cycleId，並將 requestId、ownerToken、lifetimeToken 與 cycleId 綁在單一 Java semantic binding 的生命週期；terminal publication 後 binding invalidated。cycleId 限制在 native connection 目前使用的 48-bit 表示範圍。
+
+native ck_connection lifecycle 已改為單一 64-bit packed word：低 8 bits 為 connection state、次 8 bits 為 terminal event、高 48 bits 為 async cycle id。新增 ck_connection_start_async_cycle() 與 ck_connection_validate_cycle()；原 ck_connection_start_async() 保留作 compatibility wrapper，使用 cycle id 1 的 smoke default。
+
+completion record 新增 cycle_id，Java JNI publisher 的 native method descriptor 同步改為帶 cycleId；現有 smoke completion 暫固定 cycle id 1，因真正 AsyncContext.dispatch／新 cycle 尚未進入 executable data path。這避免未來同一 request/connection 不同 async cycle 的 late completion 僅依 request/owner/lifetime 三欄而誤命中新 cycle。
+
+Java CkartaServletRequestAdapter 現在建立 cycle binding 並傳入 CkartaAsyncContext；adapter constructor 明確取得 requestId、ownerToken、lifetimeToken。Servlet API 仍只看到 standard AsyncContext，不暴露 native pointer 或 native queue。
+
+重要限制：目前 Java cycle binding 與 native ck_connection_t 仍沒有 production JNI registry/opaque connection handle 進行真正 lookup；因此本輪只能宣稱 correlation identity protocol foundation，不得宣稱 native connection bridge 完成。
+
+本輪 CI 實際抓到的問題包括 completion test 新欄位未初始化、JNI rejection completion 少傳 cycleId，以及兩個 Java test target 漏列 cycle binding source；均依既有 WORKING_RULES 的欄位生命週期、函式簽名與 dependency closure 規則修正，沒有新增規則。
+
+最新 main CI run 34344027099（commit 76e75fead0eb51a3ed2c37e407fe06e02616c748）已開始執行；在此條目建立時尚未取得最終 conclusion，因此不得把它視為通過。前一個 run 34343985342 因 API test target 漏列 CkartaAsyncCycleBinding.java 而失敗，其失敗 log 已核實。
+
+研究交叉核對：Servlet 6.1 AsyncContext API 將每次 startAsync 視為 async cycle，且 repeated startAsync/dispatch semantics 取決於 cycle；Tomcat 11.0.25 AsyncContextImpl 對 per-cycle fields、recycle 與 concurrent access 使用 atomic guard；Nginx development guide 將 connection state、event、timer、posted event 與 event loop 分離；Herlihy/Wing linearizability 作為 terminal ownership correctness baseline；SEDA 作為 bounded explicit queue/load conditioning reference。

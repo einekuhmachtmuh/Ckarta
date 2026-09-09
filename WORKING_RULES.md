@@ -130,7 +130,7 @@ faster、lower latency、less memory、higher throughput 等宣稱必須有可�
 
 ## 14. 第三方來源
 
-Nginx 與 Apache Tomcat 以 Git submodule（Git 子模組）固定於 third_party/nginx 與 third_party/tomcat；目前版本：Nginx 1.30.4 commit 017cf98dcce217946572a896f0992370475e189f；Tomcat 11.0.25 commit cbe6e15ee81e2fc6232954292a80cca5d1e84009。
+Nginx 與 Apache Tomcat 以 Git submodule（Git 子模組）固定於 third_party/nginx、third_party/tomcat 與 third_party/httpd；目前版本：Nginx 1.30.4 commit 017cf98dcce217946572a896f0992370475e189f；Tomcat 11.0.25 commit cbe6e15ee81e2fc6232954292a80cca5d1e84009。
 
 禁止未經架構決策直接複製 upstream code（上游程式碼）。移植前必須檢查 license、dependency、平台假設、安全與語意差異。
 
@@ -152,6 +152,8 @@ docs/STARTUP_STATE_MACHINE.md
 docs/STARTUP_CONFIGURATION_RESEARCH.md
 docs/CORE_CONFIGURATION_CANDIDATES.md
 docs/MODULE_ARCHITECTURE_RESEARCH.md
+docs/WIN32_LINUX_PLATFORM_RESEARCH.md
+docs/COMPLETION_NOTIFICATION_RESEARCH.md
 docs/HTTP_FRAMING_POLICY.md
 docs/CONCURRENCY_MODEL.md
 docs/CANCELLATION_MODEL.md

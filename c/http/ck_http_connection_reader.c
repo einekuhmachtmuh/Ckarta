@@ -90,7 +90,7 @@ ck_http_connection_read_result_t ck_http_connection_reader_drive(
 				}
 				if (ck_http_input_ack_body(
 						&reader->input, &body_consumed) != 0
-						|| body_consumed > feed_length - *(&consumed))
+						|| body_consumed > feed_length - consumed)
 				{
 					return CK_HTTP_CONNECTION_READ_IO_ERROR;
 				}

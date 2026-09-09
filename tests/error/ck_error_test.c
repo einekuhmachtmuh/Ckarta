@@ -28,6 +28,8 @@ int main(void)
 			CK_ERROR_CODE_JNI_FAILURE, 500, 0, 3, 19) == 0);
 	assert(ck_error_set(&error, CK_ERROR_CATEGORY_JNI,
 			CK_ERROR_CODE_JNI_FAILURE, 600, 0, 3, 19) == -1);
+	assert(ck_error_set(&error, CK_ERROR_CATEGORY_JNI,
+			CK_ERROR_CODE_JNI_FAILURE, 500, CK_ERROR_FLAG_MASK + 1, 3, 19) == -1);
 
 	return 0;
 }

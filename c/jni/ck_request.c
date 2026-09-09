@@ -27,7 +27,6 @@ static int ck_request_descriptor_valid(const ck_request_descriptor_t *descriptor
 	}
 
 	if (descriptor->owner_token > (uint64_t)INT64_MAX
-			|| descriptor->owner_token > (uint64_t)INT64_MAX
 			|| descriptor->lifetime_token > (uint64_t)INT64_MAX
 			|| descriptor->request_id > (uint64_t)INT64_MAX
 			|| descriptor->request_id == 0)

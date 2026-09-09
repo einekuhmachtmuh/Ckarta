@@ -476,3 +476,45 @@ GitHub Actions run `34346327314`、job `102448663068` 的最新 failure 已實�
 本輪改為在 recipe 中明確列出六個 Java source，JAR 仍保留為 prerequisite 與 classpath dependency。這符合既有函式／dependency closure 規則，沒有新增工作守則。
 
 下一個 CI 必須驗證新增 C registry unit test 及 C-driven JVM JNI bridge 是否真正執行；目前為止尚未取得該 integration test 的成功執行證據。
+
+## 49. 2026-09-09 Linux epoll native event backend baseline
+
+依 `WORKING_RULES.md` 重新讀取當前架構、hot path、function trace、connection ownership 與 platform 文件後，完成第一個可執行 Linux/POSIX event backend slice。新增 `c/event/ck_event_loop.[ch]` 與 `tests/event/ck_event_loop_test.c`。
+
+backend 使用 `epoll_create1(EPOLL_CLOEXEC)`、`epoll_ctl(ADD/MOD/DEL)` 與 `epoll_wait()`，目前刻意採 level-triggered semantics，不提前引入 `EPOLLET`。事件後端與 connection ownership 分離：event loop 擁有 epoll instance；connection 擁有 socket descriptor；registry 擁有 opaque handle 的 lookup／lifetime authority。
+
+registration 的 `epoll_event.data.u64` 只攜帶非零 opaque cookie，不保存可被 registry retire 的 raw connection pointer。這提供 event-to-handle 的 transport，但完整 stale-event safety 仍必須由 notification consumer 以 generation-protected handle 與 request／owner／lifetime identity 驗證。
+
+`ck_event_loop_t` 現有正式 contract 是 single-owner；同一 instance 不得被當成 thread-safe shared object，跨執行緒 registration/wakeup 另立 contract。`ck_event_loop_wait()` 是唯一允許的核心 blocking point；event dispatch 後不得執行未知 blocking application work。
+
+固定 upstream 交叉核對：Nginx 1.30.4 `src/event/modules/ngx_epoll_module.c`／`src/event/ngx_event.c` 的 event backend/epoll 分層；Tomcat 11.0.25 `NioEndpoint.java` 的 NIO Poller、SocketChannel、NioSocketWrapper 與 processor 分工。學術架構參考包括 Welsh/Culler/Brewer 的 SEDA 與 Zeldovich 等人的 event-driven parallelism；這些來源只支持架構方法與限制，不作 Ckarta 效能證明。
+
+第一次 CI 因 GCC 13.3.0 對 Linux packed `struct epoll_event` 成員位址取用觸發 `-Werror=address-of-packed-member`；修正為先產生獨立 `uint32_t` 再賦值後，GitHub Actions 已成功編譯並執行 `ckarta-event-loop-test`。
+
+對應權威文件新增／同步：`docs/EVENT_BACKEND.md`、`docs/HOT_PATH_REVIEW.md`、`docs/WIN32_LINUX_PLATFORM_RESEARCH.md`、`docs/CONNECTION_OWNERSHIP.md` 與 `README.md`。
+
+此 slice 不代表完成正式 network server、HTTP parser、TLS、Servlet runtime、Windows IOCP 或任何性能優勢。
+
+## 50. 2026-09-09 loopback TCP → registry → epoll integration baseline
+
+在 Linux epoll backend 通過後，進一步新增 `c/net/ck_tcp_listener.[ch]` 與 `tests/net/ck_tcp_event_integration_test.c`，以真正 loopback TCP 取代僅使用 `socketpair()` 的事件來源。
+
+listener baseline 使用 loopback bind、`SO_REUSEADDR`、`SOCK_CLOEXEC`，accepted socket 透過 `accept4(..., SOCK_CLOEXEC | SOCK_NONBLOCK)` 取得。整合測試實際驗證：TCP connect 觸發 listener readiness；accept；accepted fd attach 到 generation-protected connection registry；以 opaque connection handle 作 epoll cookie；真實 HTTP request bytes 在 readiness 後由 nonblocking `recv()` 讀出；資料排空後得到 `EAGAIN/EWOULDBLOCK`；client close 產生 `RDHUP` 或 `HUP/ERR`；移除 event registration 後才進入 terminal → close → retire。
+
+測試另驗證 retire 後舊 handle 不可再 lookup，重新 register 的 connection 取得不同 generation handle，因此 stale capability 不可命中新 connection。測試 payload 已刻意排除 C 字串末端 NUL，不把測試 helper 自動附加的 NUL 誤當成 HTTP request bytes。
+
+Makefile 已把 `ckarta-tcp-event-integration-test` 納入 `make test`。目前 `main` HEAD 為 `c1ce311075c261b72bea4f01a102886024f41c84`；GitHub Actions workflow run `34349565032`、job `102459210470` 對該 HEAD 顯示 completed/success。實際 log 顯示 Ubuntu 24.04.4、Temurin OpenJDK 21.0.12.1、GCC 13.3.0，並明確建置及執行 `build/bin/ckarta-tcp-event-integration-test`，其後既有 Java/C/native async smoke 亦全部成功。
+
+本機目前仍無法由 `git clone` 建立完整 checkout，因此不把本機未完成的 build 宣稱為成功；本輪最新 executable evidence 以 GitHub Actions 為準。
+
+固定 upstream 交叉比對維持：Nginx 1.30.4 event/epoll source、Tomcat 11.0.25 NioEndpoint，並以 Herlihy/Wing linearizability、SEDA 以及 Zeldovich event-driven concurrency 作 correctness／architecture reference。這些來源不構成 Ckarta 的形式化證明或性能保證。
+
+此 integration baseline 仍不等於 production multi-worker event consumer。下一個工程閘門是：將 listener／accepted connection／registry／epoll notification 組成正式 connection event consumer，加入 HTTP/1.1 framing、bounded read/write state machine、response output ownership，並將 notification consumer 的 generation/correlation validation 寫成獨立可重現測試。
+
+## 51. 狀態覆蓋與歷史條目規則
+
+本文件早期第 28、30、31、35、36、42、43、44、45、46、47、48 節中的「尚未實作 event backend／native connection registry／JNI bridge」敘述屬建立當時的歷史狀態；若與後續第 45、49、50 節衝突，以較晚且有 CI／source evidence 的條目為準。早期條目保留作 provenance，不再作目前狀態判斷。
+
+目前明確已完成並經 CI 驗證的最低 native network baseline 是：Linux loopback listener → accepted nonblocking TCP socket → native connection registry → opaque generation cookie → epoll readiness → nonblocking receive → disconnect notification → terminal/close/retire。
+
+目前明確未完成：正式多 worker event ownership、HTTP/1.1 parser/framing、response/output pipeline、TLS、完整 Servlet 6.1 container/runtime、AsyncContext 與 connection cancellation 的正式跨層語意、Servlet 6.1 TCK、ASan/UBSan/fuzz、Windows IOCP、以及任何可作產品結論的 end-to-end performance benchmark。

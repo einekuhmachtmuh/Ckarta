@@ -63,6 +63,7 @@ int ck_connection_init(ck_connection_t *connection,
 	connection->owner_token = owner_token;
 	connection->lifetime_token = lifetime_token;
 	connection->socket_fd = -1;
+	ck_http_connection_reader_init(&connection->http_reader);
 	atomic_init(&connection->lifecycle,
 			ck_connection_pack(CK_CONNECTION_OPEN, -1, 0));
 	return 0;
@@ -97,6 +98,11 @@ int ck_connection_socket_fd(const ck_connection_t *connection)
 	}
 
 	return connection->socket_fd;
+}
+
+ck_http_connection_reader_t *ck_connection_http_reader(ck_connection_t *connection)
+{
+	return connection == NULL ? NULL : &connection->http_reader;
 }
 
 int ck_connection_start_async_cycle(ck_connection_t *connection,

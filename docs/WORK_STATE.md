@@ -155,3 +155,10 @@ PR #2 已於 2026-09-08 squash-merge 至 `main`，merge commit `2638bc5017093b5f
 2026-09-08：完成 Servlet 6.1 的中立技術批判。結論是保持 Servlet container 身份與高相容性語意，但不讓 Servlet object model 成為全系統 internal representation。新增 docs/SERVLET_6_1_CRITIQUE.md。
 
 同日：Java executor handoff 已接入 smoke path，改用固定 1 thread + 有界 queue + AbortPolicy；同步等待僅供 smoke 驗證，production C event loop 尚不能使用此 blocking completion 方式。
+
+## Branch status
+
+- Purpose: 早期 nonblocking completion prototype
+- Lifecycle status: CLOSED / SUPERSEDED
+- Relation to main: 無目前 PR；其 completion 模型已被後續正式化的 completion/error contract 取代。
+- This file is branch-specific state and must not be treated as main canonical state.

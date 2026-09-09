@@ -226,3 +226,8 @@ Native module 暫定為 load-at-start、ABI/version/signature 驗證、dependenc
 - Servlet 6.1 TCK、ASan/UBSan CI 與正式 performance baseline。
 
 這些仍依既有工程閘門處理，未因本輪 audit 而新增另一套規則。
+
+
+## 27. 2026-09-09 branch consolidation
+
+`codex/platform-apache-completion` 的有效研究內容已抽取至 `docs/WIN32_LINUX_PLATFORM_RESEARCH.md` 與 `docs/COMPLETION_NOTIFICATION_RESEARCH.md`。其 `third_party/httpd` submodule 與與現行來源模型衝突的工作樹修改沒有合併；Apache 2.4.68 僅保留為外部固定研究基線。舊 PR #14 後續可關閉為 superseded，避免與主線保持兩套 platform/reference 模型。

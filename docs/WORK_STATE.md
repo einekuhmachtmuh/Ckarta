@@ -4,7 +4,7 @@
 
 歷史提交、commit message、PR、merge、CI chronology 與已 supersede 的中間狀態由 Git/GitHub 保存；需要追溯變更來源時直接查 Git provenance。本文件只在歷史資訊仍構成目前有效 invariant 時保留必要摘要。
 
-目前 `main` HEAD：`1dbb4585e1db87094556c7f38e13c94d8ec1f7b3`。
+目前狀態以 GitHub `main` ref 的當前 tree 為準；HEAD SHA 不在本文件重複維護，以避免 snapshot 自身更新造成一個 commit 的循環差異。
 
 ## 1. 工程基線
 

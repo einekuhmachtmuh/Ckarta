@@ -362,4 +362,10 @@ Makefile 已固定 Jakarta Servlet 6.1 API dependency，並將 Java async semant
 
 目前仍未完成：`ServletRequest.startAsync()` 真正建立 async context、`AsyncContext.dispatch()`、完整 `AsyncListener.onStartAsync` cycle、ServletContext/classloader binding、request/response facade、native connection correlation bridge 與 Servlet 6.1 TCK。故不得標示相容。
 
-最新 implementation/test commit `44a785f4196fa6e3a413946f4bcdf74a7f7f3aec` 的完整 `make test` 已通過；其後的 API/documentation commits 需要由最新 HEAD CI 再次驗證，不能沿用舊 run 作為最新 HEAD 證據。
+前一個 implementation/test commit `44a785f4196fa6e3a413946f4bcdf74a7f7f3aec` 的完整 `make test` 已通過；其後 API/documentation 與 build wiring 已由最新 HEAD CI 重新驗證。
+
+## 40. 2026-09-09 latest Servlet API binding CI validation
+
+API binding 後續 CI 曾依序抓出並修正：1) async core 舊 `checkUsable()` 引用；2) API test source set 漏列 `CkartaAsyncContext.java`；3) test `main()` 未宣告 `ServletException`；4) API adapter test 對 `createListener()` 的位置假設不理想。這些都屬既有 lifecycle／函式引用／exception contract 規則可處理的問題，沒有新增重複工作規則。
+
+最新 `main` commit `19899e2e31d4bcb0fb07242d5455f0a813045d4e` 的 GitHub Actions run `34341969040`、job `102434414989` 已成功。CI 實際下載 `jakarta.servlet-api-6.1.0.jar`，SHA-256 驗證通過，並成功編譯／執行 Jakarta API adapter test、Java async core test、全部 C unit/race tests 與 native smoke。此結果只證明 API boundary prototype 的 build/test 正確，不等於 Servlet 6.1 TCK 通過。

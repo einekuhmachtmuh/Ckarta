@@ -1,10 +1,5 @@
 #include "ck_completion_queue.h"
 
-#include <errno.h>
-#include <stdint.h>
-#include <string.h>
-#include <sys/eventfd.h>
-#include <unistd.h>
 
 static int ck_completion_queue_lock(ck_completion_queue_t *queue)
 {
@@ -21,7 +16,7 @@ int ck_completion_queue_init(ck_completion_queue_t *queue)
 	}
 
 	memset(queue, 0, sizeof(*queue));
-	queue->event_fd = -1;
+	queue->notification.fd = -1;
 
 	result = pthread_mutex_init(&queue->lock, NULL);
 	if (result != 0)
@@ -29,10 +24,9 @@ int ck_completion_queue_init(ck_completion_queue_t *queue)
 		return result;
 	}
 
-	queue->event_fd = eventfd(0, EFD_CLOEXEC | EFD_NONBLOCK);
-	if (queue->event_fd < 0)
+	result = ck_completion_notification_init(&queue->notification);
+	if (result != 0)
 	{
-		result = errno;
 		(void)pthread_mutex_destroy(&queue->lock);
 		return result;
 	}
@@ -45,7 +39,6 @@ int ck_completion_queue_push(ck_completion_queue_t *queue,
 		const ck_completion_record_t *record)
 {
 	int result;
-	uint64_t signal_value = 1;
 
 	if (queue == NULL || record == NULL || !queue->initialized)
 	{
@@ -74,22 +67,18 @@ int ck_completion_queue_push(ck_completion_queue_t *queue,
 	queue->tail = (queue->tail + 1U) % CK_COMPLETION_QUEUE_CAPACITY;
 	queue->count++;
 
-	result = pthread_mutex_unlock(&queue->lock);
+	result = ck_completion_notification_signal(&queue->notification);
 	if (result != 0)
 	{
+		queue->tail = (queue->tail + CK_COMPLETION_QUEUE_CAPACITY - 1U)
+				% CK_COMPLETION_QUEUE_CAPACITY;
+		queue->count--;
+		(void)pthread_mutex_unlock(&queue->lock);
 		return result;
 	}
 
-	if (write(queue->event_fd, &signal_value, sizeof(signal_value)) < 0)
-	{
-		if (errno == EAGAIN)
-		{
-			return 0;
-		}
-		return errno;
-	}
-
-	return 0;
+	result = pthread_mutex_unlock(&queue->lock);
+	return result;
 }
 
 int ck_completion_queue_pop(ck_completion_queue_t *queue,
@@ -129,34 +118,17 @@ int ck_completion_queue_notify_fd(const ck_completion_queue_t *queue)
 		return -1;
 	}
 
-	return queue->event_fd;
+	return ck_completion_notification_fd(&queue->notification);
 }
 
 int ck_completion_queue_drain_notification(ck_completion_queue_t *queue)
 {
-	uint64_t value;
-	ssize_t result;
-
 	if (queue == NULL || !queue->initialized)
 	{
 		return -1;
 	}
 
-	for (;;)
-	{
-		result = read(queue->event_fd, &value, sizeof(value));
-		if (result == (ssize_t)sizeof(value))
-		{
-			continue;
-		}
-
-		if (result < 0 && errno == EAGAIN)
-		{
-			return 0;
-		}
-
-		return result < 0 ? errno : EIO;
-	}
+	return ck_completion_notification_drain(&queue->notification);
 }
 
 int ck_completion_queue_close(ck_completion_queue_t *queue)
@@ -192,11 +164,7 @@ void ck_completion_queue_destroy(ck_completion_queue_t *queue)
 	}
 
 	(void)ck_completion_queue_close(queue);
-	if (queue->event_fd >= 0)
-	{
-		(void)close(queue->event_fd);
-		queue->event_fd = -1;
-	}
+	ck_completion_notification_destroy(&queue->notification);
 	(void)pthread_mutex_destroy(&queue->lock);
 	queue->initialized = 0;
 }

@@ -10,129 +10,21 @@ JVM／Java Servlet 容器
 +
 嚴格定義的 JNI（Java 原生介面）邊界。
 
-## 工作樹
-
-目前 repository（儲存庫）採以下基準：
-
-```
-.
-├── WORKING_RULES.md
-├── README.md
-├── .gitmodules
-├── conf/
-│   └── ckarta.conf
-├── docs/
-├── third_party/
-│   ├── nginx/        # Git submodule，固定 upstream commit
-│   └── tomcat/       # Git submodule，固定 upstream commit
-├── c/
-├── java/
-├── tests/
-├── bench/
-└── tools/
-```
-
-Nginx 與 Apache Tomcat 不直接複製進 Ckarta repository，而是以 Git submodule 固定 upstream commit。
-
-## 文件
-
-- WORKING_RULES.md：工程、命名、驗證、安全、工作成果持久化、自我衝突處理、規則衝突處理與自動化基準。
-- docs/ARCHITECTURE.md：C/Java 邊界、資料流、並行模型、C 化決策與補充需求。
-- docs/HOT_PATH_REVIEW.md：Nginx／Tomcat hot path（熱路徑）與 whole path（完整路徑）基線。
-- docs/FUNCTION_TRACE.md：固定版本的逐函式 hot path 追蹤。
-- docs/EVENT_BACKEND.md：Linux `epoll` 原生事件後端的 ownership、cookie、thread 與驗證契約。
-- docs/CKARTA_FUNCTION_FLOW.md：Ckarta 自有函式呼叫流程、函式契約、ownership、error 與 lifecycle 實作規約。
-- docs/CONNECTION_OWNERSHIP.md：C 連線、Request、AsyncContext 與 JNI 所有權基線。
-- docs/DESIGN_DECISIONS.md：架構決策與證據矩陣。
-- docs/ENTRYPOINT_DESIGN.md：C main 入口與 JVM 啟動模型。
-- docs/STARTUP_CONFIGURATION_RESEARCH.md：Apache HTTP Server、Nginx、Tomcat 與 Ckarta 啟動配置／驗證／reload 架構研究。
-- docs/STARTUP_STATE_MACHINE.md：C main、JVM、Java container、network runtime 的啟動／停止狀態機。
-- docs/HTTP_FRAMING_POLICY.md：HTTP/1.1 framing（訊息框架）權威解析政策與目前 executable parser/decode boundary。
-- docs/HTTP_CONNECTION_READER.md：connection-owned HTTP input buffer、non-blocking read consumer、body sink、pipeline、request recycle 與 registry pin 契約。
-- docs/CONCURRENCY_MODEL.md：C 事件並行與 Java Servlet 執行模型。
-- docs/EXCEPTION_HANDLING_RESEARCH.md：C/Java/JNI 例外、錯誤傳播、恢復、資訊洩漏與 exactly-once terminal outcome 的唯一權威研究。
-- docs/ERROR_STATE_MATRIX.md：error category × request lifecycle × owner × HTTP outcome 的形式化矩陣與 `ck_error_t` 邊界。
-- docs/WIN32_LINUX_PLATFORM_RESEARCH.md：Win32／Linux 平台層與 OS-native backend 研究。
-- docs/COMPLETION_NOTIFICATION_RESEARCH.md：Linux eventfd/epoll 與 Windows IOCP completion notification 候選。
-- docs/THREAD_MODEL.md：C worker、JVM bootstrap、JNI bridge 與 direct-attach 候選的 thread model（執行緒模型）研究基線。
-- docs/THREAD_BENCHMARK_PLAN.md：direct attach／JNI bridge／bridge pool 的可重現比較計畫。
-- docs/GATEWAY_SERVLET_NATIVE_BRIDGE_RESEARCH.md：CGI／FastCGI／Tomcat Servlet／CGIServlet／OpenJDK HotSpot／Ckarta JNI 邊界研究。
-- docs/OPENJDK_21U_SOURCE_AUDIT.md：固定 JDK 21u tags 的 HotSpot source audit，核對 21.0.8 與 21.0.11 對 JNI 研究結論的實際影響。
-- docs/SERVLET_6_1_CRITIQUE.md：Servlet 6.1、Nginx、Tomcat 與 Web server 理論的中立技術批判及 Ckarta 相容性策略。
-- docs/CGI_FASTCGI_RESEARCH.md：CGI/1.1、FastCGI、PHP-FPM、Tomcat CGIServlet 與外部程式閘道可行性研究。
-- docs/WEB_SERVER_THEORY_SERVLET_NGINX.md：Jakarta Servlet 6.1、Nginx、Tomcat 與 Web server 排隊／並行理論的架構比較。
-- docs/CANCELLATION_MODEL.md：連線、Servlet 非同步與 JNI 取消語意。
-- docs/JNI_ABI.md：JNI 邊界與所有權門檻。
-- docs/JNI_COST_MODEL.md：OpenJDK 21 JNI 跨語言成本模型與 C struct → Java object 策略。
-- docs/SECURITY_BASELINE.md：安全模型與驗證門檻。
-- docs/TCK_INTEGRATION_PLAN.md：Jakarta Servlet 6.1 TCK 驗證計畫。
-- docs/REFERENCE_SOURCES.md：參考原始碼版本、commit、授權與研究規則。
-- docs/WORKING_TREE.md：實際 repository 工作樹規劃。
-- docs/WORK_STATE.md：跨對話可接手的工程現況、已驗證事項與下一個工程閘門。
-
-`bench/jni/` 是獨立 JNI/thread microbenchmark（微基準測試）資產，不代表正式 Ckarta runtime 已實作。
-
-## 參考原始碼版本
-
-Nginx：stable 1.30.4，commit `017cf98dcce217946572a896f0992370475e189f`。
-
-Apache Tomcat：11.0.25，commit `cbe6e15ee81e2fc6232954292a80cca5d1e84009`。
-
-OpenJDK 21 JNI 研究基線：`jdk-21.0.8-ga`；另以 `jdk-21.0.11-ga` 做 fixed-tag implementation audit。完整結果見 `docs/OPENJDK_21U_SOURCE_AUDIT.md`。
-
-## 入口與 thread 原則
-
-正式 Ckarta server 入口為 C `main()`；由受控的專用 bootstrap thread（啟動執行緒）透過 JNI Invocation API 建立 JVM，而不是直接在 primordial process thread（原始程序執行緒）上載入 JVM。
-
-第一階段 thread topology 維持可實測候選：C worker attached submission、worker-group JNI bridge、central JNI bridge pool；attached worker 僅能做 JNI control／submission，不得執行 Servlet application。不能在沒有相同 workload benchmark 前宣稱其中任何一者較快。完整理由與研究見 `docs/THREAD_MODEL.md` 與 `docs/GATEWAY_SERVLET_NATIVE_BRIDGE_RESEARCH.md`。
-
-JNI request hot path 不採 C struct 逐欄映射為 Java object。Servlet 6.1 的 application semantics 保持，但不作為 C data plane 的內部表示。初步採：
-
-C canonical request
-→ opaque request handle
-→ 一個 Java request facade
-→ 批次初始化
-→ DirectByteBuffer data view
-
-OpenJDK 21 的 JNI 成本研究見 docs/JNI_COST_MODEL.md；固定 21u HotSpot implementation audit 見 docs/OPENJDK_21U_SOURCE_AUDIT.md。任何效能結論仍須由可重現 benchmark 證明。
-
-## 架構原則
-
-C：non-blocking I/O（非阻塞輸入輸出）、event loop（事件迴圈）、HTTP parsing（HTTP 解析）、TLS、static file、reverse proxy、load balancing、rate／connection limiting、buffering（緩衝）、compression（壓縮）、network access control（網路存取控制）、logging（日誌）與 metrics transport（指標傳輸）。
-
-Java：Jakarta Servlet 6.1、Servlet lifecycle、Filter、Listener、Session、ServletContext、RequestDispatcher、AsyncContext、web application lifecycle、class loading、deployment（部署）與 application execution（應用程式執行）。
-
-C 不得直接執行 Servlet application code（Servlet 應用程式程式碼）；Servlet application code 不得在 C event-loop thread 上執行。
-
-## 重要聲明
-
-目前文件是架構與驗證基線，不代表 Ckarta 已完成 Servlet 6.1 相容性、已通過 TCK、已達到 Nginx 安全程度或已證明效能優越。
-
-所有「已實作」「已通過」「更快」「更安全」宣稱，都必須有 repository 測試或可重現測量證據。
-
-目前已驗證的 executable native completion path：C worker submission → Java bounded executor → registered JNI publisher → runtime-owned native completion queue → Linux eventfd notification → C epoll wake → native terminal publication。
-
-Java application-facing API 已開始使用固定 `jakarta.servlet:jakarta.servlet-api:6.1.0` compile/test dependency，並有 AsyncContext binding prototype；這仍不是 Servlet 6.1 完整實作或 TCK compatibility claim。
-
-CGI/FastCGI 定位：未來可掛接 application gateway module，不屬核心 request execution；PHP 優先透過 FastCGI/PHP-FPM。完整效能與架構分析見 `docs/CGI_FASTCGI_RESEARCH.md`。
-
-啟動配置：正式程序先由 C main 讀取 conf/ckarta.conf，再建立已驗證的 native configuration snapshot；JVM 與後續 runtime 不應讀取未驗證的外部設定值。
-
 ## Native connection / async ownership status
 
 目前已完成可執行的 native connection registry／opaque handle／JNI async terminal arbitration slice：
 
-`ServletRequest.startAsync()
-→ CkartaAsyncCycleBinding
+`ServletRequest.startAsync()`
+→ `CkartaAsyncCycleBinding`
 → package-private native bridge
 → native connection registry
 → terminal arbitration
-→ Java AsyncContext semantic state`
+→ Java AsyncContext semantic state
 
-`ck_connection_t` 現已直接擁有 Linux/POSIX socket descriptor，並以 heap-backed reader owner 持有 65,536-byte HTTP connection input consumer；reader 在 `ck_connection_init()` 建立並於 connection terminal close 時釋放。C-driven JVM integration test 以 `socketpair()` 驗證 Java 不接觸 descriptor，terminal winner 之後由 native owner close socket，peer 收到 EOF，registry 再允許 retire。
+`ck_connection_t` 現已直接擁有 Linux/POSIX socket descriptor，並以 heap-backed reader owner 持有 65,536-byte HTTP connection input consumer；reader 在 `ck_connection_init()` 建立並於 connection terminal close 時釋放。
 
-Linux `ck_event_loop` 已有獨立 executable baseline，並已完成 loopback TCP listener／accept integration smoke：event loop 擁有 epoll instance、connection owner 擁有 socket descriptor；notification 只攜帶 opaque `uint64_t` cookie，accepted socket 由 `accept4()` 以 nonblocking／close-on-exec 屬性建立。
+Linux `ck_event_loop` 已有獨立 executable baseline，並已完成 loopback TCP listener／accept integration smoke。
 
-目前 HTTP path 已增加 bounded executable framing components：header parser 能處理 incremental request line/header block、Content-Length normalization、Transfer-Encoding framing decision；獨立 chunked decoder 能處理 chunk size、chunk data、chunk CRLF、last chunk 與 trailer syntax。reader 可將 Content-Length／chunked body 以同步 sink 分段消費，並在 request completion 後保留下一則 pipelined request；loopback TCP integration 現已透過 registry-safe reader pin 將 epoll readiness 對接到 connection-owned reader，並測試 body consumption、pipelined request、EOF 與 stale-handle lifecycle。
+HTTP reader 現已透過 registry-safe reader pin 接入 loopback TCP integration：epoll readiness 經 handle/generation/identity validation 後取得短生命週期 pin，在不持有 registry mutex 的情況下執行 connection-owned non-blocking `recv()`、HTTP framing、body sink 與 pipelined leftover 處理，完成後 release pin。reader pin 存在時 registry 不允許 close/retire 回收 connection reader。
 
 目前尚未完成：正式多 worker listener/accept ownership、read batching/fairness budget、完整 HTTP/1.1 request/response state machine、response ownership、async dispatch、real timeout source、完整 client-disconnect policy、shutdown drain、TCK、sanitizer/fuzz、Windows IOCP 與其他平台 event backend。

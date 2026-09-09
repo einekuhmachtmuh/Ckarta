@@ -83,17 +83,19 @@ int ck_event_loop_add(ck_event_loop_t *loop,
 	ck_event_cookie_t cookie,
 	uint32_t events)
 {
-	struct epoll_event event;
+	struct epoll_event event = {0};
+	uint32_t epoll_events;
 
 	if (loop == NULL || !loop->initialized || socket_fd < 0 || cookie == 0)
 	{
 		return EINVAL;
 	}
-	if (ck_event_to_epoll(events, &event.events) != 0)
+	if (ck_event_to_epoll(events, &epoll_events) != 0)
 	{
 		return EINVAL;
 	}
 
+	event.events = epoll_events;
 	event.data.u64 = cookie;
 	if (epoll_ctl(loop->epoll_fd, EPOLL_CTL_ADD, socket_fd, &event) != 0)
 	{
@@ -108,17 +110,19 @@ int ck_event_loop_modify(ck_event_loop_t *loop,
 	ck_event_cookie_t cookie,
 	uint32_t events)
 {
-	struct epoll_event event;
+	struct epoll_event event = {0};
+	uint32_t epoll_events;
 
 	if (loop == NULL || !loop->initialized || socket_fd < 0 || cookie == 0)
 	{
 		return EINVAL;
 	}
-	if (ck_event_to_epoll(events, &event.events) != 0)
+	if (ck_event_to_epoll(events, &epoll_events) != 0)
 	{
 		return EINVAL;
 	}
 
+	event.events = epoll_events;
 	event.data.u64 = cookie;
 	if (epoll_ctl(loop->epoll_fd, EPOLL_CTL_MOD, socket_fd, &event) != 0)
 	{

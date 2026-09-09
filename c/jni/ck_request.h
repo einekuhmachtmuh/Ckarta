@@ -4,6 +4,7 @@
 #include <stdatomic.h>
 #include <stdint.h>
 
+#include "../error/ck_error.h"
 
 #define CK_JNI_ABI_VERSION 1u
 
@@ -17,8 +18,9 @@ typedef enum ck_request_state
 	CK_REQUEST_PENDING = 0,
 	CK_REQUEST_RUNNING = 1,
 	CK_REQUEST_CANCELLING = 2,
-	CK_REQUEST_COMPLETED = 3,
-	CK_REQUEST_FAILED = 4,
+	CK_REQUEST_FAILING = 3,
+	CK_REQUEST_COMPLETED = 4,
+	CK_REQUEST_FAILED = 5,
 	CK_REQUEST_STATE_INVALID = UINT32_MAX
 } ck_request_state_t;
 
@@ -41,6 +43,7 @@ typedef struct ck_request
 {
 	ck_request_descriptor_t descriptor;
 	_Atomic uint32_t state;
+	ck_error_t error;
 } ck_request_t;
 
 int ck_request_init(ck_request_t *request,
@@ -49,5 +52,7 @@ int ck_request_begin(ck_request_t *request);
 int ck_request_cancel(ck_request_t *request);
 int ck_request_finish(ck_request_t *request, ck_request_state_t terminal_state);
 ck_request_state_t ck_request_state(const ck_request_t *request);
+int ck_request_fail(ck_request_t *request, const ck_error_t *error);
+const ck_error_t *ck_request_error(const ck_request_t *request);
 
 #endif

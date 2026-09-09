@@ -77,9 +77,9 @@ static void test_body_sink_retry_does_not_replay(void)
 {
 	static const char payload[] =
 			"POST /retry HTTP/1.1\r\n"
-			"Host: localhost\\r\\n"
-			"Content-Length: 5\\r\\n"
-			"\\r\\n"
+			"Host: localhost\r\n"
+			"Content-Length: 5\r\n"
+			"\r\n"
 			"hello";
 	ck_http_connection_reader_t reader;
 	retrying_body_sink_t sink = {0};

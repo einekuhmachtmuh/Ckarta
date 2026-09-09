@@ -45,8 +45,10 @@ main
 | ck_request_init | main/dispatcher | validate/copy descriptor + initialize state | 0 | -1 | descriptor body remains caller-owned/borrowed |
 | ck_request_begin | worker | PENDING→RUNNING | 0 | 1/-1 | request owner retained |
 | ck_request_cancel | owner | acquire CANCELLING state | 0 | -1 | owner remains responsible |
+| ck_error_init | error record owner | initialize fixed record | void | no-op on null | caller owns record |
+| ck_error_set | error record owner | validate and populate category/code/outcome | 0 | -1 | caller owns record |
 | ck_request_fail | failure publisher | RUNNING→FAILING→FAILED | 0 | 1/-1 | winner publishes error |
-| ck_request_finish | completion owner | RUNNING→COMPLETED | 0 | 1/-1 | first terminal winner |
+| ck_request_finish | completion owner | RUNNING→COMPLETED | 0 | 1/-1 | success-only terminal winner |
 | ck_request_state | observer | acquire state | valid enum | INVALID sentinel on null | no ownership change |
 | ck_runtime_init | process control | initialize sync + bootstrap JVM | 0 | nonzero | runtime owns initialized sync state |
 | ck_runtime_dispatch_async_smoke | C control | create temporary attached submission worker | 0 | nonzero | worker borrows request lifetime until join |
@@ -73,7 +75,8 @@ main
 3. 建立 local reference 後，在離開 JNI sequence 前 DeleteLocalRef。
 4. DetachCurrentThread 後不得再使用該 JNIEnv*。
 5. `JavaVM*` 可以由 runtime-level owner 保存；`JNIEnv*` 不可跨 thread 傳遞。
-6. `ExceptionClear()` 只在 native layer 已決定接管該 exception 時使用。
+6. `NewDirectByteBuffer()` 的 address/capacity 必須先滿足 request descriptor 的 native preconditions。
+7. `ExceptionClear()` 只在 native layer 已決定接管該 exception 時使用。
 
 ## 5. DirectByteBuffer contract
 

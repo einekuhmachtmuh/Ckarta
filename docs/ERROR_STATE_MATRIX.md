@@ -59,7 +59,7 @@ HTTP status must remain a protocol outcome, not the canonical failure identity. 
 
 ## 5. Exactly-once terminal outcome
 
-Terminal publication is defined as a compare-and-establish operation on request ownership. The first valid terminal winner controls response/completion and cleanup. Later events may be recorded for diagnostics, but cannot perform a second cleanup or change the externally visible outcome.
+Terminal publication is defined as a compare-and-establish operation on request ownership. The first valid terminal winner controls response/completion and cleanup. Later events may be recorded for diagnostics, but cannot perform a second cleanup or change the externally visible outcome. In the executable smoke poll API, a consumed late/duplicate completion is reported as `2` so the producer event is acknowledged without counting a second terminal outcome; `-2` is reserved for a newly published failure.
 
 Formally, for one request owner O:
 

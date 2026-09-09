@@ -183,31 +183,6 @@ int ck_http_input_ack_body(
 	return 0;
 }
 
-int ck_http_input_ack_body(
-	ck_http_input_t *input,
-	size_t *consumed)
-{
-	size_t value;
-
-	if (input == NULL || consumed == NULL
-			|| input->pending_body_length == 0)
-	{
-		return -1;
-	}
-
-	value = input->pending_input_consumed;
-	if (input->pending_message_complete)
-	{
-		input->message_complete = 1;
-	}
-	input->pending_body_data = NULL;
-	input->pending_body_length = 0;
-	input->pending_input_consumed = 0;
-	input->pending_message_complete = 0;
-	*consumed = value;
-	return 0;
-}
-
 ck_http_input_result_t ck_http_input_eof(
 	ck_http_input_t *input,
 	const unsigned char **body_data,

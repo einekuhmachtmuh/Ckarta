@@ -81,7 +81,7 @@ epoll notification
 - `ck_event_loop_init()`：建立 event backend。
 - `ck_event_loop_add()`：建立 fd + cookie + interest registration。
 - `ck_event_loop_modify()`：以 `EPOLL_CTL_MOD` 更新 interest／cookie。
-- `ck_event_loop_remove()`：移除 registration。
+- `ck_event_loop_remove()`：移除 descriptor registration。
 - `ck_event_loop_wait()`：blocking／non-blocking 取得 notification；`timeout_ms=-1` 表示無限等待。
 - `ck_event_loop_destroy()`：釋放 epoll instance。
 
@@ -154,23 +154,34 @@ Multiprocessor Support for Event-Driven Programs：Nickolai Zeldovich、Alexande
 7. remove 後再次 remove 取得 `ENOENT`。
 8. peer close 可產生 `RDHUP` 或 `HUP/ERR` 語意。
 
-這是 backend contract smoke test，不是 real TCP listener、HTTP parser、TLS 或 Servlet end-to-end test。
+`tests/net/ck_tcp_event_integration_test.c` 進一步驗證：
 
-GitHub Actions build-smoke 已以 Ubuntu 24.04、GCC 13.3.0、Temurin OpenJDK 21.0.12 執行 `make test` 並通過；其中 `ckarta-event-loop-test` 實際被建置與執行。
+1. loopback TCP listener 建立與 ephemeral port 取得。
+2. client TCP connect 產生 listener readiness。
+3. `accept4()` 取得 `SOCK_NONBLOCK | SOCK_CLOEXEC` accepted descriptor。
+4. accepted descriptor attach 至 connection registry。
+5. generation-protected opaque handle 作為 epoll cookie。
+6. 真實 TCP request bytes 經 epoll readiness 後以 nonblocking `recv()` 取得。
+7. data drain 後 `EAGAIN/EWOULDBLOCK` 被正確辨識。
+8. client close 產生 `RDHUP` 或 `HUP/ERR` notification。
+9. registration 先 remove，再進行 terminal、close、retire。
+10. retire 後舊 generation handle 無法重新 lookup，新 connection 得到不同 generation handle。
+
+GitHub Actions build-smoke 已在 Ubuntu 24.04、Temurin OpenJDK 21.0.12、GCC 13.3.0 執行 `make test`，其中 `ckarta-event-loop-test` 與 `ckarta-tcp-event-integration-test` 均實際建置及執行成功。
 
 ## 11. 尚未宣稱的能力
 
 此 slice 不代表：
 
-- 已完成 TCP listener／accept path。
+- 已完成一般 TCP listener／multi-worker accept architecture。
 - 已完成 HTTP/1.1 request framing。
-- 已完成 nonblocking read/write state machine。
+- 已完成完整 nonblocking read/write state machine。
 - 已完成 TLS。
-- 已完成 real client-disconnect source。
-- 已完成 timeout timer source。
 - 已完成 response output ownership。
+- 已完成 real timeout timer source。
+- 已完成完整 client-disconnect policy。
 - 已完成 Servlet 6.1 runtime 或 TCK。
 - 已證明 epoll 比其他 backend 更快。
 - 已完成 Windows IOCP 或 macOS/BSD kqueue。
 
-下一個網路實作閘門是把 listener／accepted connection、nonblocking I/O、event notification 與現有 `ck_connection_registry` 接起來，並以 generation-protected cookie/handle 驗證 stale notification。
+下一個網路實作閘門是把已驗證的 listener／accepted connection／epoll registration path 提升為正式 connection event consumer，再接入 HTTP/1.1 framing 與 bounded read/write state machine；stale notification 必須在 consumer 端以 generation/correlation identity 再驗證。

@@ -81,7 +81,7 @@ public final class CkartaRuntime
 	}
 
 	public static void dispatchAsync(long requestHandle, long ownerToken,
-		long lifetimeToken, ByteBuffer data)
+		long lifetimeToken, ByteBuffer metadata, ByteBuffer data)
 	{
 		ThreadPoolExecutor currentExecutor;
 		long queueHandle;
@@ -104,14 +104,23 @@ public final class CkartaRuntime
 				int status = 0;
 				try
 				{
-					NativeRequest request = new NativeRequest(requestHandle, data);
-					if (!request.data().isDirect())
+					NativeRequest request = new NativeRequest(
+							requestHandle,
+							metadata == null
+									? ByteBuffer.allocateDirect(0) : metadata,
+							data == null
+									? ByteBuffer.allocateDirect(0) : data);
+					if (request.methodBytes().remaining() == 0
+							|| request.targetBytes().remaining() == 0
+							|| request.protocolBytes().remaining() == 0)
 					{
 						throw new IllegalArgumentException(
-								"native request data must be direct");
+								"native request metadata is empty");
 					}
 
-					result = request.handle() + request.data().remaining();
+					result = request.handle()
+							+ request.targetBytes().remaining()
+							+ request.data().remaining();
 				}
 				catch (RuntimeException exception)
 				{

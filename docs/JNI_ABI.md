@@ -115,7 +115,13 @@ Clarke、Potter、Noble 的 *Ownership Types for Flexible Alias Protection* 將 
 
 來源：https://doi.org/10.1145/286936.286947
 
-## 14. 研究與 benchmark
+## 14. Error record boundary
+
+`c/error/ck_error.[ch]` 已提供第一個 process-local structured error record 與 layout/validation test。它不是 Java Throwable ABI，也不是 runtime-loadable module ABI；正式 request/completion publication 前不得把可變 `ck_error_t` 直接寫入共享 request state 而未證明 atomic publication 或唯一 owner。
+
+完整 state matrix 見 `docs/ERROR_STATE_MATRIX.md`。
+
+## 15. 研究與 benchmark
 
 OpenJDK 21 成本基線與 API 比較見 docs/JNI_COST_MODEL.md；fixed-tag HotSpot audit 見 docs/OPENJDK_21U_SOURCE_AUDIT.md。
 

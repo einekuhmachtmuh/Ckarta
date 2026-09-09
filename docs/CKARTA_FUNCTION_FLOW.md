@@ -110,7 +110,7 @@ poll completion output 使用固定 36 bytes：8 + 8 + 8 + 8 + 4，並以 native
 
 ## 8. Java side flow
 
-`CkartaRuntime.start()` 建立 bounded `ThreadPoolExecutor` 與 bounded completion queue；`dispatchAsync()` 只負責 admission 與提交工作，不在 C event loop 執行 Servlet code；executor task 建立 `NativeRequest`、驗證 DirectByteBuffer，再產生 value-like CompletionRecord。
+`CkartaRuntime.start(queueHandle)` 建立 bounded `ThreadPoolExecutor`，並保存 runtime-owned native completion queue handle；`dispatchAsync()` 只負責 admission 與提交工作，不在 C event loop 執行 Servlet code；executor task 建立 `NativeRequest`、驗證 DirectByteBuffer，完成後以 registered JNI native method 直接發布 value-only completion record。
 
 `CkartaRuntime.stop()` 先從 runtime registry 移除 executor/completion references，再 shutdown executor；現階段尚未實作真正 Servlet container lifecycle。
 

@@ -81,11 +81,20 @@ ck_http_connection_read_result_t ck_http_connection_reader_drive(
 			}
 			if (body_length != 0)
 			{
+				size_t body_consumed = 0;
+
 				if (body_sink == NULL
 						|| body_sink(body_sink_context, body_data, body_length) != 0)
 				{
 					return CK_HTTP_CONNECTION_READ_SINK_ERROR;
 				}
+				if (ck_http_input_ack_body(
+						&reader->input, &body_consumed) != 0
+						|| body_consumed > feed_length - *(&consumed))
+				{
+					return CK_HTTP_CONNECTION_READ_IO_ERROR;
+				}
+				consumed += body_consumed;
 			}
 			reader->begin += consumed;
 			process_budget -= consumed;

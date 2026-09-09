@@ -426,7 +426,7 @@ static ck_http_parse_result_t parse_header_block(
 	{
 		request->body_mode = CK_HTTP_BODY_NONE;
 		request->content_length = 0;
-		request->connection_close_required = 0;
+		request->connection_close_required = connection_close;
 	}
 
 	return CK_HTTP_PARSE_COMPLETE;

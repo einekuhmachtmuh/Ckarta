@@ -30,6 +30,7 @@ typedef enum ck_http_request_body_read_result
  * Producer owns write operations.
  * Consumer owns read operations.
  * Neither side may perform the opposite operation.
+ * Each write is all-or-nothing: a short write never advances head.
  */
 typedef struct ck_http_request_body
 {

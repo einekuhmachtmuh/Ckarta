@@ -157,6 +157,7 @@ retry 不得由「發生 exception」單獨觸發；任何 retry 都必須先證
 ## 17. 文件索引
 
 docs/EXCEPTION_HANDLING_RESEARCH.md
+docs/ERROR_STATE_MATRIX.md
 docs/ARCHITECTURE.md
 docs/HOT_PATH_REVIEW.md
 docs/FUNCTION_TRACE.md

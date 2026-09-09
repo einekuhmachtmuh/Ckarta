@@ -76,7 +76,7 @@ JNI bridge 應轉換成明確的 completion/error record。
 
 cancel(operation) 必須是 idempotent（冪等）的。\n\n目前 `ck_request_cancel()` 對已取消／已終止 operation 重複呼叫無副作用；`ck_request_finish()` 不會覆寫已勝出的 cancellation。
 
-第二次 cancel：
+第二次 cancel 回傳非 ownership result，不改變現有狀態；
 
 不能 double free；
 不能重複呼叫 Servlet lifecycle callback；

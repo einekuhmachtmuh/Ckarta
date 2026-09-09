@@ -22,6 +22,37 @@ int main(void)
 	descriptor.body_length = sizeof(body) - 1;
 
 	assert(ck_request_init(&request, &descriptor) == 0);
+
+	{
+		ck_request_t empty_body_request;
+		ck_request_descriptor_t empty = descriptor;
+		empty.body = NULL;
+		empty.body_length = 0;
+		assert(ck_request_init(&empty_body_request, &empty) == 0);
+	}
+
+	{
+		static const char raw_request[] =
+				"GET /handoff HTTP/1.1\r\nHost: x\r\n\r\n";
+		ck_http_parser_t parser;
+		ck_http_request_t parsed;
+		ck_request_t http_request;
+		size_t consumed = 0;
+
+		ck_http_parser_init(&parser);
+		assert(ck_http_parser_feed(&parser, raw_request,
+				sizeof(raw_request) - 1, &consumed, &parsed)
+				== CK_HTTP_PARSE_COMPLETE);
+		assert(consumed == sizeof(raw_request) - 1);
+		assert(ck_request_init_http(&http_request, &parsed,
+				NULL, 0, 91, 92, 93) == 0);
+		assert(http_request.descriptor.metadata != NULL);
+		assert(http_request.descriptor.metadata_length >= 13);
+		assert(http_request.descriptor.body == NULL);
+		assert(http_request.descriptor.body_length == 0);
+		assert(http_request.descriptor.feature_flags
+				& CK_REQUEST_FEATURE_METADATA_BUFFER);
+	}
 	assert(ck_request_state(&request) == CK_REQUEST_PENDING);
 	assert(ck_request_state(NULL) == CK_REQUEST_STATE_INVALID);
 

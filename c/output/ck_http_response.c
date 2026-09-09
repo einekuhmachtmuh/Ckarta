@@ -174,7 +174,7 @@ int ck_http_response_serialize_headers(
 	}
 
 	length = snprintf((char *)output, capacity,
-			"HTTP/1.1 %03u\r\nContent-Length: %llu\r\n%s\r\n",
+			"HTTP/1.1 %03u \r\nContent-Length: %llu\r\n%s\r\n",
 			(unsigned int)response->status,
 			(unsigned long long)content_length,
 			response->connection_close ? "Connection: close\r\n" : "");

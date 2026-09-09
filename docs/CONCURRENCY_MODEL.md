@@ -106,6 +106,8 @@ global cache mutation
 
 除非 profiling（效能分析）證明必要。
 
+registry mutex 可以保護 handle lookup、generation validation 與 reader pin counter，但不得把 `recv()`、HTTP framing 或 Servlet dispatch 等長時間／可變長度工作放在 registry critical section 內。
+
 ## 8. Lock-free
 
 不預設。
@@ -134,6 +136,9 @@ completion record（完成記錄）。
 JVM bootstrap thread：
 只在啟動／停止協定需要時進行 JVM lifecycle coordination，不取代 C worker 的 network data-plane ownership。
 
+registry reader pin：
+只提供短生命週期的 lifetime guard；取得後 caller 可在未持有 registry mutex 的情況下執行 connection-owned non-blocking reader，但在 pin release 前不得使 entry retire 或 reader storage 回收。pin 不把 reader 變成一般可共享的 thread-safe object。
+
 ## 10. 關閉
 
 shutdown 時：
@@ -158,13 +163,11 @@ OpenJDK 21 Invocation API 規定 `DestroyJavaVM()` 會等待 non-daemon threads�
 
 https://docs.oracle.com/en/java/javase/21/docs/specs/jni/invocation.html
 
-
 ## 11. Servlet 6.1 implementation freedom
 
 Servlet 6.1 的 externally visible semantics 與 internal scheduling strategy 分離。Ckarta 可用 C event-driven scheduling 提供 input/output readiness，再由 Java executor 執行 Servlet application。
 
 不得為符合規格而把 HTTP socket readiness 或 native connection state 暴露給 Servlet application。
-
 
 ## 12. Completion handoff
 

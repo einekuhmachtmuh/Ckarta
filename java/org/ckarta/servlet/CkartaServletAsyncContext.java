@@ -134,18 +134,21 @@ public final class CkartaServletAsyncContext implements AsyncContext
 	@Override
 	public long getTimeout()
 	{
+		checkActive();
 		return timeout.get();
 	}
 
 	@Override
 	public void setTimeout(long timeout)
 	{
+		checkActive();
 		this.timeout.set(timeout);
 	}
 
 	@Override
 	public boolean hasOriginalRequestAndResponse()
 	{
+		checkActive();
 		return originalRequestAndResponse;
 	}
 

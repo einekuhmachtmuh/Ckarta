@@ -7,6 +7,8 @@
 
 #include "ck_connection.h"
 
+#define CK_CONNECTION_REGISTRY_CAPACITY 256u
+
 typedef uint64_t ck_connection_handle_t;
 typedef struct ck_connection_registry_entry
 {

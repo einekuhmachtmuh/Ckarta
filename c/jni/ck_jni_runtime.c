@@ -92,6 +92,10 @@ static int ck_call_start(JNIEnv *env, ck_completion_queue_t *queue)
 		return -1;
 	}
 
+#if defined(__GNUC__) || defined(__clang__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wpedantic"
+#endif
 	if ((*env)->RegisterNatives(env, runtime_class, methods,
 			(jint)(sizeof(methods) / sizeof(methods[0]))) != JNI_OK)
 	{
@@ -99,6 +103,9 @@ static int ck_call_start(JNIEnv *env, ck_completion_queue_t *queue)
 		(*env)->DeleteLocalRef(env, runtime_class);
 		return -1;
 	}
+#if defined(__GNUC__) || defined(__clang__)
+#pragma GCC diagnostic pop
+#endif
 
 	method = (*env)->GetStaticMethodID(env, runtime_class, "start", "(J)V");
 	if (ck_check_java_exception(env, "GetStaticMethodID(start)") != 0 || method == NULL)

@@ -27,7 +27,8 @@ https://docs.oracle.com/en/java/javase/21/docs/specs/jni/invocation.html
 - `owner_token`：C owner 的邏輯識別。
 - `lifetime_token`：native storage 有效期間的識別。
 - `request_id`：request 邏輯識別。
-- `body`／`body_length`：C-owned native bytes；目前 DirectByteBuffer 路徑要求 `body != NULL` 且 `body_length <= INT32_MAX`，以符合 Java SE 21 `NewDirectByteBuffer` 的 address／capacity 前置條件。
+- `metadata`／`metadata_length`：C-owned compact canonical request metadata view；目前由 method、target、protocol 三個 big-endian 32-bit length 加上 bytes 與一個 connection-close flag 組成，Java 一次取得 DirectByteBuffer 後以 slice view 存取，不逐欄建立 header object。
+- `body`／`body_length`：C-owned native bytes；`body_length == 0` 時 `body` 可為 NULL；非零長度仍須 `body != NULL` 且 `body_length <= INT32_MAX`，以符合目前 DirectByteBuffer boundary。
 
 descriptor 不是 wire protocol；atomic lifecycle state 不放入 descriptor，避免把同步實作細節固定成 ABI。
 
@@ -37,7 +38,15 @@ descriptor 不是 wire protocol；atomic lifecycle state 不放入 descriptor，
 
 C 實作用 atomic CAS 保證競爭 cancellation 不重複取得 terminal ownership；failure 則先 CAS 至 private `FAILING` publication state，再寫 error record，最後 release-store `FAILED`。
 
-## 4. C struct → Java object
+## 4. Canonical HTTP request handoff
+
+目前 executable handoff 為：HTTP parser → `ck_request_init_http()` → canonical request descriptor → JNI `dispatchAsync()` → Java `NativeRequest` facade。`ck_request_init_http()` 只複製 method/target/protocol 的 bounded metadata，不複製 header object graph；body 仍由呼叫者保證在 Java borrow lifetime 內有效。
+
+metadata wire view 格式固定為：`u32 method_length | u32 target_length | u32 protocol_length | method bytes | target bytes | protocol bytes | u8 connection_close_required`；u32 使用 network/big-endian order。Java 不取得 `ck_http_request_t` 或其 span pointer。
+
+目前 handoff slice 的 Java runtime 只驗證 method=GET、protocol=HTTP/1.1、target 非空且沒有 `Connection: close`，並將 body/metadata 作 read-only DirectByteBuffer view。這是 canonical request handoff smoke contract，不是完整 `HttpServletRequest` 實作。
+
+## 5. C struct → Java object
 
 禁止把 C request struct（請求結構）逐欄映射為大量 Java fields、Strings 或 header objects。
 
@@ -51,13 +60,13 @@ C canonical request
 
 OpenJDK 21 HotSpot 的 NewObjectA／NewObjectV 涉及 Java instance allocation、local JNI handle、參數整理與 constructor invocation；大量 Set/Get field 因此不是單純記憶體映射。
 
-## 5. Buffer ownership
+## 6. Buffer ownership
 
 Java 使用 native buffer 時預設為 borrow-only（借用）；Java 不得 free。C 不得在 Java borrow 未結束前 recycle。
 
 NewDirectByteBuffer 可提供 native memory view，但不決定 Ckarta ownership；native allocation lifetime 必須覆蓋所有 Java 使用時間。
 
-## 6. Thread rules
+## 7. Thread rules
 
 `JNIEnv*` 不得跨執行緒共享。C event-loop thread 不得執行 Servlet application code。
 
@@ -67,27 +76,27 @@ JNI bridge thread 必須具有自己的 attachment／detach 生命週期。需�
 
 具體 thread topology 見 docs/THREAD_MODEL.md。
 
-## 7. Exception
+## 8. Exception
 
 每次可能建立 pending Java exception 的 JNI operation 都必須依 JDK 版本規格在適當邊界檢查；不得無條件清除 pending exception，也不得把 Throwable 的私有實作細節變成 C ABI。
 
 完整 exception taxonomy、translation、cleanup、security disclosure 與 async error contract 見 `docs/EXCEPTION_HANDLING_RESEARCH.md`。
 
-## 8. Async
+## 9. Async
 
 JNI 呼叫返回不等於 request 完成。Servlet AsyncContext 可以讓請求在 Java method return 後繼續存在。
 
-## 9. ABI stability
+## 10. ABI stability
 
 正式 ABI 穩定前必須有：version、struct size、feature flags（功能旗標）、reserved fields（保留欄位）、ownership flags（所有權旗標）。
 
 不得依賴 C struct 自然布局作為長期 ABI，除非另有明確相容性契約。
 
-## 10. Forbidden
+## 11. Forbidden
 
 禁止：expose raw socket fd to Servlet application、expose C pool pointer、Java free native memory、C access private Java object internals、hidden global native state。
 
-## 11. JNI crossing 策略
+## 12. JNI crossing 策略
 
 優先：read buffer → parse → canonical descriptor → bounded semantic handoff → Java executor → Java processing → completion record。
 
@@ -95,7 +104,7 @@ semantic handoff 可由 attached submission 或受控 bridge queue 實作；實�
 
 避免每個 header、body chunk 或 write operation 都跨 JNI。
 
-## 12. 成本與 API 選擇
+## 13. 成本與 API 選擇
 
 Call<Type>MethodA/V：粗粒度 request／stage dispatch。
 
@@ -109,19 +118,19 @@ GetPrimitiveArrayCritical：只可作符合 JNI critical region 限制的短操�
 
 NewDirectByteBuffer／GetDirectBufferAddress：優先作大量 native bytes 視圖，但 ownership／lifetime 必須由 Ckarta 明確管理。
 
-## 13. 學術與 ownership 背景
+## 14. 學術與 ownership 背景
 
 Clarke、Potter、Noble 的 *Ownership Types for Flexible Alias Protection* 將 ownership 與 alias visibility／representation containment 形式化；Ckarta 只借用其 ownership 設計思想，correctness 仍由 C lifecycle、JNI specification 與測試決定。
 
 來源：https://doi.org/10.1145/286936.286947
 
-## 14. Error record boundary
+## 15. Error record boundary
 
 `c/error/ck_error.[ch]` 已提供 process-local structured error record 與 layout/validation test。`ck_request_t` 目前已內含此 record；failure publication 使用 `RUNNING → FAILING` CAS，由唯一勝出者寫入 error，再以 release-store 發布 `FAILED`；讀者在 acquire-load 看到 `FAILED` 後才可取得 error record。它不是 Java Throwable ABI，也不是 runtime-loadable module ABI。
 
 完整 state matrix 見 `docs/ERROR_STATE_MATRIX.md`；Ckarta 實際函式流程見 `docs/CKARTA_FUNCTION_FLOW.md`。
 
-## 15. 研究與 benchmark
+## 16. 研究與 benchmark
 
 OpenJDK 21 成本基線與 API 比較見 docs/JNI_COST_MODEL.md；fixed-tag HotSpot audit 見 docs/OPENJDK_21U_SOURCE_AUDIT.md。
 
@@ -130,7 +139,7 @@ thread model 的 direct-attach 與 JNI bridge 差異見 docs/THREAD_MODEL.md。
 該文件把 OpenJDK 21 原始碼分析、歷史 JNI benchmark 與本機 sanity test 分開；未完成 Ckarta 自有 benchmark 前，不得宣稱某 JNI API 或 thread topology 更快。
 
 
-## 15. Executor handoff slice
+## 17. Executor handoff slice
 
 目前 executable path 已由 Java-owned completion queue 改為 runtime-owned native completion queue：Java executor thread 完成 request 後透過 `RegisterNatives` 綁定的 `publishCompletion(long, long, long, long, long, int)` 直接發布 value-only record。Native callback 不保存 `JNIEnv*`、Java Throwable 或 Java object graph，只將固定整數欄位寫入 native queue。
 
@@ -142,7 +151,7 @@ Java executor 必須使用有界容量；飽和時不得 fallback 到 C event-lo
  
 
 目前已固定 Jakarta Servlet API dependency `jakarta.servlet:jakarta.servlet-api:6.1.0` 作為 application-facing API compile/test boundary；`CkartaServletAsyncContext` 是薄 adapter，不把 native connection、queue 或 token 暴露給 Servlet application。這不是 TCK compatibility claim。
-## 16. Native completion notification slice
+## 18. Native completion notification slice
 
 C runtime 使用 runtime-owned bounded completion queue + platform notification backend。Linux 第一個 executable backend 使用 `eventfd(EFD_CLOEXEC | EFD_NONBLOCK)`，C main 以 `epoll_wait()` 等待 notification fd，收到 wake-up 後 drain notification，再反覆 dequeue completion records。notification coalescing 時不得把一次 wake-up 解讀成恰好一筆 completion。
 
@@ -152,7 +161,7 @@ C runtime 使用 runtime-owned bounded completion queue + platform notification 
 
 此設計只驗證非阻塞交接的生命週期；多請求 smoke 已能以 request_id + owner_token + lifetime_token 路由兩個完成事件。poll API 將 1 定義為新 terminal completion、0 為目前沒有 completion、2 為已消費但因 cancellation/duplicate 而沒有產生第二 terminal outcome、負值為 runtime/ABI error 或新 failure；此仍不是最終多 worker completion queue。正式實作前仍需避免每次 poll attach/detach，並完成 cancellation、shutdown drain 與通知機制。
 
-## 17. 多請求 completion ownership
+## 19. 多請求 completion ownership
 
 下一階段不能把單一 CompletionRecord 全域佇列視為正式 ABI。正式模型必須使每個 completion 帶有 request_id、owner_token、lifetime_token 與 terminal status，並保證 completion publication 不會在 owner 已釋放後發生。
 
@@ -161,7 +170,7 @@ C event worker 應可依 request_id 將完成事件送回唯一 connection／req
 正式多請求 completion queue 必須定義：enqueue、dequeue、overflow、shutdown drain、cancellation、duplicate completion、late completion 與 owner disappearance 的語意；單一 smoke poll 不再足以代表此 ABI。
 
 
-## 15. Container-internal native async capability
+## 20. Container-internal native async capability
 
 native connection registry 現提供固定容量 process-local ownership table。Java side 僅可透過 package-private `CkartaNativeAsyncBridge` 持有兩個 opaque `long` capability values：registry capability 與 generation-protected connection handle；Java 不能解參照、運算或轉型為 native pointer，也不屬 application-facing Servlet ABI。
 

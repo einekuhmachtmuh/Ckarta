@@ -172,12 +172,13 @@ C epoll readiness
 → registry handle/generation validation
 → short-lived reader pin
 → connection-owned non-blocking recv
+→ bounded reader read/process batch
 → HTTP framing
 → body sink
 → request completion／pipelined leftover
 → reader pin release
 
-reader pin 只保護 connection entry 與 heap-backed reader 的 lifetime；registry mutex 不包住 `recv()` 或 HTTP framing。這是 Ckarta 目前的 native input integration boundary，不代表完整 Servlet request path 已完成。
+reader pin 只保護 connection entry 與 heap-backed reader 的 lifetime；registry mutex 不包住 `recv()` 或 HTTP framing。單次 reader dispatch 現受 32 KiB socket read budget 與 32 KiB input processing budget 約束；budget 是 fairness／overload-control policy，不是 HTTP framing limit。這是 Ckarta 目前的 native input integration boundary，不代表完整 Servlet request path 已完成。
 
 ## 7. 不變條件
 

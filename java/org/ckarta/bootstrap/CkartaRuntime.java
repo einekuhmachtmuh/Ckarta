@@ -110,17 +110,20 @@ public final class CkartaRuntime
 									? ByteBuffer.allocateDirect(0) : metadata,
 							data == null
 									? ByteBuffer.allocateDirect(0) : data);
-					if (request.methodBytes().remaining() == 0
-							|| request.targetBytes().remaining() == 0
-							|| request.protocolBytes().remaining() == 0)
+					if (request.metadata().remaining() != 0
+							&& (request.methodBytes().remaining() == 0
+								|| request.targetBytes().remaining() == 0
+								|| request.protocolBytes().remaining() == 0))
 					{
 						throw new IllegalArgumentException(
 								"native request metadata is empty");
 					}
 
-					result = request.handle()
-							+ request.targetBytes().remaining()
-							+ request.data().remaining();
+					result = request.handle() + request.data().remaining();
+					if (request.metadata().remaining() != 0)
+					{
+						result += request.targetBytes().remaining();
+					}
 				}
 				catch (RuntimeException exception)
 				{

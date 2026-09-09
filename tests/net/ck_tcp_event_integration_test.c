@@ -2,6 +2,7 @@
 
 #include "../../c/connection/ck_connection_registry.h"
 #include "../../c/event/ck_event_loop.h"
+#include "../../c/http/ck_http_parser.h"
 #include "../../c/net/ck_tcp_listener.h"
 
 #include <assert.h>
@@ -25,7 +26,7 @@ static int connect_loopback(int port)
 	address.sin_port = htons((unsigned short)port);
 
 	assert(connect(socket_fd, (const struct sockaddr *)&address,
-			sizeof(address)) == 0);
+		sizeof(address)) == 0);
 	return socket_fd;
 }
 
@@ -34,6 +35,8 @@ int main(void)
 	ck_tcp_listener_t listener = {0};
 	ck_event_loop_t loop = {0};
 	ck_connection_registry_t registry = {0};
+	ck_http_parser_t parser = {0};
+	ck_http_request_t parsed_request = {0};
 	ck_event_notification_t notifications[4] = {0};
 	ck_connection_handle_t handle;
 	ck_connection_handle_t reused_handle;
@@ -43,6 +46,7 @@ int main(void)
 	int client_fd;
 	int accepted_fd;
 	int count;
+	size_t consumed;
 
 	assert(ck_tcp_listener_init(&listener, 0) == 0);
 	assert(ck_event_loop_init(&loop) == 0);
@@ -78,6 +82,15 @@ int main(void)
 	assert(recv(accepted_fd, request, sizeof(request), MSG_DONTWAIT)
 			== (ssize_t)payload_length);
 	assert(memcmp(request, payload, payload_length) == 0);
+	ck_http_parser_init(&parser);
+	assert(ck_http_parser_feed(&parser, request, payload_length,
+		&consumed, &parsed_request) == CK_HTTP_PARSE_COMPLETE);
+	assert(consumed == payload_length);
+	assert(parsed_request.method.length == 3);
+	assert(memcmp(parsed_request.method.data, "GET", 3) == 0);
+	assert(parsed_request.target.length == 1);
+	assert(memcmp(parsed_request.target.data, "/", 1) == 0);
+	assert(parsed_request.body_mode == CK_HTTP_BODY_NONE);
 	assert(recv(accepted_fd, request, sizeof(request), MSG_DONTWAIT) == -1);
 	assert(errno == EAGAIN || errno == EWOULDBLOCK);
 

@@ -131,6 +131,7 @@ faster、lower latency、less memory、higher throughput 等宣稱必須有可�
 ## 14. 第三方來源
 
 Nginx 與 Apache Tomcat 以 Git submodule（Git 子模組）固定於 third_party/nginx 與 third_party/tomcat；目前版本：Nginx 1.30.4 commit 017cf98dcce217946572a896f0992370475e189f；Tomcat 11.0.25 commit cbe6e15ee81e2fc6232954292a80cca5d1e84009。
+Apache HTTP Server 2.4.68 可作固定研究來源，但目前不要求加入 third_party submodule；其 tag/commit 必須在研究文件與 `docs/REFERENCE_SOURCES.md` 固定。
 
 禁止未經架構決策直接複製 upstream code（上游程式碼）。移植前必須檢查 license、dependency、平台假設、安全與語意差異。
 

@@ -5,6 +5,7 @@
 #include <pthread.h>
 
 #include "ck_request.h"
+#include "../completion/ck_completion_queue.h"
 #include <stddef.h>
 #include <stdint.h>
 
@@ -24,6 +25,8 @@ struct ck_runtime
 	int sync_initialized;
 	int bootstrap_thread_started;
 	int shutdown_complete;
+	ck_completion_queue_t completion_queue;
+	int completion_queue_initialized;
 };
 
 typedef struct ck_runtime ck_runtime_t;
@@ -33,6 +36,7 @@ int ck_runtime_dispatch_async_smoke(ck_runtime_t *runtime, ck_request_t *request
 		size_t request_count);
 int ck_runtime_poll_completion(ck_runtime_t *runtime, ck_request_t *requests,
 		size_t request_count);
+int ck_runtime_completion_fd(const ck_runtime_t *runtime);
 int ck_runtime_shutdown(ck_runtime_t *runtime);
 void ck_runtime_destroy(ck_runtime_t *runtime);
 

@@ -289,3 +289,12 @@ runtime shutdown 已加入 initialized/started/completed lifecycle guards 與 se
 | codex/win32-research-notification | Win32 / completion notification research | CLOSED / SUPERSEDED | PR #13 closed；有效研究已後續整合 |
 
 No non-main branch currently has an open PR. Branch refs are retained only where useful for historical provenance; they are not active development baselines.
+## 32. 2026-09-09 terminal publication protocol
+
+本輪完成 terminal publication 的第一階段 executable contract：`ck_request_cancel()` 回傳 0 表示本次 CAS 取得 CANCELLING ownership、1 表示已有其他 cancellation/failure/completion winner；`ck_request_finish()` 僅允許 RUNNING → COMPLETED；`ck_request_fail()` 使用 RUNNING → FAILING → FAILED publication gate。completion poll 對新成功 terminal 回傳 1、無事件回傳 0、late/duplicate/cancelled completion 被消費但不產生第二 terminal outcome 回傳 2、新發布 failure 回傳 -2，runtime/identity error 回傳負值。
+
+新增 `tests/error/request_terminal_race_test.c`，驗證 cancellation vs completion、failure vs completion 的 terminal ownership race；`tests/error/request_error_race_test.c` 驗證 concurrent failure publisher 只有一個 winner 並保留 winner error record。
+
+學術 correctness 基線新增 Herlihy/Wing linearizability 與 Michael/Scott non-blocking queue references；目前不據此預設採 lock-free completion queue，因為 memory reclamation、overflow、shutdown drain 與 owner lifetime 仍需獨立證明。
+
+目前下一個正式閘門仍是 production multi-worker completion queue 與 notification primitive，接著才是 AsyncContext ↔ C connection cancellation integration。

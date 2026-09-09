@@ -27,7 +27,7 @@ https://docs.oracle.com/en/java/javase/21/docs/specs/jni/invocation.html
 - `owner_token`：C owner 的邏輯識別。
 - `lifetime_token`：native storage 有效期間的識別。
 - `request_id`：request 邏輯識別。
-- `body`／`body_length`：C-owned native bytes。
+- `body`／`body_length`：C-owned native bytes；目前 DirectByteBuffer 路徑要求 `body != NULL` 且 `body_length <= INT32_MAX`，以符合 Java SE 21 `NewDirectByteBuffer` 的 address／capacity 前置條件。
 
 descriptor 不是 wire protocol；atomic lifecycle state 不放入 descriptor，避免把同步實作細節固定成 ABI。
 

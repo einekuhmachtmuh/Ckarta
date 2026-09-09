@@ -29,7 +29,7 @@ static void test_content_length_body_and_pipeline(void)
 	result = ck_http_input_feed(&input, request_and_body,
 			header_length + 5 + strlen(next_request_text), &consumed,
 			&body, &body_length);
-	assert(result == CK_HTTP_INPUT_COMPLETE);
+	assert(result == CK_HTTP_INPUT_BODY);
 	assert(consumed == header_length);
 	assert(body_length == 5);
 	assert(ck_http_input_ack_body(&input, &body_consumed) == 0);

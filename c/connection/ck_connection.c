@@ -1,6 +1,7 @@
 #include "ck_connection.h"
 
-#include <stddef.h>
+#include <errno.h>
+#include <unistd.h>
 
 #define CK_CONNECTION_STATE_MASK UINT64_C(0xff)
 #define CK_CONNECTION_EVENT_SHIFT 8u
@@ -61,9 +62,41 @@ int ck_connection_init(ck_connection_t *connection,
 	connection->request_id = request_id;
 	connection->owner_token = owner_token;
 	connection->lifetime_token = lifetime_token;
+	connection->socket_fd = -1;
 	atomic_init(&connection->lifecycle,
 			ck_connection_pack(CK_CONNECTION_OPEN, -1, 0));
 	return 0;
+}
+
+int ck_connection_attach_socket(ck_connection_t *connection, int socket_fd)
+{
+	if (connection == NULL || socket_fd < 0)
+	{
+		return -1;
+	}
+
+	if (ck_connection_state(connection) != CK_CONNECTION_OPEN)
+	{
+		return 1;
+	}
+
+	if (connection->socket_fd >= 0)
+	{
+		return 1;
+	}
+
+	connection->socket_fd = socket_fd;
+	return 0;
+}
+
+int ck_connection_socket_fd(const ck_connection_t *connection)
+{
+	if (connection == NULL)
+	{
+		return -1;
+	}
+
+	return connection->socket_fd;
 }
 
 int ck_connection_start_async_cycle(ck_connection_t *connection,
@@ -136,6 +169,8 @@ int ck_connection_close(ck_connection_t *connection)
 	uint64_t current;
 	uint64_t expected;
 	uint64_t desired;
+	int socket_fd;
+	int close_result;
 
 	if (connection == NULL)
 	{
@@ -165,7 +200,22 @@ int ck_connection_close(ck_connection_t *connection)
 				&connection->lifecycle, &expected, desired,
 				memory_order_acq_rel, memory_order_acquire))
 		{
-			return 0;
+			/* The successful state transition transfers descriptor cleanup to this caller. */
+			socket_fd = connection->socket_fd;
+			connection->socket_fd = -1;
+			if (socket_fd < 0)
+			{
+				return 0;
+			}
+
+			close_result = close(socket_fd);
+			if (close_result == 0)
+			{
+				return 0;
+			}
+
+			/* The lifecycle is already CLOSED; the descriptor will not be retried after EINTR. */
+			return errno == EINTR ? 2 : -1;
 		}
 		current = expected;
 	}
@@ -213,10 +263,10 @@ ck_connection_terminal_event_t ck_connection_terminal_event(
 }
 
 int ck_connection_validate_cycle(const ck_connection_t *connection,
-		uint64_t request_id,
-		uint64_t owner_token,
-		uint64_t lifetime_token,
-		uint64_t cycle_id)
+	uint64_t request_id,
+	uint64_t owner_token,
+	uint64_t lifetime_token,
+	uint64_t cycle_id)
 {
 	if (connection == NULL || request_id == 0
 			|| !ck_connection_valid_cycle_id(cycle_id))

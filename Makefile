@@ -97,7 +97,7 @@ $(CONNECTION_TEST): tests/connection/ck_connection_test.c c/connection/ck_connec
 
 $(CONNECTION_REGISTRY_TEST): tests/connection/ck_connection_registry_test.c c/connection/ck_connection_registry.c c/connection/ck_connection_registry.h c/connection/ck_connection.c c/connection/ck_connection.h c/output/ck_http_output_writer.c c/output/ck_http_output_writer.h c/http/ck_http_connection_reader.c c/http/ck_http_connection_reader.h c/http/ck_http_input.c c/http/ck_http_input.h c/http/ck_http_parser.c c/http/ck_http_parser.h c/http/ck_http_chunked.c c/http/ck_http_chunked.h
 	@mkdir -p $(BIN_DIR)
-	$(CC) $(CFLAGS) tests/connection/ck_connection_registry_test.c c/connection/ck_connection_registry.c c/connection/ck_connection.c c/http/ck_http_connection_reader.c c/http/ck_http_input.c c/http/ck_http_parser.c c/http/ck_http_chunked.c -o $@
+	$(CC) $(CFLAGS) tests/connection/ck_connection_registry_test.c c/connection/ck_connection_registry.c c/connection/ck_connection.c c/output/ck_http_output_writer.c c/http/ck_http_connection_reader.c c/http/ck_http_input.c c/http/ck_http_parser.c c/http/ck_http_chunked.c -o $@
 
 $(EVENT_LOOP_TEST): tests/event/ck_event_loop_test.c c/event/ck_event_loop.c c/event/ck_event_loop.h
 	@mkdir -p $(BIN_DIR)

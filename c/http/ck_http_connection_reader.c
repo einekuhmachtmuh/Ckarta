@@ -93,10 +93,6 @@ ck_http_connection_read_result_t ck_http_connection_reader_drive(
 			{
 				break;
 			}
-			if (consumed == 0 && body_length == 0)
-			{
-				return CK_HTTP_CONNECTION_READ_IO_ERROR;
-			}
 		}
 
 		if (reader->end == sizeof(reader->buffer))

@@ -140,7 +140,11 @@ Java executor 必須使用有界工作佇列；native completion queue 另有獨
 
 Java executor 必須使用有界容量；飽和時不得 fallback 到 C event-loop thread 執行 Servlet application。
 
-## 16. Nonblocking completion smoke slice
+## 16. Native completion notification slice
+
+C runtime 使用 runtime-owned bounded completion queue + platform notification backend。Linux 第一個 executable backend 使用 `eventfd(EFD_CLOEXEC | EFD_NONBLOCK)`，C main 以 `epoll_wait()` 等待 notification fd，收到 wake-up 後 drain notification，再反覆 dequeue completion records。notification coalescing 時不得把一次 wake-up 解讀成恰好一筆 completion。
+
+舊的 Java `pollCompletion()`／Java-owned completion queue 已移除，不再作為目前 executable path。
 
 目前 executable slice 使用 Java-owned bounded completion queue（Java 所有的有界完成佇列）。C worker 提交 request 後即可 detach；C 以短 JNI poll 呼叫取得 completion。輸出 DirectByteBuffer 固定 36 bytes：request handle 8 bytes、owner token 8 bytes、lifetime token 8 bytes、result 8 bytes、status 4 bytes，並以 native byte order（原生位元組序）寫入。
 

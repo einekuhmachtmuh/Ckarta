@@ -151,7 +151,7 @@ poll completion output 使用固定 36 bytes：8 + 8 + 8 + 8 + 4，並以 native
 - response descriptor
 - real Servlet container
 - AsyncContext bridge
-- production completion notification
+- production completion notification / JNI producer integration
 - production error response renderer
 - formal public module ABI
 - Servlet 6.1 TCK

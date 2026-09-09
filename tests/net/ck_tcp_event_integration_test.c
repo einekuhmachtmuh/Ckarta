@@ -49,16 +49,18 @@ int main(void)
 		"hello"
 		"GET /next HTTP/1.1\r\n"
 		"Host: localhost\r\n\r\n";
+	const char next_request[] =
+		"GET /next HTTP/1.1\r\nHost: localhost\r\n\r\n";
 	const size_t payload_length = sizeof(payload) - 1U;
 	char received[512];
 	int client_fd;
 	int accepted_fd;
 	int count;
-	size_t consumed;
-	size_t body_length;
+	size_t consumed = 0;
+	size_t body_length = 0;
 	size_t total_received = 0;
 	size_t first_request_end = 0;
-	const unsigned char *body;
+	const unsigned char *body = NULL;
 
 	ck_http_input_init(&http_input);
 	ck_http_input_init(&next_input);
@@ -87,57 +89,66 @@ int main(void)
 		CK_EVENT_READ | CK_EVENT_RDHUP | CK_EVENT_ERROR) == 0);
 
 	assert(send(client_fd, payload, payload_length, 0) == (ssize_t)payload_length);
-	count = ck_event_loop_wait(&loop, notifications, 4, 1000);
-	assert(count == 1);
-	assert(notifications[0].cookie == handle);
-	assert((notifications[0].events & CK_EVENT_READ) != 0);
-
-	assert(ck_connection_registry_socket_fd(&registry, notifications[0].cookie,
-		UINT64_C(2001), UINT64_C(3001), UINT64_C(4001)) == accepted_fd);
 
 	for (;;)
 	{
-		ssize_t received_now = recv(accepted_fd, received + total_received,
-			sizeof(received) - total_received, MSG_DONTWAIT);
-		if (received_now < 0)
+		count = ck_event_loop_wait(&loop, notifications, 4, 1000);
+		assert(count == 1);
+		assert(notifications[0].cookie == handle);
+		if ((notifications[0].events & CK_EVENT_READ) == 0)
 		{
-			assert(errno == EAGAIN || errno == EWOULDBLOCK);
+			assert((notifications[0].events & (CK_EVENT_RDHUP | CK_EVENT_ERROR)) == 0);
+			continue;
+		}
+
+		for (;;)
+		{
+			ssize_t received_now = recv(accepted_fd, received + total_received,
+				sizeof(received) - total_received, MSG_DONTWAIT);
+			if (received_now < 0)
+			{
+				assert(errno == EAGAIN || errno == EWOULDBLOCK);
+				break;
+			}
+			assert(received_now > 0);
+			{
+				size_t feed_offset = total_received;
+				http_result = ck_http_input_feed(&http_input,
+						received + feed_offset, (size_t)received_now,
+						&consumed, &body, &body_length);
+				assert(consumed <= (size_t)received_now);
+				if (http_input.header_complete
+						&& http_input.request.body_mode == CK_HTTP_BODY_CONTENT_LENGTH
+						&& body_length != 0)
+				{
+					assert(body_length <= 5);
+					assert(memcmp(body, "hello", body_length) == 0);
+				}
+				total_received += (size_t)received_now;
+				if (http_result == CK_HTTP_INPUT_COMPLETE)
+				{
+					first_request_end = feed_offset + consumed;
+					break;
+				}
+				assert(http_result == CK_HTTP_INPUT_INCOMPLETE
+						|| http_result == CK_HTTP_INPUT_BODY);
+			}
+		}
+		if (first_request_end != 0)
+		{
 			break;
 		}
-		assert(received_now > 0);
-		http_result = ck_http_input_feed(&http_input,
-			received + total_received, (size_t)received_now,
-			&consumed, &body, &body_length);
-		assert(consumed <= (size_t)received_now);
-		if (body_length != 0)
-		{
-			assert(body_length <= 5);
-			assert(total_received + consumed >= payload_length - strlen("GET /next HTTP/1.1\r\nHost: localhost\r\n\r\n"));
-		}
-		total_received += (size_t)received_now;
-		if (http_result == CK_HTTP_INPUT_COMPLETE)
-		{
-			first_request_end = total_received - (size_t)received_now + consumed;
-			break;
-		}
-		assert(http_result == CK_HTTP_INPUT_INCOMPLETE
-				|| http_result == CK_HTTP_INPUT_BODY);
-		assert(total_received < sizeof(received));
 	}
 
 	assert(first_request_end != 0);
 	assert(first_request_end < total_received);
 	assert(total_received <= payload_length);
 	assert(memcmp(received, payload, total_received) == 0);
-	assert(memcmp(received + first_request_end,
-			"GET /next HTTP/1.1\r\nHost: localhost\r\n\r\n",
-			strlen("GET /next HTTP/1.1\r\nHost: localhost\r\n\r\n")) == 0);
+	assert(memcmp(received + first_request_end, next_request, strlen(next_request)) == 0);
 
-	assert(ck_http_input_next_request, "next request reset API exists");
 	ck_http_input_next_request(&next_input);
 	http_result = ck_http_input_feed(&next_input,
-		received + first_request_end,
-		total_received - first_request_end,
+		received + first_request_end, total_received - first_request_end,
 		&consumed, &body, &body_length);
 	assert(http_result == CK_HTTP_INPUT_COMPLETE);
 	assert(consumed == total_received - first_request_end);

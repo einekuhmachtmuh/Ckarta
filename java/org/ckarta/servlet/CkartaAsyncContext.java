@@ -71,6 +71,11 @@ public final class CkartaAsyncContext
 		this.cycleBinding = cycleBinding;
 	}
 
+	CkartaAsyncCycleBinding cycleBinding()
+	{
+		return cycleBinding;
+	}
+
 	public State state()
 	{
 		return state.get();

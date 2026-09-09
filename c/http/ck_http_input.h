@@ -25,6 +25,10 @@ typedef struct ck_http_input
 	uint64_t content_length_remaining;
 	int header_complete;
 	int message_complete;
+	const unsigned char *pending_body_data;
+	size_t pending_body_length;
+	size_t pending_input_consumed;
+	int pending_message_complete;
 } ck_http_input_t;
 
 void ck_http_input_init(ck_http_input_t *input);
@@ -35,6 +39,9 @@ ck_http_input_result_t ck_http_input_feed(
 	size_t *consumed,
 	const unsigned char **body_data,
 	size_t *body_length);
+int ck_http_input_ack_body(
+	ck_http_input_t *input,
+	size_t *consumed);
 ck_http_input_result_t ck_http_input_eof(
 	ck_http_input_t *input,
 	const unsigned char **body_data,

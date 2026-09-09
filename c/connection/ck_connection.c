@@ -1,6 +1,7 @@
 #include "ck_connection.h"
 
 #define CK_CONNECTION_STATE_MASK UINT64_C(0xffffffff)
+#define CK_CONNECTION_EVENT_MASK UINT64_C(0xffffffff)
 
 static uint64_t ck_connection_pack(uint32_t state, int32_t event)
 {
@@ -15,7 +16,7 @@ static uint32_t ck_connection_unpack_state(uint64_t lifecycle)
 
 static int32_t ck_connection_unpack_event(uint64_t lifecycle)
 {
-	return (int32_t)(uint32_t)(lifecycle >> 32);
+	return (int32_t)(uint32_t)((lifecycle >> 32) & CK_CONNECTION_EVENT_MASK);
 }
 
 static int ck_connection_valid_event(ck_connection_terminal_event_t event)
@@ -65,7 +66,6 @@ int ck_connection_try_terminal(ck_connection_t *connection,
 		ck_connection_terminal_event_t event)
 {
 	uint64_t current;
-	uint64_t expected;
 	uint64_t desired;
 	uint32_t state;
 
@@ -89,15 +89,13 @@ int ck_connection_try_terminal(ck_connection_t *connection,
 			return -1;
 		}
 
-		expected = current;
 		desired = ck_connection_pack(CK_CONNECTION_CLOSING, event);
 		if (atomic_compare_exchange_weak_explicit(
-				&connection->lifecycle, &expected, desired,
+				&connection->lifecycle, &current, desired,
 				memory_order_acq_rel, memory_order_acquire))
 		{
 			return 0;
 		}
-		current = expected;
 	}
 }
 

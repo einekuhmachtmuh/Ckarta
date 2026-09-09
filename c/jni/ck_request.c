@@ -47,6 +47,7 @@ int ck_request_init(ck_request_t *request,
 
 	request->descriptor = *descriptor;
 	atomic_init(&request->state, CK_REQUEST_PENDING);
+	ck_error_init(&request->error);
 	return 0;
 }
 
@@ -124,6 +125,44 @@ int ck_request_finish(ck_request_t *request, ck_request_state_t terminal_state)
 	}
 
 	return -1;
+}
+
+int ck_request_fail(ck_request_t *request, const ck_error_t *error)
+{
+	uint32_t expected = CK_REQUEST_RUNNING;
+
+	if (request == NULL || error == NULL
+			|| error->abi_version != CK_ERROR_ABI_VERSION)
+	{
+		return -1;
+	}
+
+	if (atomic_compare_exchange_strong_explicit(
+			&request->state, &expected, CK_REQUEST_FAILED,
+			memory_order_acq_rel, memory_order_acquire))
+	{
+		request->error = *error;
+		return 0;
+	}
+
+	if (expected == CK_REQUEST_CANCELLING
+			|| expected == CK_REQUEST_COMPLETED
+			|| expected == CK_REQUEST_FAILED)
+	{
+		return 1;
+	}
+
+	return -1;
+}
+
+const ck_error_t *ck_request_error(const ck_request_t *request)
+{
+	if (request == NULL)
+	{
+		return NULL;
+	}
+
+	return &request->error;
 }
 
 ck_request_state_t ck_request_state(const ck_request_t *request)

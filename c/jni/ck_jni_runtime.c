@@ -461,6 +461,15 @@ int ck_runtime_poll_completion(ck_runtime_t *runtime, ck_request_t *requests,
 	return -3;
 }
 
+int ck_runtime_drain_completion_notification(ck_runtime_t *runtime)
+{
+	if (runtime == NULL || !runtime->completion_queue_initialized)
+	{
+		return -1;
+	}
+
+	return ck_completion_queue_drain_notification(&runtime->completion_queue);
+}
 int ck_runtime_completion_fd(const ck_runtime_t *runtime)
 {
 	if (runtime == NULL || !runtime->completion_queue_initialized)

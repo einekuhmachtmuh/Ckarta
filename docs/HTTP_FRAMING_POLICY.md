@@ -61,12 +61,17 @@ parser output 至少包括：
 
 `c/http/ck_http_parser.[ch]`
 `c/http/ck_http_chunked.[ch]`
+`c/http/ck_http_input.[ch]`
 
-header parser 以 bounded buffer 做增量 feed；header 區塊完成後，`consumed` 表示該次 feed 實際消耗的 bytes，讓上層可以正確保留尚未消耗的 network input。
+header parser 以 bounded buffer 做增量 feed；header 區塊完成後，`consumed` 表示該次 feed 實際消耗的 header bytes，body 與後續 pipelined input 不被 parser 宣稱為已消耗。
 
-header parser 已完成 request-line、header-field grammar、Content-Length normalization、Transfer-Encoding 判斷與 header-size bound。chunked body 則由獨立 decoder 維護 `size → data → data CRLF → trailers → done` 狀態，body data 以 input span 直接交給 caller，不建立額外 body copy。
+parser 現在只複製至實際 `\r\n\r\n` framing boundary，不再因單次 `feed` 同時帶入大量 body bytes 而把 body 誤計入 header buffer 上限。
 
-目前兩者仍是 bounded executable components，不代表正式 connection HTTP state machine 已完成。
+`ck_http_input` 進一步把 header framing、Content-Length body progress 與 chunked decoding 串成單一 per-request input state。它只回傳目前 feed 內可立即借用的 body span，並以 `consumed` 明確保留尚未屬於當前 request message 的剩餘 input；request 結束後由 caller 顯式建立下一 request state。
+
+header parser 已完成 request-line、header-field grammar、Content-Length normalization、Transfer-Encoding 判斷與 header-size bound。chunked body 則由 decoder 維護 `size → data → data CRLF → trailers → done` 狀態，body data 以 input span 直接交給 caller，不建立額外 body copy。
+
+目前以上是 bounded executable components；尚未等同正式 multi-worker connection HTTP production loop。
 
 ## 5. 嚴格要求
 
@@ -125,12 +130,15 @@ RFC 9112 要求 recipient 能解析並解碼 chunked transfer coding，且必須
 - decoded-body overflow checking
 - incremental input consumption
 
+`c/http/ck_http_input.[ch]` 現已將此 decoder 接入 per-request input state machine，並由 `tests/http/ck_http_input_test.c` 驗證 Content-Length／chunked、fragmentation、body boundary 與 subsequent request bytes 的 consumed boundary。
+
 尚未完成：
 
-- decoder 與正式 per-connection read state machine 的 ownership integration
+- input state machine 與正式 connection event consumer 的 ownership integration
 - configurable maximum decoded body size
 - trailer storage／forwarding policy
 - complete request-to-Servlet body stream mapping
+- production request recycle 與 keep-alive loop
 
 ## 9. Proxy
 
@@ -161,7 +169,16 @@ upstream parser 不得重新詮釋同一個模糊 framing。
 - malformed line ending rejection
 - truncated chunk data state
 
-TCP integration test 直接由 loopback accepted socket 讀取 HTTP bytes，再送入同一 header parser；chunked decoder 目前是獨立 executable component，尚未接入 production connection body loop。
+`tests/http/ck_http_input_test.c` 覆蓋：
+
+- header／body 同一 feed
+- Content-Length fragmented body
+- premature EOF state
+- chunked fragmented body
+- body completion 與 subsequent request boundary
+- no-body request completion
+
+TCP integration test 仍是 loopback accepted socket → HTTP header parser 的 executable slice；`ck_http_input` 尚未接入正式 connection body event loop。
 
 仍需補齊：
 
@@ -169,10 +186,9 @@ TCP integration test 直接由 loopback accepted socket 讀取 HTTP bytes，再�
 - malformed chunk extensions
 - truncated chunk CRLF
 - trailer policy corpus
-- extra bytes after body
 - oversized decoded body policy
-- pipelined requests
-- keep-alive boundary
+- pipelined requests in the production connection loop
+- keep-alive boundary in the production connection loop
 - HTTP request smuggling corpus
 
 所有 corpus（測試語料）都應保留 regression identifier（回歸識別碼）。

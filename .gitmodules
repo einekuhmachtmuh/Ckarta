@@ -4,3 +4,6 @@
 [submodule "third_party/tomcat"]
 	path = third_party/tomcat
 	url = https://github.com/apache/tomcat.git
+[submodule "third_party/httpd"]
+	path = third_party/httpd
+	url = https://github.com/apache/httpd.git

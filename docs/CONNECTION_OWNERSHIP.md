@@ -230,15 +230,14 @@ JNIEnv pointer 不得跨執行緒共享。
 
 Tomcat 11.0.25 `AsyncContextImpl` 顯示真正 async lifecycle 還包含 `start()`、`complete()`、`timeout()`、`onError()`、`onComplete()`、recycle 與 concurrent-use protection；其中 recycle 必須先建立不可再用的狀態標記，再清除 request/context 等欄位。Ckarta 因此不得只把 `startAsync()` 當成「把 request 放進背景 thread」。
 
-正式 bridge 尚需：
+目前已完成第一個 Java API binding slice：CkartaServletRequestAdapter 可依 Servlet 6.1 的 asyncSupported／same-dispatch 規則建立 CkartaServletAsyncContext，並提供 isAsyncStarted()/getAsyncContext()。正式 bridge 尚需：
 
-1. ServletRequest.startAsync() 與 adapter 建立的正式 request/container lifecycle integration。
-2. Java AsyncContext reference lifetime。
-2. native connection owner handoff。
-3. timeout/error/client-disconnect precedence。
-4. response/output ownership。
-5. cross-thread cancellation。
-6. post-recycle invalidation。
+1. native connection owner handoff。
+2. timeout/error/client-disconnect precedence。
+3. response/output ownership。
+4. cross-thread cancellation。
+5. post-recycle invalidation。
+6. async dispatch / new-cycle reinitialization。
 7. shutdown drain。
 8. Servlet 6.1 TCK compatibility tests。
 

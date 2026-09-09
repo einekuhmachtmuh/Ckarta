@@ -32,6 +32,7 @@ $(TARGET): c/core/main.c c/config/ck_config.c c/config/ck_config.h c/error/ck_er
 	$(CC) $(CFLAGS) $(CPPFLAGS) c/core/main.c c/config/ck_config.c c/error/ck_error.c c/jni/ck_jni_runtime.c c/jni/ck_request.c -o $@ $(LDFLAGS)
 
 $(ABI_TEST): tests/request_lifecycle_test.c c/jni/ck_request.c c/jni/ck_request.h c/error/ck_error.c c/error/ck_error.h
+c/event/ck_completion_notification.c c/event/ck_completion_notification.h
 	@mkdir -p $(BIN_DIR)
 	$(CC) $(CFLAGS) tests/request_lifecycle_test.c c/jni/ck_request.c c/error/ck_error.c -o $@
 
@@ -45,7 +46,7 @@ $(ERROR_RACE_TEST): tests/error/request_error_race_test.c c/jni/ck_request.c c/j
 
 $(COMPLETION_QUEUE_TEST): tests/completion/ck_completion_queue_test.c c/completion/ck_completion_queue.c c/completion/ck_completion_queue.h
 	@mkdir -p $(BIN_DIR)
-	$(CC) $(CFLAGS) tests/completion/ck_completion_queue_test.c c/completion/ck_completion_queue.c -o $@
+	$(CC) $(CFLAGS) tests/completion/ck_completion_queue_test.c c/completion/ck_completion_queue.c c/event/ck_completion_notification.c -o $@
 
 $(CONFIG_TEST): tests/config_load_test.c c/config/ck_config.c c/config/ck_config.h
 	@mkdir -p $(BIN_DIR)

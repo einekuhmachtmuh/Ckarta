@@ -184,3 +184,11 @@ Java executor handoff 的 v2 smoke slice 使用 bounded Java completion queue，
 ## 20. 多請求 completion 下一閘門
 
 2026-09-08：在單一 Java completion queue smoke slice 之後，新增正式多請求 completion contract 研究。下一步先定義 request_id、owner_token、lifetime_token、overflow、late/duplicate completion、cancellation、shutdown drain 與 owner teardown，再選擇通知原語；不先綁定 Linux-specific primitive。
+
+
+## Branch status
+
+- Purpose: multi-request completion contract research
+- Lifecycle status: CLOSED / SUPERSEDED
+- Relation to main: PR #10 closed；有效語意已整合至 main。
+- This file is branch-specific state and must not be treated as main canonical state.

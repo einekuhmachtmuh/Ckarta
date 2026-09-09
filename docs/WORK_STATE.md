@@ -212,3 +212,11 @@ Apache HTTP Server 2.4.68（commit 736bb657405eb73fd68a64772c3a908807bdb887）�
 ## 25. 下一個 completion 閘門
 
 completion notification 候選已研究：Linux epoll + eventfd；Windows IOCP + PostQueuedCompletionStatus。正式實作尚未開始，下一步先做 notification latency、batching、wake-up、shutdown/cancellation 與多 worker 壓力 benchmark，再選 platform backend。
+
+
+## Branch status
+
+- Purpose: Win32/Linux platform與Apache reference/completion notification research
+- Lifecycle status: CLOSED / SUPERSEDED
+- Relation to main: PR #14 closed;有效研究保留，httpd submodule 未納入 main。
+- This file is branch-specific state and must not be treated as main canonical state.

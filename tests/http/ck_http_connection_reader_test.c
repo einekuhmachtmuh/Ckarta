@@ -3,7 +3,6 @@
 #include "../../c/http/ck_http_connection_reader.h"
 
 #include <assert.h>
-#include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
 #include <unistd.h>
@@ -14,6 +13,11 @@ typedef struct body_capture
 	size_t length;
 } body_capture_t;
 
+typedef struct body_counter
+{
+	size_t length;
+} body_counter_t;
+
 static int capture_body(void *context, const unsigned char *data, size_t length)
 {
 	body_capture_t *capture = context;
@@ -22,6 +26,16 @@ static int capture_body(void *context, const unsigned char *data, size_t length)
 	assert(capture->length + length <= sizeof(capture->data));
 	memcpy(capture->data + capture->length, data, length);
 	capture->length += length;
+	return 0;
+}
+
+static int count_body(void *context, const unsigned char *data, size_t length)
+{
+	body_counter_t *counter = context;
+
+	assert(counter != NULL);
+	(void)data;
+	counter->length += length;
 	return 0;
 }
 
@@ -177,17 +191,14 @@ static void test_read_batch_budget(void)
 {
 	static const char prefix[] =
 		"POST /large HTTP/1.1\r\n"
-		"Content-Length: 70000\r\n\r\n";
-	const size_t body_length = 70000U;
-	unsigned char *body;
+		"Content-Length: 40000\r\n\r\n";
+	static unsigned char body[40000];
 	ck_http_connection_reader_t reader;
+	body_counter_t counter = {0};
 	int sockets[2];
 	ck_http_connection_read_result_t result;
-	size_t total = 0;
 
-	body = malloc(body_length);
-	assert(body != NULL);
-	for (size_t i = 0; i < body_length; i++)
+	for (size_t i = 0; i < sizeof(body); i++)
 	{
 		body[i] = (unsigned char)('a' + (i % 26U));
 	}
@@ -195,13 +206,20 @@ static void test_read_batch_budget(void)
 	assert(socketpair(AF_UNIX, SOCK_STREAM, 0, sockets) == 0);
 	ck_http_connection_reader_init(&reader);
 	send_all(sockets[0], (const unsigned char *)prefix, sizeof(prefix) - 1U);
-	send_all(sockets[0], body, body_length);
+	send_all(sockets[0], body, sizeof(body));
 
 	result = ck_http_connection_reader_drive(&reader, sockets[1],
-			NULL, NULL);
-	assert(result == CK_HTTP_CONNECTION_READ_SINK_ERROR);
+			count_body, &counter);
+	assert(result == CK_HTTP_CONNECTION_READ_INCOMPLETE);
+	assert(counter.length > 0);
+	assert(counter.length < sizeof(body));
 
-	free(body);
+	result = ck_http_connection_reader_drive(&reader, sockets[1],
+			count_body, &counter);
+	assert(result == CK_HTTP_CONNECTION_READ_REQUEST_COMPLETE);
+	assert(counter.length == sizeof(body));
+	assert(ck_http_connection_reader_buffered_bytes(&reader) == 0);
+
 	assert(close(sockets[0]) == 0);
 	assert(close(sockets[1]) == 0);
 }

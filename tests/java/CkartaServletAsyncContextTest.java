@@ -122,7 +122,18 @@ public final class CkartaServletAsyncContextTest
 		assert listenerCount.get() == 1;
 		assert error.get() == null;
 
-		boolean requestRejected = false;
+		boolean timeoutRejected = false;
+		try
+		{
+			context.setTimeout(1000L);
+		}
+		catch (IllegalStateException expected)
+		{
+			timeoutRejected = true;
+		}
+		assert timeoutRejected;
+
+			boolean requestRejected = false;
 		try
 		{
 			context.getRequest();

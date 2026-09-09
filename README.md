@@ -71,6 +71,7 @@ Nginx 與 Apache Tomcat 不直接複製進 Ckarta repository，而是以 Git sub
 - docs/TCK_INTEGRATION_PLAN.md：Jakarta Servlet 6.1 TCK 驗證計畫。
 - docs/REFERENCE_SOURCES.md：參考原始碼版本、commit、授權與研究規則。
 - docs/WORKING_TREE.md：實際 repository 工作樹規劃。
+- docs/IO_URING_BACKEND_RESEARCH.md：Linux io_uring backend 可行性、kernel capability ladder、direct syscall/no-liburing 與 fallback 策略。
 - docs/WORK_STATE.md：跨對話可接手的工程現況、已驗證事項與下一個工程閘門。
 
 `bench/jni/` 是獨立 JNI/thread microbenchmark（微基準測試）資產，不代表正式 Ckarta runtime 已實作。

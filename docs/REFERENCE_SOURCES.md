@@ -47,6 +47,16 @@ https://github.com/apache/tomcat
 官方版本資訊：
 https://tomcat.apache.org/tomcat-11.0-doc/
 
+### Apache HTTP Server
+
+版本：2.4.68 GA
+Git tag：2.4.68
+commit：736bb657405eb73fd68a64772c3a908807bdb887
+repository：https://github.com/apache/httpd
+官方版本資訊：https://httpd.apache.org/download.cgi
+
+用途：啟動配置、MPM／平台抽象、模組／hook、Windows native networking 交叉研究。Apache 不是 Ckarta C data plane 的主要架構模板；Nginx 仍為主要 C hot-path 參考。
+
 ## 3. 版本選擇
 
 Nginx 以 stable 1.30.4 作為目前 Ckarta 的穩定參考基線，而不是 mainline 1.31.5。

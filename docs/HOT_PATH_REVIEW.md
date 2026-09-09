@@ -274,9 +274,9 @@ DOI：https://doi.org/10.1016/S0140-3664(02)00221-9
 - TCK integration plan
 - reproducible benchmark harness
 - direct attach／bridge topology benchmark
-- event backend 與 connection registry 的 lifetime/cookie integration
+- event backend 與 connection registry 的 production lifetime/cookie integration
 
-其中 Linux `epoll` event backend contract 已有 executable slice，但 listener、accepted connection、nonblocking I/O 與 HTTP request path 尚未接入。
+Linux `epoll` event backend 與 loopback TCP listener／accepted connection integration 已有 executable slice；正式 HTTP request path 與 production notification consumer 尚未完成。
 
 以上每一項都必須以固定 upstream commit、OpenJDK baseline 與 Ckarta commit 為版本基準。
 
@@ -318,3 +318,13 @@ C worker
 event backend 不儲存可被 registry retire 的 raw connection pointer，只傳遞 opaque cookie。真正的 stale-event 防護必須在 notification consumer 重新以 generation-protected registry handle 驗證。
 
 `tests/event/ck_event_loop_test.c` 已覆蓋 registration、readiness、cookie 更新、remove 與 peer close notification；GitHub Actions build-smoke 已在 Ubuntu 24.04／GCC 13.3／Temurin OpenJDK 21.0.12 通過整條 `make test`。
+
+## 15. 2026-09-09 loopback TCP event integration
+
+新增 `c/net/ck_tcp_listener.[ch]` 與 `tests/net/ck_tcp_event_integration_test.c`。Linux baseline 現已能建立 loopback TCP listener，以 ephemeral port 接受 client，`accept4()` 使用 `SOCK_CLOEXEC | SOCK_NONBLOCK`，accepted descriptor attach 至 native connection registry，再以 generation-protected opaque handle 作 epoll cookie。
+
+整合測試實際傳送 HTTP/1.1 request bytes，經 epoll readiness 後以 nonblocking `recv()` 取得並確認資料排空後出現 `EAGAIN/EWOULDBLOCK`；client close 會產生 `RDHUP` 或 `HUP/ERR`。event registration 先 remove，之後才進 terminal → close → retire；retire 後舊 generation handle 失效，slot reuse 取得新的 generation handle。
+
+此為 real TCP transport baseline，不等於完整 HTTP parser／request state machine，也不等於 production multi-worker accept architecture。
+
+目前正式 network gate 已由「listener／accepted connection 尚未接入」提升為：HTTP/1.1 framing、bounded nonblocking read/write、production connection event consumer、response/output ownership、TLS 與 shutdown drain。

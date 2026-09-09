@@ -1,6 +1,6 @@
 #include "ck_http_response.h"
 
-#include <limits.h>
+#include <stdio.h>
 #include <string.h>
 
 static int ck_http_response_valid_status(uint16_t status)
@@ -148,6 +148,42 @@ int ck_http_response_finish(ck_http_response_t *response)
 	}
 
 	response->state = CK_HTTP_RESPONSE_FINISHED;
+	return 0;
+}
+
+int ck_http_response_serialize_headers(
+	const ck_http_response_t *response,
+	unsigned char *output,
+	size_t capacity,
+	size_t *output_length)
+{
+	int length;
+	uint64_t content_length;
+
+	if (response == NULL || output == NULL || output_length == NULL
+			|| capacity == 0 || response->state != CK_HTTP_RESPONSE_FINISHED)
+	{
+		return -1;
+	}
+
+	content_length = response->content_length_set
+			? response->content_length : (uint64_t)response->body_length;
+	if (content_length > SIZE_MAX)
+	{
+		return -1;
+	}
+
+	length = snprintf((char *)output, capacity,
+			"HTTP/1.1 %03u\r\nContent-Length: %llu\r\n%s\r\n",
+			(unsigned int)response->status,
+			(unsigned long long)content_length,
+			response->connection_close ? "Connection: close\r\n" : "");
+	if (length < 0 || (size_t)length >= capacity)
+	{
+		return -2;
+	}
+
+	*output_length = (size_t)length;
 	return 0;
 }
 

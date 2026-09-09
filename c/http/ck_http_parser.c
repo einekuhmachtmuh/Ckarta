@@ -220,6 +220,55 @@ static int parse_content_length_headers(const ck_http_request_t *request,
 	return 1;
 }
 
+static int parse_connection_headers(const ck_http_request_t *request,
+	int *close_required)
+{
+	int close = 0;
+
+	for (size_t i = 0; i < request->header_count; i++)
+	{
+		ck_http_span_t source;
+		size_t start = 0;
+
+		if (!span_equal_ci(request->headers[i].name, "Connection"))
+		{
+			continue;
+		}
+		source = request->headers[i].value;
+		while (start < source.length)
+		{
+			size_t end = start;
+			ck_http_span_t token;
+
+			while (start < source.length && (source.data[start] == ' '
+					|| source.data[start] == '\t'))
+			{
+				start++;
+			}
+			if (start == source.length || source.data[start] == ',')
+			{
+				return 0;
+			}
+			end = start;
+			while (end < source.length && source.data[end] != ',')
+			{
+				end++;
+			}
+			token.data = source.data + start;
+			token.length = end - start;
+			trim_ows(&token);
+			if (span_equal_ci(token, "close"))
+			{
+				close = 1;
+			}
+			start = end < source.length ? end + 1 : end;
+		}
+	}
+
+	*close_required = close;
+	return 1;
+}
+
 static int parse_transfer_encoding_headers(const ck_http_request_t *request,
 	int *present, int *is_chunked)
 {
@@ -282,6 +331,7 @@ static ck_http_parse_result_t parse_header_block(
 	int has_content_length = 0;
 	int has_transfer_encoding = 0;
 	int transfer_is_chunked = 0;
+	int connection_close = 0;
 
 	memset(request, 0, sizeof(*request));
 	if (!find_crlf(parser->buffer, header_end, 0, &line_end)
@@ -351,6 +401,10 @@ static ck_http_parse_result_t parse_header_block(
 	{
 		return CK_HTTP_PARSE_BAD_REQUEST;
 	}
+	if (!parse_connection_headers(request, &connection_close))
+	{
+		return CK_HTTP_PARSE_BAD_REQUEST;
+	}
 
 	if (has_transfer_encoding)
 	{
@@ -360,13 +414,13 @@ static ck_http_parse_result_t parse_header_block(
 		}
 		request->body_mode = CK_HTTP_BODY_CHUNKED;
 		request->content_length = 0;
-		request->connection_close_required = has_content_length;
+		request->connection_close_required = 1;
 	}
 	else if (has_content_length)
 	{
 		request->body_mode = CK_HTTP_BODY_CONTENT_LENGTH;
 		request->content_length = content_length;
-		request->connection_close_required = 0;
+		request->connection_close_required = connection_close;
 	}
 	else
 	{

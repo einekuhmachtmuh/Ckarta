@@ -423,7 +423,8 @@ int ck_runtime_poll_completion(ck_runtime_t *runtime, ck_request_t *requests,
 				if (status == 0)
 				{
 								finish_result = ck_request_finish(&requests[i]);
-					return finish_result == 0 ? 1 : -2;
+					return finish_result == 0 ? 1 :
+							(finish_result == 1 ? 2 : -1);
 				}
 
 				{
@@ -460,8 +461,8 @@ int ck_runtime_poll_completion(ck_runtime_t *runtime, ck_request_t *requests,
 					}
 
 					finish_result = ck_request_fail(&requests[i], &error);
-					(void)finish_result;
-					return -2;
+					return finish_result == 0 ? -2 :
+							(finish_result == 1 ? 2 : -1);
 				}
 			}
 		}

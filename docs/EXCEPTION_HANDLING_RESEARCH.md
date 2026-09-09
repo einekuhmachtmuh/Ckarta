@@ -242,7 +242,7 @@ https://doi.org/10.1109/MC.2004.219
 4. stable Java exception translation boundary。
 5. client error-disclosure policy。
 6. exactly-once completion/error/cancellation contract。
-7. logging failure與 error path memory-safety tests。
+7. logging failure 與 error-path memory-safety tests。
 8. JNI exception injection tests。
 9. executor saturation/rejection tests。
 10. timeout、disconnect、AsyncContext、upstream failure、shutdown race tests。

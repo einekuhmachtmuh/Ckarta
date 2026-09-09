@@ -157,6 +157,7 @@ static void *ck_bootstrap_main(void *arg)
 	jint create_result;
 	int start_status;
 	int option_length;
+	int result;
 
 
 	option_length = snprintf(option_string, sizeof(option_string),

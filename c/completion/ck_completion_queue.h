@@ -15,6 +15,7 @@ typedef struct ck_completion_record
 	uint64_t request_id;
 	uint64_t owner_token;
 	uint64_t lifetime_token;
+	uint64_t cycle_id;
 	int64_t result;
 	int32_t status;
 } ck_completion_record_t;

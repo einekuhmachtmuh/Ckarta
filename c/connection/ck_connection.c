@@ -71,6 +71,15 @@ int ck_connection_init(ck_connection_t *connection,
 		connection->http_reader = NULL;
 		return -1;
 	}
+	connection->http_response = malloc(sizeof(*connection->http_response));
+	if (connection->http_response == NULL)
+	{
+		free(connection->http_writer);
+		connection->http_writer = NULL;
+		free(connection->http_reader);
+		connection->http_reader = NULL;
+		return -1;
+	}
 
 	connection->connection_id = connection_id;
 	connection->request_id = request_id;
@@ -79,6 +88,7 @@ int ck_connection_init(ck_connection_t *connection,
 	connection->socket_fd = -1;
 	ck_http_connection_reader_init(connection->http_reader);
 	ck_http_output_writer_init(connection->http_writer);
+	ck_http_response_init(connection->http_response);
 	atomic_init(&connection->lifecycle,
 			ck_connection_pack(CK_CONNECTION_OPEN, -1, 0));
 	return 0;
@@ -140,6 +150,54 @@ ck_http_output_writer_t *ck_connection_http_writer(
 		return NULL;
 	}
 	return connection->http_writer;
+}
+
+ck_http_response_t *ck_connection_http_response(
+	ck_connection_t *connection)
+{
+	if (connection == NULL || connection->http_response == NULL
+			|| ck_connection_state(connection) == CK_CONNECTION_CLOSED)
+	{
+		return NULL;
+	}
+	return connection->http_response;
+}
+
+int ck_connection_http_recycle(ck_connection_t *connection)
+{
+	const ck_http_request_t *request;
+
+	if (connection == NULL || connection->http_reader == NULL
+			|| connection->http_writer == NULL
+			|| connection->http_response == NULL)
+	{
+		return -1;
+	}
+	if (ck_connection_state(connection) != CK_CONNECTION_OPEN)
+	{
+		return 1;
+	}
+	request = ck_http_connection_reader_request(connection->http_reader);
+	if (request == NULL
+			|| !ck_http_input_complete(&connection->http_reader->input))
+	{
+		return 2;
+	}
+	if (request->connection_close_required
+			|| ck_http_response_state(connection->http_response)
+			!= CK_HTTP_RESPONSE_FINISHED
+			|| ck_http_output_writer_buffered_bytes(
+				connection->http_writer) != 0
+			|| connection->http_response->connection_close)
+	{
+		return 3;
+	}
+	if (ck_http_connection_reader_next_request(connection->http_reader) != 0)
+	{
+		return -1;
+	}
+	ck_http_response_init(connection->http_response);
+	return 0;
 }
 
 int ck_connection_start_async_cycle(ck_connection_t *connection,
@@ -258,6 +316,8 @@ int ck_connection_close(ck_connection_t *connection)
 						connection->http_reader = NULL;
 						free(connection->http_writer);
 						connection->http_writer = NULL;
+						free(connection->http_response);
+						connection->http_response = NULL;
 						return -1;
 					}
 				}
@@ -267,6 +327,8 @@ int ck_connection_close(ck_connection_t *connection)
 			connection->http_reader = NULL;
 			free(connection->http_writer);
 			connection->http_writer = NULL;
+			free(connection->http_response);
+			connection->http_response = NULL;
 			return close_result == 0 || socket_fd < 0 ? 0 : 2;
 		}
 		current = expected;

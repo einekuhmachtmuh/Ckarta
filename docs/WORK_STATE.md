@@ -228,7 +228,13 @@ Native module 暫定為 load-at-start、ABI/version/signature 驗證、dependenc
 這些仍依既有工程閘門處理，未因本輪 audit 而新增另一套規則。
 
 
-## 27. 2026-09-09 branch consolidation
+## 28. 2026-09-09 function flow and error publication
+
+完成 Ckarta 自有函式逐函式流程與契約梳理，持久化於 `docs/CKARTA_FUNCTION_FLOW.md`。已修正：invalid request state 與 FAILED 混淆、runtime shutdown/destroy lifecycle guards、request failure 的 `FAILING → FAILED` publication、Java completion failure taxonomy mapping，以及對應 Makefile dependencies/tests。同步更新 JNI／error matrix／startup 文件，避免 upstream trace 與 Ckarta implementation contract 混在同一權威文件。
+
+目前仍未實作 C network/event backend、HTTP parser、real Servlet container、AsyncContext bridge、production completion notification、正式 public module ABI、Servlet 6.1 TCK、sanitizer/fuzz integration；這些仍是獨立工程閘門。
+
+## 29. 2026-09-09 branch consolidation
 
 `main/WORKING_RULES.md` 現已是唯一工作守則來源；所有非-main branch 的 `WORKING_RULES.md` 均已移除。各 branch 的 `docs/WORK_STATE.md` 保留為 branch-specific state，不覆蓋或取代 main state。
 

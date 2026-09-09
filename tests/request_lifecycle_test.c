@@ -23,6 +23,7 @@ int main(void)
 
 	assert(ck_request_init(&request, &descriptor) == 0);
 	assert(ck_request_state(&request) == CK_REQUEST_PENDING);
+	assert(ck_request_state(NULL) == CK_REQUEST_STATE_INVALID);
 
 	{
 		ck_request_descriptor_t invalid = descriptor;
@@ -46,6 +47,23 @@ int main(void)
 	assert(ck_request_finish(&request, CK_REQUEST_COMPLETED) == -1);
 	assert(ck_request_begin(&request) == 0);
 	assert(ck_request_finish(&request, CK_REQUEST_COMPLETED) == 0);
+
+	assert(ck_request_init(&request, &descriptor) == 0);
+	assert(ck_request_begin(&request) == 0);
+	{
+		ck_error_t error;
+
+		ck_error_init(&error);
+		assert(ck_error_set(&error, CK_ERROR_CATEGORY_APPLICATION,
+				CK_ERROR_CODE_APPLICATION_EXCEPTION, 500,
+				CK_ERROR_FLAG_CLIENT_VISIBLE, 2, descriptor.request_id) == 0);
+		assert(ck_request_fail(&request, &error) == 0);
+		assert(ck_request_state(&request) == CK_REQUEST_FAILED);
+		assert(ck_request_error(&request) != NULL);
+		assert(ck_request_error(&request)->code
+				== CK_ERROR_CODE_APPLICATION_EXCEPTION);
+		assert(ck_request_finish(&request, CK_REQUEST_COMPLETED) == 1);
+	}
 	assert(ck_request_finish(&request, CK_REQUEST_COMPLETED) == 1);
 	assert(ck_request_state(&request) == CK_REQUEST_COMPLETED);
 	assert(ck_request_cancel(&request) == 0);

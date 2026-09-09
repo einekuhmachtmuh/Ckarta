@@ -17,7 +17,7 @@ static ck_http_parse_result_t parse_split(const char *request,
 
 	result = ck_http_parser_feed(parser, request + split,
 		strlen(request) - split, &second, parsed);
-	if (result == CK_HTTP_PARSE_COMPLETE)
+	if (result == CK_HTTP_PARSE_COMPLETE || result == CK_HTTP_PARSE_BAD_REQUEST)
 	{
 		assert(second <= strlen(request) - split);
 		*consumed = split + second;
@@ -107,10 +107,11 @@ static void test_non_chunked_final_transfer_encoding_is_rejected(void)
 	ck_http_parser_t parser;
 	ck_http_request_t parsed;
 	size_t consumed;
+	ck_http_parse_result_t result;
 
 	ck_http_parser_init(&parser);
-	assert(parse_split(request, &parser, &parsed, &consumed) == CK_HTTP_PARSE_COMPLETE
-			|| parse_split(request, &parser, &parsed, &consumed) == CK_HTTP_PARSE_BAD_REQUEST);
+	result = parse_split(request, &parser, &parsed, &consumed);
+	assert(result == CK_HTTP_PARSE_BAD_REQUEST);
 }
 
 static void test_bad_request_line(void)

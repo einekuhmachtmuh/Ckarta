@@ -69,7 +69,7 @@ public final class CkartaAsyncContext
 	public void addListener(Listener listener)
 	{
 		Objects.requireNonNull(listener, "listener");
-		checkUsable();
+		checkActive();
 
 		if (state.get() != State.ACTIVE)
 		{

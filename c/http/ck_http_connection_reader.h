@@ -6,6 +6,7 @@
 #include "ck_http_input.h"
 
 #define CK_HTTP_CONNECTION_READ_BUFFER_BYTES 65536u
+#define CK_HTTP_CONNECTION_READ_BUDGET_BYTES 65536u
 
 typedef enum ck_http_connection_read_result
 {
@@ -37,7 +38,7 @@ ck_http_connection_read_result_t ck_http_connection_reader_drive(
 	int socket_fd,
 	ck_http_body_sink_fn body_sink,
 	void *body_sink_context);
-void ck_http_connection_reader_next_request(
+int ck_http_connection_reader_next_request(
 	ck_http_connection_reader_t *reader);
 const ck_http_request_t *ck_http_connection_reader_request(
 	const ck_http_connection_reader_t *reader);

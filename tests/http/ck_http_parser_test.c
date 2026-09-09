@@ -142,6 +142,37 @@ static void test_header_too_large(void)
 			== CK_HTTP_PARSE_HEADER_TOO_LARGE);
 }
 
+
+static void test_connection_persistence(void)
+{
+	static const char close_request[] =
+			"GET / HTTP/1.1\\r\\n"
+			"Host: x\\r\\n"
+			"Connection: close\\r\\n"
+			"\\r\\n";
+	static const char keep_request[] =
+			"GET / HTTP/1.1\\r\\n"
+			"Host: x\\r\\n"
+			"Connection: keep-alive\\r\\n"
+			"\\r\\n";
+	ck_http_parser_t parser;
+	ck_http_request_t request;
+	size_t consumed;
+	ck_http_parse_result_t result;
+
+	ck_http_parser_init(&parser);
+	result = ck_http_parser_feed(&parser, close_request,
+			strlen(close_request), &consumed, &request);
+	assert(result == CK_HTTP_PARSE_COMPLETE);
+	assert(request.connection_close_required == 1);
+
+	ck_http_parser_init(&parser);
+	result = ck_http_parser_feed(&parser, keep_request,
+			strlen(keep_request), &consumed, &request);
+	assert(result == CK_HTTP_PARSE_COMPLETE);
+	assert(request.connection_close_required == 0);
+}
+
 int main(void)
 {
 	test_valid_content_length();
@@ -151,5 +182,6 @@ int main(void)
 	test_non_chunked_final_transfer_encoding_is_rejected();
 	test_bad_request_line();
 	test_header_too_large();
+	test_connection_persistence();
 	return 0;
 }

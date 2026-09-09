@@ -299,4 +299,4 @@ No non-main branch currently has an open PR. Branch refs are retained only where
 
 目前已完成第一個完整的 executable native completion integration path：Java executor completion → registered JNI publisher → runtime-owned bounded native ring queue → Linux eventfd notification → C epoll wake → native dequeue / request terminal publication。queue 具 close-aware bounded backpressure、overflow/closed semantics、notification coalescing 與 epoll-compatible fd，並有 multi-producer/overflow/drain/close tests。它仍不是完整 Servlet connection data plane 或跨平台最終 backend。
 
-下一個正式閘門改為：JNI producer integration（Java completion → native queue）、owner/lifetime validation、queue shutdown drain、notification close ordering，以及之後的 AsyncContext ↔ C connection cancellation integration。
+下一個正式閘門改為：owner/lifetime validation 的 production connection integration、queue shutdown drain 的完整 connection semantics、Windows IOCP backend，以及之後的 AsyncContext ↔ C connection cancellation integration；Linux smoke path 已不再使用 Java polling。

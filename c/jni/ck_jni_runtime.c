@@ -6,6 +6,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdint.h>
 
 static void ck_runtime_sync_fatal(const char *operation, int result)
 {
@@ -29,7 +30,63 @@ static int ck_check_java_exception(JNIEnv *env, const char *operation)
 	return -1;
 }
 
-static int ck_call_start(JNIEnv *env)
+
+static jint ck_native_publish_completion(JNIEnv *env, jclass clazz,
+		jlong queue_handle, jlong request_id, jlong owner_token,
+		jlong lifetime_token, jlong result, jint status)
+{
+	ck_completion_record_t record;
+	ck_completion_queue_t *queue;
+
+	(void)env;
+	(void)clazz;
+
+	if (queue_handle <= 0
+			|| request_id <= 0
+			|| owner_token < 0
+			|| lifetime_token < 0)
+	{
+		return -1;
+	}
+
+	queue = (ck_completion_queue_t *)(uintptr_t)(uint64_t)queue_handle;
+	record.request_id = (uint64_t)request_id;
+	record.owner_token = (uint64_t)owner_token;
+	record.lifetime_token = (uint64_t)lifetime_token;
+	record.result = (int64_t)result;
+	record.status = (int32_t)status;
+
+	return (jint)ck_completion_queue_push_wait(queue, &record);
+}
+
+static int ck_register_native_methods(JNIEnv *env, jclass runtime_class,
+		ck_completion_queue_t *queue)
+{
+	static const JNINativeMethod methods[] = {
+		{ "publishCompletion", "(JJJJJI)V",
+				(void *)ck_native_publish_completion }
+	};
+	jlong queue_handle;
+
+	_Static_assert(sizeof(uintptr_t) <= sizeof(jlong),
+			"runtime queue pointer must fit in jlong");
+
+	queue_handle = (jlong)(uintptr_t)(void *)queue;
+	if (queue_handle <= 0)
+	{
+		return -1;
+	}
+
+	if ((*env)->RegisterNatives(env, runtime_class, methods,
+			(jint)(sizeof(methods) / sizeof(methods[0]))) != JNI_OK)
+	{
+		return -1;
+	}
+
+	return 0;
+}
+
+static int ck_call_start(JNIEnv *env, ck_completion_queue_t *queue)
 {
 	jclass runtime_class;
 	jmethodID method;
@@ -37,6 +94,12 @@ static int ck_call_start(JNIEnv *env)
 	runtime_class = (*env)->FindClass(env, "org/ckarta/bootstrap/CkartaRuntime");
 	if (ck_check_java_exception(env, "FindClass") != 0 || runtime_class == NULL)
 	{
+		return -1;
+	}
+
+	if (ck_register_native_methods(env, runtime_class, queue) != 0)
+	{
+		(*env)->DeleteLocalRef(env, runtime_class);
 		return -1;
 	}
 
@@ -135,7 +198,7 @@ static void *ck_bootstrap_main(void *arg)
 	runtime->vm = vm;
 	ck_runtime_sync_fatal("bootstrap.mutex_unlock", pthread_mutex_unlock(&runtime->lock));
 
-	start_status = ck_call_start(env);
+	start_status = ck_call_start(env, &runtime->completion_queue);
 
 	ck_runtime_sync_fatal("bootstrap.mutex_lock", pthread_mutex_lock(&runtime->lock));
 	runtime->bootstrap_status = start_status;

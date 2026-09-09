@@ -260,7 +260,8 @@ static int ck_call_dispatch_async(JNIEnv *env,
 {
 	jclass runtime_class;
 	jmethodID method;
-	jobject buffer;
+	jobject metadata_buffer;
+	jobject body_buffer;
 
 	runtime_class = (*env)->FindClass(env, "org/ckarta/bootstrap/CkartaRuntime");
 	if (ck_check_java_exception(env, "FindClass(dispatchAsync)") != 0 ||
@@ -278,28 +279,65 @@ static int ck_call_dispatch_async(JNIEnv *env,
 		return -1;
 	}
 
-	buffer = (*env)->NewDirectByteBuffer(env, (void *)descriptor->body,
-			(jlong)descriptor->body_length);
-	if (ck_check_java_exception(env, "NewDirectByteBufferAsync") != 0 ||
-			buffer == NULL)
+	metadata_buffer = NULL;
+	body_buffer = NULL;
+	if (descriptor->metadata_length != 0)
 	{
-		(*env)->DeleteLocalRef(env, runtime_class);
-		return -1;
+		metadata_buffer = (*env)->NewDirectByteBuffer(env,
+				(void *)descriptor->metadata,
+				(jlong)descriptor->metadata_length);
+		if (ck_check_java_exception(env, "NewDirectByteBufferMetadata") != 0
+				|| metadata_buffer == NULL)
+		{
+			(*env)->DeleteLocalRef(env, runtime_class);
+			return -1;
+		}
+	}
+	if (descriptor->body_length != 0)
+	{
+		body_buffer = (*env)->NewDirectByteBuffer(env,
+				(void *)descriptor->body,
+				(jlong)descriptor->body_length);
+		if (ck_check_java_exception(env, "NewDirectByteBufferBody") != 0
+				|| body_buffer == NULL)
+		{
+			if (metadata_buffer != NULL)
+			{
+				(*env)->DeleteLocalRef(env, metadata_buffer);
+			}
+			(*env)->DeleteLocalRef(env, runtime_class);
+			return -1;
+		}
 	}
 
 	(*env)->CallStaticVoidMethod(env, runtime_class, method,
 			(jlong)descriptor->request_id,
 			(jlong)descriptor->owner_token,
 			(jlong)descriptor->lifetime_token,
-			buffer);
+			metadata_buffer,
+			body_buffer);
 	if (ck_check_java_exception(env, "CallStaticVoidMethod(dispatchAsync)") != 0)
 	{
-		(*env)->DeleteLocalRef(env, buffer);
+		if (body_buffer != NULL)
+		{
+			(*env)->DeleteLocalRef(env, body_buffer);
+		}
+		if (metadata_buffer != NULL)
+		{
+			(*env)->DeleteLocalRef(env, metadata_buffer);
+		}
 		(*env)->DeleteLocalRef(env, runtime_class);
 		return -1;
 	}
 
-	(*env)->DeleteLocalRef(env, buffer);
+	if (body_buffer != NULL)
+	{
+		(*env)->DeleteLocalRef(env, body_buffer);
+	}
+	if (metadata_buffer != NULL)
+	{
+		(*env)->DeleteLocalRef(env, metadata_buffer);
+	}
 	(*env)->DeleteLocalRef(env, runtime_class);
 	return 0;
 }

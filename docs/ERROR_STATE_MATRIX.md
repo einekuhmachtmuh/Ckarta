@@ -112,7 +112,11 @@ The detailed diagnostic context remains in the owning layer and is correlated wi
 
 `ck_error_t` is required as a process-local error/outcome record, but it is not a Java exception hierarchy and it is not yet a public plugin ABI. It should first be used internally by C request/completion state. A future externally loadable module ABI, if any, must define a separately versioned compatibility contract.
 
-## 9. Concurrent-object correctness references
+## 9. Completion queue and notification boundary
+
+Completion record data 與 OS notification 是兩個不同物件。queue 擁有 record storage；notification backend 只負責可等待的 wake-up state。consumer 不得把收到 notification 解讀成「必有一個 record」；notification 可 coalesce，正確做法是 drain notification 後反覆 dequeue 直到 empty，再重新等待。queue overflow 是 data-plane capacity failure，不能只靠 notification counter 表示。
+
+## 10. Concurrent-object correctness references
 
 Herlihy and Wing 的 *Linearizability: A Correctness Condition for Concurrent Objects* 提供 concurrent object operation 必須可對應到單一線性化點的 correctness framework；本專案的 terminal winner CAS 正以此作為概念上的驗證基線，而不宣稱它本身完成了形式化 proof。來源：https://doi.org/10.1145/78969.78972
 

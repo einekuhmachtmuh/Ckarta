@@ -40,7 +40,7 @@ int ck_completion_notification_signal(ck_completion_notification_t *notification
 
 	if (result < 0 && errno == EAGAIN)
 	{
-		return 0;
+		return EAGAIN;
 	}
 
 	return result < 0 ? errno : EIO;

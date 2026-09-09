@@ -48,7 +48,7 @@ TCK 結果必須獨立保存。
 
 ## 6. 目前狀態
 
-尚未執行 TCK。
+目前已固定 `jakarta.servlet:jakarta.servlet-api:6.1.0` 作為 application-facing API 的 compile/test dependency，並有 `CkartaServletAsyncContext` API binding prototype 與獨立 smoke test。尚未執行 Jakarta Servlet 6.1.0 TCK；因此目前仍不得標示 Servlet 6.1 相容。
 
 本文件是整合計畫，不代表目前已通過 TCK。
 

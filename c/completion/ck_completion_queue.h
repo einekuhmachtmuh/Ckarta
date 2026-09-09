@@ -22,6 +22,7 @@ typedef struct ck_completion_record
 typedef struct ck_completion_queue
 {
 	pthread_mutex_t lock;
+	pthread_cond_t not_full;
 	ck_completion_record_t entries[CK_COMPLETION_QUEUE_CAPACITY];
 	size_t head;
 	size_t tail;
@@ -33,6 +34,8 @@ typedef struct ck_completion_queue
 
 int ck_completion_queue_init(ck_completion_queue_t *queue);
 int ck_completion_queue_push(ck_completion_queue_t *queue,
+		const ck_completion_record_t *record);
+int ck_completion_queue_push_wait(ck_completion_queue_t *queue,
 		const ck_completion_record_t *record);
 int ck_completion_queue_pop(ck_completion_queue_t *queue,
 		ck_completion_record_t *record);

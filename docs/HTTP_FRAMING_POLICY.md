@@ -57,9 +57,16 @@ parser output 至少包括：
 - consumed bytes
 - parse result
 
-目前 executable slice 已落地 `c/http/ck_http_parser.[ch]`。parser 只擁有自己的 bounded header buffer；輸入可以分多次 feed，header 區塊完成後回傳本 request 的 consumed bytes，使 caller 能保留後續 body／pipeline bytes。
+目前 executable slice：
 
-目前 parser 已完成 request-line、header-field grammar、Content-Length normalization、Transfer-Encoding final-coding 判斷與 header-size bound；chunked body 的 chunk-size/data/trailer 解碼仍未完成。
+`c/http/ck_http_parser.[ch]`
+`c/http/ck_http_chunked.[ch]`
+
+header parser 以 bounded buffer 做增量 feed；header 區塊完成後，`consumed` 表示該次 feed 實際消耗的 bytes，讓上層可以正確保留尚未消耗的 network input。
+
+header parser 已完成 request-line、header-field grammar、Content-Length normalization、Transfer-Encoding 判斷與 header-size bound。chunked body 則由獨立 decoder 維護 `size → data → data CRLF → trailers → done` 狀態，body data 以 input span 直接交給 caller，不建立額外 body copy。
+
+目前兩者仍是 bounded executable components，不代表正式 connection HTTP state machine 已完成。
 
 ## 5. 嚴格要求
 
@@ -98,21 +105,32 @@ RFC 9112 允許收到多個 `Content-Length` 時，在可解析為逗號分隔 l
 - 非法值
 - 與 Content-Length 的互動
 
-目前 Ckarta executable parser 的 framing consumer 只把最終 `chunked` 視為可接受的 request transfer framing；任何最終不是 `chunked` 的 request transfer coding 均拒絕。非 `chunked` transfer-coding 的實際 decoding 尚未實作，因此不能把此 parser slice 標示成完整 Transfer-Encoding implementation。
+目前 Ckarta executable header parser 的 framing consumer 只接受 `chunked` 為可解碼 request transfer coding；其他 transfer coding 目前直接拒絕，因為 corresponding decoder 尚未加入。這是刻意的 safety boundary，不是完整 Transfer-Encoding 相容性宣稱。
 
-若同時存在 `Transfer-Encoding` 與 `Content-Length`，Ckarta 使用 Transfer-Encoding 決定 framing，並設定 `connection_close_required`；這與 RFC 9112 對 request-smuggling risk 的處理方向一致，但正式 response/status 行為仍需接入完整 request state machine。
+若同時存在 `Transfer-Encoding` 與 `Content-Length`，Ckarta 使用 Transfer-Encoding 決定 framing，並設定 `connection_close_required`；完整 HTTP request error response／connection close policy 仍需接入 production connection state machine。
 
 ## 8. Chunked body
 
-chunk size 必須：
+RFC 9112 要求 recipient 能解析並解碼 chunked transfer coding，且必須防止大 hexadecimal chunk size 導致 integer overflow 或 precision loss。
 
-- 有界
-- 完整
-- checked arithmetic（檢查過的算術）
-- 不允許越界
-- 不允許 parser state desynchronization（解析器狀態去同步）
+目前 `c/http/ck_http_chunked.[ch]` 已提供 bounded incremental decoder：
 
-目前只完成 header framing 的 `chunked` mode recognition；chunk data、CRLF、last-chunk、trailer section 與 truncated-body handling 尚待下一個獨立 parser state-machine gate。
+- chunk-size hexadecimal parsing
+- chunk extension syntax bound
+- chunk data span output
+- chunk data trailing CRLF validation
+- zero-size last chunk
+- trailer field syntax validation
+- trailer count／byte bounds
+- decoded-body overflow checking
+- incremental input consumption
+
+尚未完成：
+
+- decoder 與正式 per-connection read state machine 的 ownership integration
+- configurable maximum decoded body size
+- trailer storage／forwarding policy
+- complete request-to-Servlet body stream mapping
 
 ## 9. Proxy
 
@@ -122,9 +140,9 @@ upstream parser 不得重新詮釋同一個模糊 framing。
 
 ## 10. 測試
 
-目前 `tests/http/ck_http_parser_test.c` 已驗證：
+`tests/http/ck_http_parser_test.c` 已驗證：
 
-- incremental feed
+- incremental header feed
 - request line token validation
 - Content-Length 正常值
 - identical duplicate Content-Length normalization
@@ -133,20 +151,29 @@ upstream parser 不得重新詮釋同一個模糊 framing。
 - non-chunked final Transfer-Encoding rejection
 - oversized header buffer
 
-TCP integration test 另直接由 loopback accepted socket 讀取 HTTP bytes，再送入同一 parser，驗證 parser 並非只存在於 isolated unit test。
+`tests/http/ck_http_chunked_test.c` 覆蓋：
+
+- incremental chunk-size/data/trailer feed
+- chunk extension
+- zero-size last chunk
+- trailer field
+- chunk-size overflow rejection
+- malformed line ending rejection
+- truncated chunk data state
+
+TCP integration test 直接由 loopback accepted socket 讀取 HTTP bytes，再送入同一 header parser；chunked decoder 目前是獨立 executable component，尚未接入 production connection body loop。
 
 仍需補齊：
 
-- duplicate Content-Length
-- conflicting Content-Length
-- Transfer-Encoding variants
-- malformed chunk size
-- truncated chunk body
+- multiple Transfer-Encoding variants
+- malformed chunk extensions
+- truncated chunk CRLF
+- trailer policy corpus
 - extra bytes after body
-- oversized headers
-- oversized body
+- oversized decoded body policy
 - pipelined requests
 - keep-alive boundary
+- HTTP request smuggling corpus
 
 所有 corpus（測試語料）都應保留 regression identifier（回歸識別碼）。
 

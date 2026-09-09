@@ -41,6 +41,8 @@ ck_http_connection_read_result_t ck_http_connection_reader_drive(
 	ck_http_body_sink_fn body_sink,
 	void *body_sink_context)
 {
+	size_t budget = CK_HTTP_CONNECTION_READ_BUDGET_BYTES;
+
 	if (reader == NULL || socket_fd < 0)
 	{
 		return CK_HTTP_CONNECTION_READ_IO_ERROR;
@@ -50,21 +52,29 @@ ck_http_connection_read_result_t ck_http_connection_reader_drive(
 	{
 		while (reader->begin < reader->end)
 		{
+			size_t available = reader->end - reader->begin;
+			size_t feed_length;
 			size_t consumed = 0;
 			size_t body_length = 0;
 			const unsigned char *body_data = NULL;
 			ck_http_input_result_t input_result;
 			ck_http_connection_read_result_t read_result;
 
+			if (budget == 0)
+			{
+				return CK_HTTP_CONNECTION_READ_INCOMPLETE;
+			}
+
+			feed_length = available < budget ? available : budget;
 			input_result = ck_http_input_feed(
 					&reader->input,
 					reader->buffer + reader->begin,
-					reader->end - reader->begin,
+					feed_length,
 					&consumed,
 					&body_data,
 					&body_length);
 
-			if (consumed > reader->end - reader->begin)
+			if (consumed > feed_length)
 			{
 				return CK_HTTP_CONNECTION_READ_IO_ERROR;
 			}
@@ -77,6 +87,7 @@ ck_http_connection_read_result_t ck_http_connection_reader_drive(
 				}
 			}
 			reader->begin += consumed;
+			budget -= consumed;
 
 			read_result = map_input_result(input_result);
 			if (read_result == CK_HTTP_CONNECTION_READ_REQUEST_COMPLETE
@@ -93,6 +104,15 @@ ck_http_connection_read_result_t ck_http_connection_reader_drive(
 			{
 				break;
 			}
+			if (consumed == 0)
+			{
+				break;
+			}
+		}
+
+		if (budget == 0)
+		{
+			return CK_HTTP_CONNECTION_READ_INCOMPLETE;
 		}
 
 		if (reader->end == sizeof(reader->buffer))
@@ -111,13 +131,16 @@ ck_http_connection_read_result_t ck_http_connection_reader_drive(
 		}
 
 		{
+			size_t available = sizeof(reader->buffer) - reader->end;
+			size_t receive_length = available < budget ? available : budget;
 			ssize_t received = recv(socket_fd,
 					reader->buffer + reader->end,
-					sizeof(reader->buffer) - reader->end,
+					receive_length,
 					MSG_DONTWAIT);
 			if (received > 0)
 			{
 				reader->end += (size_t)received;
+				budget -= (size_t)received;
 				continue;
 			}
 			if (received == 0)
@@ -141,14 +164,14 @@ ck_http_connection_read_result_t ck_http_connection_reader_drive(
 	}
 }
 
-void ck_http_connection_reader_next_request(
+int ck_http_connection_reader_next_request(
 	ck_http_connection_reader_t *reader)
 {
 	size_t remaining;
 
 	if (reader == NULL || !ck_http_input_complete(&reader->input))
 	{
-		return;
+		return -1;
 	}
 
 	remaining = reader->end - reader->begin;
@@ -159,6 +182,7 @@ void ck_http_connection_reader_next_request(
 	reader->begin = 0;
 	reader->end = remaining;
 	ck_http_input_next_request(&reader->input);
+	return 0;
 }
 
 const ck_http_request_t *ck_http_connection_reader_request(

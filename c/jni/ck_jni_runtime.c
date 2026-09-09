@@ -471,21 +471,81 @@ int ck_runtime_init(ck_runtime_t *runtime, const char *class_path)
 
 int ck_runtime_shutdown(ck_runtime_t *runtime)
 {
-	pthread_mutex_lock(&runtime->lock);
-	runtime->shutdown_requested = 1;
-	pthread_cond_broadcast(&runtime->condition);
-	pthread_mutex_unlock(&runtime->lock);
+	int result;
+	int shutdown_status;
 
-	if (pthread_join(runtime->bootstrap_thread, NULL) != 0)
+	if (runtime == NULL || !runtime->sync_initialized
+			|| !runtime->bootstrap_thread_started)
 	{
 		return -1;
 	}
 
-	return runtime->shutdown_status;
+	result = pthread_mutex_lock(&runtime->lock);
+	if (result != 0)
+	{
+		return result;
+	}
+
+	if (runtime->shutdown_complete)
+	{
+		shutdown_status = runtime->shutdown_status;
+		(void)pthread_mutex_unlock(&runtime->lock);
+		return shutdown_status;
+	}
+
+	runtime->shutdown_requested = 1;
+	result = pthread_cond_broadcast(&runtime->condition);
+	if (result != 0)
+	{
+		(void)pthread_mutex_unlock(&runtime->lock);
+		return result;
+	}
+
+	result = pthread_mutex_unlock(&runtime->lock);
+	if (result != 0)
+	{
+		return result;
+	}
+
+	result = pthread_join(runtime->bootstrap_thread, NULL);
+	if (result != 0)
+	{
+		return result;
+	}
+
+	result = pthread_mutex_lock(&runtime->lock);
+	if (result != 0)
+	{
+		return result;
+	}
+
+	runtime->shutdown_complete = 1;
+	shutdown_status = runtime->shutdown_status;
+	(void)pthread_mutex_unlock(&runtime->lock);
+	return shutdown_status;
 }
 
 void ck_runtime_destroy(ck_runtime_t *runtime)
 {
-	pthread_cond_destroy(&runtime->condition);
-	pthread_mutex_destroy(&runtime->lock);
+	int result;
+
+	if (runtime == NULL || !runtime->sync_initialized
+			|| !runtime->shutdown_complete)
+	{
+		return;
+	}
+
+	result = pthread_cond_destroy(&runtime->condition);
+	if (result != 0)
+	{
+		return;
+	}
+
+	result = pthread_mutex_destroy(&runtime->lock);
+	if (result != 0)
+	{
+		return;
+	}
+
+	memset(runtime, 0, sizeof(*runtime));
 }

@@ -51,6 +51,69 @@ static void send_all(int socket_fd, const unsigned char *data, size_t length)
 	}
 }
 
+
+typedef struct retrying_body_sink
+{
+	size_t calls;
+	size_t bytes;
+} retrying_body_sink_t;
+
+static int reject_first_body(void *context,
+	const unsigned char *data, size_t length)
+{
+	retrying_body_sink_t *sink = context;
+	assert(sink != NULL);
+	assert(data != NULL);
+	sink->calls++;
+	if (sink->calls == 1)
+	{
+		return 1;
+	}
+	sink->bytes += length;
+	return 0;
+}
+
+static void test_body_sink_retry_does_not_replay(void)
+{
+	static const char payload[] =
+			"POST /retry HTTP/1.1\r\n"
+			"Host: localhost\\r\\n"
+			"Content-Length: 5\\r\\n"
+			"\\r\\n"
+			"hello";
+	ck_http_connection_reader_t reader;
+	retrying_body_sink_t sink = {0};
+	int sockets[2];
+	ck_http_connection_read_result_t result;
+	const ck_http_request_t *request;
+
+	assert(socketpair(AF_UNIX, SOCK_STREAM, 0, sockets) == 0);
+	ck_http_connection_reader_init(&reader);
+	assert(send(sockets[0], payload, sizeof(payload) - 1U, 0)
+			== (ssize_t)(sizeof(payload) - 1U));
+
+	result = ck_http_connection_reader_drive(&reader, sockets[1],
+			reject_first_body, &sink);
+	assert(result == CK_HTTP_CONNECTION_READ_SINK_ERROR);
+	assert(sink.calls == 1);
+	assert(sink.bytes == 0);
+	assert(ck_http_connection_reader_buffered_bytes(&reader)
+			>= sizeof("hello") - 1U);
+
+	result = ck_http_connection_reader_drive(&reader, sockets[1],
+			reject_first_body, &sink);
+	assert(result == CK_HTTP_CONNECTION_READ_REQUEST_COMPLETE);
+	assert(sink.calls == 2);
+	assert(sink.bytes == 5);
+	request = ck_http_connection_reader_request(&reader);
+	assert(request != NULL);
+	assert(request->target.length == 6);
+	assert(memcmp(request->target.data, "/retry", 6) == 0);
+
+	assert(close(sockets[0]) == 0);
+	assert(close(sockets[1]) == 0);
+}
+
 static void test_content_length_pipeline(void)
 {
 	static const char payload[] =
@@ -251,6 +314,7 @@ static void test_eof_incomplete_body(void)
 int main(void)
 {
 	test_content_length_pipeline();
+	test_body_sink_retry_does_not_replay();
 	test_chunked_stream();
 	test_chunked_split_crlf();
 	test_read_batch_budget();

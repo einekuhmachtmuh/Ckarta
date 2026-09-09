@@ -175,3 +175,14 @@ IOCP + PostQueuedCompletionStatus + bounded completion queue
 - cross-thread contention
 - lost/duplicate wakeup tests
 - shutdown／cancellation correctness
+
+
+## 8. Current executable decision
+
+本階段已選擇 Linux `eventfd(EFD_CLOEXEC | EFD_NONBLOCK)` 作為第一個可執行 notification backend prototype；completion records 仍由獨立 bounded mutex-protected ring queue 保存。`eventfd` 只負責 wake-up/count，不攜帶 request identity。queue producer 先在同一 critical section 發布 record，再執行 nonblocking notification；若 notification 明確失敗，record 會 rollback，避免資料與通知出現半成功狀態。這是 Linux executable backend，不是跨平台最終選型，也尚未接入 Java JNI producer。
+
+研究基線：Linux `eventfd(2)` 官方文件說明 eventfd 建立可供 user-space 使用的 file descriptor event notification 機制，並支援 `poll`/`epoll`；EFD_NONBLOCK 使 notification 操作不需阻塞 event loop。來源：https://man7.org/linux/man-pages/man2/eventfd.2.html
+
+SEDA 的 explicit queue + load conditioning 與本設計的 bounded completion queue 相符，但不代表 Ckarta 必須採用 SEDA 全部架構。來源：https://doi.org/10.1145/502059.502057
+
+Michael/Scott 1996 的 non-blocking queue work 仍僅作替代設計參考；本階段選 mutex-protected bounded queue，因為 ownership、reclamation、shutdown drain 與 overflow 語意比 lock-free micro-optimization 更優先。來源：https://doi.org/10.1145/248052.248106

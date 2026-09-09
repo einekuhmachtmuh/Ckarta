@@ -232,7 +232,8 @@ Tomcat 11.0.25 `AsyncContextImpl` 顯示真正 async lifecycle 還包含 `start(
 
 正式 bridge 尚需：
 
-1. Java AsyncContext reference lifetime。
+1. ServletRequest.startAsync() 與 adapter 建立的正式 request/container lifecycle integration。
+2. Java AsyncContext reference lifetime。
 2. native connection owner handoff。
 3. timeout/error/client-disconnect precedence。
 4. response/output ownership。

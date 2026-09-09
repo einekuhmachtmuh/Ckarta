@@ -134,3 +134,18 @@ response transaction
 response header serializer 目前只接受 final-response status 200..599，輸出受控的 Content-Length 與 optional Connection: close；尚未覆蓋完整 header collection、header-value validation、interim 1xx response、body-forbidden response semantics 與 transfer-coding response。
 
 因此 FINISHED 仍只表示 native response transaction 已完成 framing invariant，不表示 bytes 已經送完或 connection 可以立即 recycle。
+
+
+## 11. Connection recycle boundary
+
+`FINISHED` 只表示 response transaction 的 native framing invariant 成立；只有 output writer 完全 `DRAINED`，且目前 request 沒有 `Connection: close`、response 沒有設定 close，connection owner 才能透過 `ck_connection_http_recycle()` 將 response transaction 重設為 `NEW` 並交由 reader 處理下一個 request。
+
+`ck_connection_http_recycle()` 不執行 socket close，也不改變 connection-level `OPEN` state。它是 HTTP persistence/reuse operation，不是 terminal completion。
+
+因此目前三個 boundary 必須維持分離：
+
+response FINISHED
+→ output DRAINED
+→ HTTP connection RECYCLED
+
+其中任何一個 boundary 的 failure 都不得被誤報為下一層已完成。

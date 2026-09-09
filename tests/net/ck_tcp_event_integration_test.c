@@ -53,12 +53,14 @@ int main(void)
 		"GET /next HTTP/1.1\r\nHost: localhost\r\n\r\n";
 	const size_t payload_length = sizeof(payload) - 1U;
 	char received[512];
+	char body_copy[5] = {0};
 	int client_fd;
 	int accepted_fd;
 	int count;
 	size_t consumed = 0;
 	size_t body_length = 0;
 	size_t total_received = 0;
+	size_t body_copied = 0;
 	size_t first_request_end = 0;
 	const unsigned char *body = NULL;
 
@@ -117,12 +119,11 @@ int main(void)
 						received + feed_offset, (size_t)received_now,
 						&consumed, &body, &body_length);
 				assert(consumed <= (size_t)received_now);
-				if (http_input.header_complete
-						&& http_input.request.body_mode == CK_HTTP_BODY_CONTENT_LENGTH
-						&& body_length != 0)
+				if (body_length != 0)
 				{
-					assert(body_length <= 5);
-					assert(memcmp(body, "hello", body_length) == 0);
+					assert(body_copied + body_length <= sizeof(body_copy));
+					memcpy(body_copy + body_copied, body, body_length);
+					body_copied += body_length;
 				}
 				total_received += (size_t)received_now;
 				if (http_result == CK_HTTP_INPUT_COMPLETE)
@@ -143,6 +144,8 @@ int main(void)
 	assert(first_request_end != 0);
 	assert(first_request_end < total_received);
 	assert(total_received <= payload_length);
+	assert(body_copied == sizeof(body_copy));
+	assert(memcmp(body_copy, "hello", sizeof(body_copy)) == 0);
 	assert(memcmp(received, payload, total_received) == 0);
 	assert(memcmp(received + first_request_end, next_request, strlen(next_request)) == 0);
 

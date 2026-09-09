@@ -33,7 +33,7 @@ descriptor 不是 wire protocol；atomic lifecycle state 不放入 descriptor，
 
 ### 狀態機
 
-`PENDING → RUNNING → COMPLETED|FAILED`；取消可由 `PENDING|RUNNING → CANCELLING`。一旦進入 `CANCELLING`，不得再被 `COMPLETED` 或 `FAILED` 覆寫。
+`PENDING → RUNNING → COMPLETED|FAILED`；失敗由 `RUNNING → FAILING → FAILED` 發布。取消可由 `PENDING|RUNNING → CANCELLING`。一旦進入 `CANCELLING`，不得再被 `COMPLETED`、`FAILING` 或 `FAILED` 覆寫。`FAILING` 是 private publication state，不代表對外 terminal outcome。
 
 C 實作用 atomic CAS 保證競爭 cancellation 不重複取得 terminal ownership。
 

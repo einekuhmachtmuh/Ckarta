@@ -1,6 +1,7 @@
 #include "../../c/connection/ck_connection.h"
 
 #include <assert.h>
+#include <string.h>
 #include <pthread.h>
 #include <sys/socket.h>
 #include <unistd.h>
@@ -30,10 +31,7 @@ static void test_http_keepalive_recycle(void)
 	ck_http_connection_reader_t *reader;
 	ck_http_response_t *response;
 	ck_http_output_writer_t *writer;
-	const unsigned char *body;
-	size_t body_length;
-	size_t consumed;
-	int sockets[2];
+		int sockets[2];
 	ck_http_connection_read_result_t read_result;
 
 	assert(socketpair(AF_UNIX, SOCK_STREAM, 0, sockets) == 0);
@@ -58,7 +56,7 @@ static void test_http_keepalive_recycle(void)
 	assert(request->connection_close_required == 0);
 
 	assert(ck_http_response_set_status(response, 200U) == 0);
-	assert(ck_http_response_write_body(response, "ok", 2) == 0);
+	assert(ck_http_response_write_body(response, (const unsigned char *)"ok", 2) == 0);
 	assert(ck_http_response_finish(response) == 0);
 	{
 		unsigned char headers[CK_HTTP_RESPONSE_HEADER_BUFFER_BYTES];
@@ -201,5 +199,7 @@ int main(void)
 			|| disconnect.result == CK_CONNECTION_TERMINAL_CLAIMED);
 	assert(ck_connection_close(&connection) == 0);
 	assert(ck_connection_http_reader(&connection) == NULL);
+	test_http_keepalive_recycle();
+	test_connection_close_prevents_recycle();
 	return 0;
 }

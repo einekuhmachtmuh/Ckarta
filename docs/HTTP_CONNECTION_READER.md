@@ -22,7 +22,7 @@ reader buffer 由 connection-side owner 擁有。body sink callback 只借用 bo
 
 `ck_http_request_t` 的 spans 受 `ck_http_input`／parser storage lifetime 約束。`ck_http_connection_reader_next_request()` 會 recycle current request state，因此 caller 不得在其後繼續使用舊 request span。
 
-registry 不直接暴露內部 `ck_connection_t *` 給未受控 caller；connection entry 的 lookup lifetime 仍由 registry mutex 保護。正式 registry dispatch 使用 reader pin：`ck_connection_registry_reader_acquire()` 在 registry lock 內完成 handle/generation/identity validation 並增加 reader user count，然後 caller 可在不持有 registry lock 的情況下執行 non-blocking reader operation；`ck_connection_registry_reader_release()` 減少 user count。只要 reader pin 存在，registry 不允許 close 或 retire，以避免 reader 與 underlying connection entry 在使用期間被回收。
+registry 不直接暴露內部 `ck_connection_t *` 給未受控 caller；正式 registry dispatch 使用 reader pin：`ck_connection_registry_reader_acquire()` 在 registry lock 內完成 handle/generation/identity validation 並增加 reader user count，然後 caller 可在不持有 registry lock 的情況下執行 non-blocking reader operation；`ck_connection_registry_reader_release()` 減少 user count。只要 reader pin 存在，registry 不允許 close 或 retire，以避免 reader 與 underlying connection entry 在使用期間被回收。
 
 reader access 仍遵循 connection owner single-owner contract：同一時間只有受授權的 connection owner 應推進 reader state。reader pin 是 lifetime guard，不是 reader 本身的 general-purpose thread-safe guarantee。
 
@@ -99,14 +99,14 @@ Ckarta reader 不重新解釋這些規則，只執行已由 framing layer 決定
 - independent reader socketpair tests
 - connection close 後 reader lifetime invalidation test
 - registry close/retire 被 active reader pin 阻擋的測試
+- loopback TCP integration 透過 registry-safe reader pin 消費 request body 並處理 pipelined request
 
 尚未完成：
 
-- production connection read-event state integration
-- loopback TCP integration 改用 registry-safe reader dispatch
 - read batching/fairness budget
 - request timeout／Slowloris timer source
 - true multi-worker accept ownership
+- production connection read-event state 的完整 lifecycle state machine
 - response/output state machine
 - Servlet request-body stream adapter
 - async cancellation integration

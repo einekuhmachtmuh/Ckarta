@@ -1,5 +1,6 @@
 #include "../config/ck_config.h"
 #include "../jni/ck_jni_runtime.h"
+#include "../http/ck_http_parser.h"
 
 #include <errno.h>
 #include <sys/epoll.h>
@@ -99,11 +100,12 @@ static int apply_class_path(void *data, size_t argc,
 
 int main(int argc, char **argv)
 {
-	const unsigned char body_one[] = "ckarta-jni-smoke-one";
-	const unsigned char body_two[] = "ckarta-jni-smoke-two";
+	static const char request_one[] =
+			"GET /handoff-one HTTP/1.1\r\nHost: x\r\n\r\n";
+	static const char request_two[] =
+			"GET /handoff-two HTTP/1.1\r\nHost: x\r\n\r\n";
 	const char *config_path = CKARTA_DEFAULT_CONFIG_PATH;
 	ck_config_t config;
-	ck_request_descriptor_t descriptors[2];
 	ck_request_t requests[2];
 	char config_error[512];
 	int test_only = 0;
@@ -165,38 +167,46 @@ int main(int argc, char **argv)
 		return EXIT_SUCCESS;
 	}
 
-	memset(descriptors, 0, sizeof(descriptors));
-
-	descriptors[0].abi_version = CK_JNI_ABI_VERSION;
-	descriptors[0].struct_size = sizeof(descriptors[0]);
-	descriptors[0].feature_flags = CK_REQUEST_FEATURE_DIRECT_BUFFER;
-	descriptors[0].ownership_flags = CK_REQUEST_OWNS_NATIVE_STORAGE |
-			CK_REQUEST_JAVA_BORROWS_BUFFER;
-	descriptors[0].owner_token = 1;
-	descriptors[0].lifetime_token = 11;
-	descriptors[0].request_id = UINT64_C(0xC4A7A);
-	descriptors[0].body = body_one;
-	descriptors[0].body_length = sizeof(body_one) - 1;
-
-	descriptors[1] = descriptors[0];
-	descriptors[1].owner_token = 2;
-	descriptors[1].lifetime_token = 22;
-	descriptors[1].request_id = UINT64_C(0xC4A7B);
-	descriptors[1].body = body_two;
-	descriptors[1].body_length = sizeof(body_two) - 1;
-
-	result = ck_request_init(&requests[0], &descriptors[0]);
-	if (check_result("REQUEST_INIT_1", result) != 0)
 	{
-		ck_config_destroy(&config);
-		return EXIT_FAILURE;
-	}
+		ck_http_parser_t parser;
+		ck_http_request_t parsed;
+		size_t consumed = 0;
 
-	result = ck_request_init(&requests[1], &descriptors[1]);
-	if (check_result("REQUEST_INIT_2", result) != 0)
-	{
-		ck_config_destroy(&config);
-		return EXIT_FAILURE;
+		ck_http_parser_init(&parser);
+		result = ck_http_parser_feed(&parser, request_one,
+				sizeof(request_one) - 1, &consumed, &parsed);
+		if (result != CK_HTTP_PARSE_COMPLETE
+				|| consumed != sizeof(request_one) - 1)
+		{
+			check_result("REQUEST_PARSE_1", -1);
+			ck_config_destroy(&config);
+			return EXIT_FAILURE;
+		}
+		result = ck_request_init_http(&requests[0], &parsed,
+				NULL, 0, UINT64_C(0xC4A7A), 1, 11);
+		if (check_result("REQUEST_INIT_1", result) != 0)
+		{
+			ck_config_destroy(&config);
+			return EXIT_FAILURE;
+		}
+
+		ck_http_parser_init(&parser);
+		result = ck_http_parser_feed(&parser, request_two,
+				sizeof(request_two) - 1, &consumed, &parsed);
+		if (result != CK_HTTP_PARSE_COMPLETE
+				|| consumed != sizeof(request_two) - 1)
+		{
+			check_result("REQUEST_PARSE_2", -1);
+			ck_config_destroy(&config);
+			return EXIT_FAILURE;
+		}
+		result = ck_request_init_http(&requests[1], &parsed,
+				NULL, 0, UINT64_C(0xC4A7B), 2, 22);
+		if (check_result("REQUEST_INIT_2", result) != 0)
+		{
+			ck_config_destroy(&config);
+			return EXIT_FAILURE;
+		}
 	}
 
 	result = ck_runtime_init(&runtime, config.class_path);

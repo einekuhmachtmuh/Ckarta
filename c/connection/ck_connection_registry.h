@@ -15,6 +15,7 @@ typedef struct ck_connection_registry_entry
 	ck_connection_t connection;
 	uint32_t generation;
 	uint32_t reader_users;
+	uint32_t output_users;
 	int active;
 } ck_connection_registry_entry_t;
 
@@ -31,6 +32,13 @@ typedef struct ck_connection_registry_reader_pin
 	ck_http_connection_reader_t *reader;
 	ck_connection_handle_t handle;
 } ck_connection_registry_reader_pin_t;
+
+typedef struct ck_connection_registry_output_pin
+{
+	ck_connection_t *connection;
+	ck_http_output_writer_t *writer;
+	ck_connection_handle_t handle;
+} ck_connection_registry_output_pin_t;
 
 int ck_connection_registry_init(ck_connection_registry_t *registry);
 int ck_connection_registry_register(
@@ -78,6 +86,16 @@ int ck_connection_registry_reader_acquire(
 int ck_connection_registry_reader_release(
 		ck_connection_registry_t *registry,
 		ck_connection_registry_reader_pin_t *pin);
+int ck_connection_registry_output_acquire(
+		ck_connection_registry_t *registry,
+		ck_connection_handle_t handle,
+		uint64_t request_id,
+		uint64_t owner_token,
+		uint64_t lifetime_token,
+		ck_connection_registry_output_pin_t *pin);
+int ck_connection_registry_output_release(
+		ck_connection_registry_t *registry,
+		ck_connection_registry_output_pin_t *pin);
 int ck_connection_registry_close(
 		ck_connection_registry_t *registry,
 		ck_connection_handle_t handle,

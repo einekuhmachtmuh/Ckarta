@@ -28,6 +28,7 @@ public final class CkartaServletAsyncContext implements AsyncContext
 	private final ServletResponse response;
 	private final boolean originalRequestAndResponse;
 	private final AtomicLong timeout = new AtomicLong(DEFAULT_TIMEOUT_MILLIS);
+	private final CkartaAsyncCycleBinding cycleBinding;
 
 	public CkartaServletAsyncContext(
 			CkartaAsyncContext core,
@@ -39,6 +40,7 @@ public final class CkartaServletAsyncContext implements AsyncContext
 		this.request = Objects.requireNonNull(request, "request");
 		this.response = Objects.requireNonNull(response, "response");
 		this.originalRequestAndResponse = originalRequestAndResponse;
+		this.cycleBinding = core.cycleBinding();
 	}
 
 	@Override
@@ -152,6 +154,11 @@ public final class CkartaServletAsyncContext implements AsyncContext
 	{
 		checkActive();
 		return originalRequestAndResponse;
+	}
+
+	CkartaAsyncCycleBinding cycleBinding()
+	{
+		return cycleBinding;
 	}
 
 	private void checkActive()

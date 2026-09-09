@@ -85,7 +85,7 @@ public final class CkartaServletAsyncContextTest
 		assert context.getRequest() == request;
 		assert context.getResponse() == response;
 		assert context.hasOriginalRequestAndResponse();
-		assert context.getTimeout() == -1L;
+		assert context.getTimeout() == 30_000L;
 
 		context.setTimeout(0L);
 		assert context.getTimeout() == 0L;

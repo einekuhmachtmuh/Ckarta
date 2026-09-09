@@ -236,9 +236,16 @@ Native module 暫定為 load-at-start、ABI/version/signature 驗證、dependenc
 
 ## 29. 2026-09-09 branch consolidation
 
-`main/WORKING_RULES.md` 現已是唯一工作守則來源；所有非-main branch 的 `WORKING_RULES.md` 均已移除。各 branch 的 `docs/WORK_STATE.md` 保留為 branch-specific state，不覆蓋或取代 main state。
+`main/WORKING_RULES.md` 現已是唯一工作守則來源；所有非-main branch 的 `WORKING_RULES.md` 均已移除。各 branch 的 `docs/WORK_STATE.md` 只描述該 branch 自身狀態，不覆蓋或取代 main state。
 
-`codex/platform-apache-completion` 的有效研究內容已抽取至 `docs/WIN32_LINUX_PLATFORM_RESEARCH.md` 與 `docs/COMPLETION_NOTIFICATION_RESEARCH.md`。其 `third_party/httpd` submodule 與與現行來源模型衝突的工作樹修改沒有合併；Apache 2.4.68 僅保留為外部固定研究基線。PR #14 已於 2026-09-09 關閉為 superseded，避免與主線保持兩套 platform/reference 模型。
+`codex/platform-apache-completion` 的有效研究內容已抽取至 `docs/WIN32_LINUX_PLATFORM_RESEARCH.md` 與 `docs/COMPLETION_NOTIFICATION_RESEARCH.md`。其 `third_party/httpd` submodule 與現行來源模型衝突，因此沒有整枝合併；Apache 2.4.68 僅保留為外部固定研究基線。PR #14 已於 2026-09-09 關閉為 superseded。
 
+## 30. 2026-09-09 branch workflow and function-flow baseline
 
-`codex/platform-apache-completion` 的有效研究內容已抽取至 `docs/WIN32_LINUX_PLATFORM_RESEARCH.md` 與 `docs/COMPLETION_NOTIFICATION_RESEARCH.md`。其 `third_party/httpd` submodule 與與現行來源模型衝突的工作樹修改沒有合併；Apache 2.4.68 僅保留為外部固定研究基線。PR #14 已於 2026-09-09 關閉為 superseded，避免與主線保持兩套 platform/reference 模型。
+本輪已完成所有現存非-main branch 的 WORKING_RULES 比對；其仍有效且可泛化的內容已整合到 main/WORKING_RULES.md。非-main branch 不再保存 WORKING_RULES。
+
+新增 `docs/CKARTA_FUNCTION_FLOW.md` 作為 Ckarta 自有實作函式流程與契約的權威文件；`docs/FUNCTION_TRACE.md` 僅保存固定 Nginx/Tomcat upstream function-level trace。
+
+本輪已把 request failure publication 固定為 `RUNNING → FAILING → FAILED`，其中只有成功取得 FAILING 的 publisher 可以寫 error record，再以 release-store 發布 FAILED；reader 以 acquire-load 後讀取 error。
+
+目前仍未實作 C network/event backend、HTTP parser、real Servlet container、AsyncContext bridge、production completion notification、formal public module ABI、Servlet 6.1 TCK 與 sanitizer/fuzz integration。

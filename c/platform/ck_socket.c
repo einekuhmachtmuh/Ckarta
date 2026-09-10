@@ -3,41 +3,28 @@
 #include "ck_socket.h"
 
 #include <errno.h>
-#include <limits.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
 #include <unistd.h>
 
-int ck_socket_is_valid(ck_socket_t socket)
-{
-	return socket.value != UINTPTR_MAX;
-}
-
-int ck_socket_create_loopback_listener(unsigned short port,
-	ck_socket_t *out_socket)
+int ck_socket_create_loopback_listener(unsigned short port)
 {
 	struct sockaddr_in address = {0};
 	int socket_fd;
 	int reuse = 1;
 
-	if (out_socket == NULL)
-	{
-		return EINVAL;
-	}
-	*out_socket = CK_SOCKET_INVALID;
-
 	socket_fd = socket(AF_INET, SOCK_STREAM | SOCK_CLOEXEC, 0);
 	if (socket_fd < 0)
 	{
-		return errno;
+		return -errno;
 	}
 
 	if (setsockopt(socket_fd, SOL_SOCKET, SO_REUSEADDR,
-			&reuse, sizeof(reuse)) != 0)
+		&reuse, sizeof(reuse)) != 0)
 	{
 		int error = errno;
 		(void)close(socket_fd);
-		return error;
+		return -error;
 	}
 
 	address.sin_family = AF_INET;
@@ -48,35 +35,28 @@ int ck_socket_create_loopback_listener(unsigned short port,
 	{
 		int error = errno;
 		(void)close(socket_fd);
-		return error;
+		return -error;
 	}
 
 	if (listen(socket_fd, 128) != 0)
 	{
 		int error = errno;
 		(void)close(socket_fd);
-		return error;
+		return -error;
 	}
 
-	out_socket->value = (uintptr_t)(unsigned int)socket_fd;
-	return 0;
+	return socket_fd;
 }
 
-int ck_socket_get_port(ck_socket_t socket)
+int ck_socket_get_port(int socket_fd)
 {
 	struct sockaddr_in address = {0};
 	socklen_t address_length = sizeof(address);
-	int socket_fd;
 
-	if (!ck_socket_is_valid(socket))
+	if (socket_fd < 0)
 	{
 		return -EINVAL;
 	}
-	if (socket.value > (uintptr_t)INT_MAX)
-	{
-		return -EINVAL;
-	}
-	socket_fd = (int)socket.value;
 	if (getsockname(socket_fd,
 		(struct sockaddr *)&address, &address_length) != 0)
 	{
@@ -86,81 +66,63 @@ int ck_socket_get_port(ck_socket_t socket)
 	return (int)ntohs(address.sin_port);
 }
 
-int ck_socket_accept_nonblocking(ck_socket_t listener,
-	ck_socket_t *accepted_socket)
+int ck_socket_accept_nonblocking(int socket_fd)
 {
-	int listener_fd;
 	int accepted_fd;
 
-	if (accepted_socket == NULL || !ck_socket_is_valid(listener))
+	if (socket_fd < 0)
 	{
-		return EINVAL;
+		return -EINVAL;
 	}
-	*accepted_socket = CK_SOCKET_INVALID;
-	if (listener.value > (uintptr_t)INT_MAX)
-	{
-		return EINVAL;
-	}
-	listener_fd = (int)listener.value;
 
-	accepted_fd = accept4(listener_fd, NULL, NULL,
+	accepted_fd = accept4(socket_fd, NULL, NULL,
 		SOCK_CLOEXEC | SOCK_NONBLOCK);
 	if (accepted_fd >= 0)
 	{
-		accepted_socket->value = (uintptr_t)(unsigned int)accepted_fd;
-		return 0;
+		return accepted_fd;
 	}
 
-	return errno;
+	return -errno;
 }
 
-ptrdiff_t ck_socket_recv_nonblocking(
-	ck_socket_t socket,
+ssize_t ck_socket_recv_nonblocking(
+	int socket_fd,
 	void *buffer,
 	size_t length)
 {
-	int socket_fd;
-
-	if (!ck_socket_is_valid(socket)
-		|| socket.value > (uintptr_t)INT_MAX
-		|| (buffer == NULL && length != 0))
+	if (socket_fd < 0 || (buffer == NULL && length != 0))
 	{
 		errno = EINVAL;
 		return -1;
 	}
-	socket_fd = (int)socket.value;
 
-	return (ptrdiff_t)recv(socket_fd, buffer, length, MSG_DONTWAIT);
+	return recv(socket_fd, buffer, length, MSG_DONTWAIT);
 }
 
-ptrdiff_t ck_socket_send_nonblocking(
-	ck_socket_t socket,
+ssize_t ck_socket_send_nonblocking(
+	int socket_fd,
 	const void *buffer,
 	size_t length)
 {
-	int socket_fd;
-
-	if (!ck_socket_is_valid(socket)
-		|| socket.value > (uintptr_t)INT_MAX
-		|| (buffer == NULL && length != 0))
+	if (socket_fd < 0 || (buffer == NULL && length != 0))
 	{
 		errno = EINVAL;
 		return -1;
 	}
-	socket_fd = (int)socket.value;
 
-	return (ptrdiff_t)send(socket_fd, buffer, length,
+	return send(socket_fd, buffer, length,
 		MSG_DONTWAIT | MSG_NOSIGNAL);
 }
 
-int ck_socket_close(ck_socket_t socket)
+int ck_socket_close(int socket_fd)
 {
-	int socket_fd;
-
-	if (!ck_socket_is_valid(socket) || socket.value > (uintptr_t)INT_MAX)
+	if (socket_fd < 0)
 	{
 		return EINVAL;
 	}
-	socket_fd = (int)socket.value;
-	return close(socket_fd) == 0 ? 0 : errno;
+	if (close(socket_fd) == 0)
+	{
+		return 0;
+	}
+	return errno == EINTR ? EINTR : errno;
 }

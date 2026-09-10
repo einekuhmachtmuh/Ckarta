@@ -138,28 +138,29 @@ thread model 的 direct-attach 與 JNI bridge 差異見 docs/THREAD_MODEL.md。
 
 該文件把 OpenJDK 21 原始碼分析、歷史 JNI benchmark 與本機 sanity test 分開；未完成 Ckarta 自有 benchmark 前，不得宣稱某 JNI API 或 thread topology 更快。
 
-
 ## 17. Executor handoff slice
 
-目前 executable path 已由 Java-owned completion queue 改為 runtime-owned native completion queue：Java executor thread 完成 request 後透過 `RegisterNatives` 綁定的 `publishCompletion(long, long, long, long, long, int)` 直接發布 value-only record。Native callback 不保存 `JNIEnv*`、Java Throwable 或 Java object graph，只將固定整數欄位寫入 native queue。
+目前 executable path 使用 runtime-owned bounded native completion queue：Java executor thread 完成 request 後透過 `RegisterNatives` 綁定的 `publishCompletion(long, long, long, long, long, int)` 直接發布 value-only record。Native callback 不保存 `JNIEnv*`、Java Throwable 或 Java object graph，只將固定整數欄位寫入 native queue。
 
 Java executor 必須使用有界工作佇列；native completion queue 另有獨立有界容量與 close-aware producer backpressure。Java producer 在 queue 滿時可阻塞等待 native consumer 釋放容量，但 C event loop 本身不得因此阻塞。
 
-目前 executable slice 使用 Java ThreadPoolExecutor 的有界工作佇列。C worker 僅負責 submission 後 detach；Java executor thread 建立 NativeRequest 並執行 smoke workload；C 以非阻塞 JNI poll 取得 completion。此 polling 仍是 smoke slice，正式 production event loop 尚需更高效率的通知／多請求 completion queue。
+目前 executable slice 使用 Java ThreadPoolExecutor 的有界工作佇列。C worker 僅負責 submission 後 detach；Java executor thread 建立 NativeRequest 並執行 smoke workload；C 以非阻塞 native queue poll 取得 completion。此 polling 仍是 smoke slice，正式 production event loop 尚需更高效率的通知／多請求 completion queue。
 
 Java executor 必須使用有界容量；飽和時不得 fallback 到 C event-loop thread 執行 Servlet application。
- 
 
 目前已固定 Jakarta Servlet API dependency `jakarta.servlet:jakarta.servlet-api:6.1.0` 作為 application-facing API compile/test boundary；`CkartaServletAsyncContext` 是薄 adapter，不把 native connection、queue 或 token 暴露給 Servlet application。這不是 TCK compatibility claim。
+
 ## 18. Native completion notification slice
 
-C runtime 使用 runtime-owned bounded completion queue + platform notification backend。Linux 第一個 executable backend 使用 `eventfd(EFD_CLOEXEC | EFD_NONBLOCK)`，C main 以 `epoll_wait()` 等待 notification fd，收到 wake-up 後 drain notification，再反覆 dequeue completion records。notification coalescing 時不得把一次 wake-up 解讀成恰好一筆 completion。
+C runtime 另有 Linux `eventfd(EFD_CLOEXEC | EFD_NONBLOCK)` notification primitive：`c/event/ck_completion_notification.[ch]` 可建立 notification fd、coalescing signal 與 drain。它目前是已驗證的 native notification primitive／smoke building block，但**尚未接入正式 production completion dispatch path**；目前 executable completion consumer 仍以 native bounded completion queue polling 驗證生命週期。
 
-舊的 Java `pollCompletion()`／Java-owned completion queue 已移除，不再作為目前 executable path。
+因此目前不可宣稱「C main 已以 epoll_wait() 等待 completion notification fd」；那是下一階段 production notification integration，而不是目前 executable smoke path。
 
-目前 executable slice 使用 Java-owned bounded completion queue（Java 所有的有界完成佇列）。C worker 提交 request 後即可 detach；C 以短 JNI poll 呼叫取得 completion。輸出 DirectByteBuffer 固定 36 bytes：request handle 8 bytes、owner token 8 bytes、lifetime token 8 bytes、result 8 bytes、status 4 bytes，並以 native byte order（原生位元組序）寫入。
+多請求 completion 的 value-only record 固定包含 request_id、owner_token、lifetime_token、cycle_id、result 與 status。Java side 不持有 completion queue ownership，也不接收 C queue pointer 之外的 raw native object graph。
 
-此設計只驗證非阻塞交接的生命週期；多請求 smoke 已能以 request_id + owner_token + lifetime_token 路由兩個完成事件。poll API 將 1 定義為新 terminal completion、0 為目前沒有 completion、2 為已消費但因 cancellation/duplicate 而沒有產生第二 terminal outcome、負值為 runtime/ABI error 或新 failure；此仍不是最終多 worker completion queue。正式實作前仍需避免每次 poll attach/detach，並完成 cancellation、shutdown drain 與通知機制。
+目前 smoke poll 的結果語意：正值代表取得一筆可由 C request identity 路由的 completion；0 代表目前沒有 completion；負值代表 runtime／ABI／native completion error。cancellation、duplicate、late completion 等 terminal arbitration 不由這個單純 poll API 自行重新定義，而由 `ck_request_t`／connection registry 的 state contract 決定。
+
+正式多請求 completion queue 仍必須定義：enqueue、dequeue、overflow、shutdown drain、cancellation、duplicate completion、late completion 與 owner disappearance 的語意；單一 smoke queue/poll 不足以代表 production ABI。
 
 ## 19. 多請求 completion ownership
 
@@ -168,7 +169,6 @@ C runtime 使用 runtime-owned bounded completion queue + platform notification 
 C event worker 應可依 request_id 將完成事件送回唯一 connection／request owner；Java executor 不得持有 C-owned request memory 的裸指標。若未來採 native callback（原生回呼）通知，callback context 必須是 process-local opaque token，並由 C 端明確驗證 token 尚未失效。
 
 正式多請求 completion queue 必須定義：enqueue、dequeue、overflow、shutdown drain、cancellation、duplicate completion、late completion 與 owner disappearance 的語意；單一 smoke poll 不再足以代表此 ABI。
-
 
 ## 20. Container-internal native async capability
 

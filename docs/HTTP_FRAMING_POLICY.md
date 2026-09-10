@@ -67,11 +67,11 @@ header parser 以 bounded buffer 做增量 feed；header 區塊完成後，`cons
 
 parser 現在只複製至實際 `\r\n\r\n` framing boundary，不再因單次 `feed` 同時帶入大量 body bytes 而把 body 誤計入 header buffer 上限。
 
-`ck_http_input` 進一步把 header framing、Content-Length body progress 與 chunked decoding 串成單一 per-request input state。它只回傳目前 feed 內可立即借用的 body span，並以 `consumed` 明確保留尚未屬於當前 request message 的剩餘 input；request 結束後由 caller 顯式建立下一 request state。
+`ck_http_input` 已將 header framing、Content-Length body progress 與 chunked decoding 串成單一 per-request input state，並與 connection-owned reader 的 pending-body acknowledgement／bounded body sink 整合。它只回傳目前可交付的 body span，以 `consumed` 保留尚未屬於當前 request message 的剩餘 input；request 結束後由 caller 顯式建立下一 request state。
 
 header parser 已完成 request-line、header-field grammar、Content-Length normalization、Transfer-Encoding 判斷與 header-size bound。chunked body 則由 decoder 維護 `size → data → data CRLF → trailers → done` 狀態，body data 以 input span 直接交給 caller，不建立額外 body copy。
 
-目前以上是 bounded executable components；尚未等同正式 multi-worker connection HTTP production loop。
+以上已是 bounded executable components，且已進入 connection-owned reader smoke path；仍未等同正式 multi-worker connection HTTP production loop。
 
 ## 5. 嚴格要求
 
@@ -134,7 +134,6 @@ RFC 9112 要求 recipient 能解析並解碼 chunked transfer coding，且必須
 
 尚未完成：
 
-- input state machine 與正式 connection event consumer 的 ownership integration
 - configurable maximum decoded body size
 - trailer storage／forwarding policy
 - complete request-to-Servlet body stream mapping
@@ -178,7 +177,7 @@ upstream parser 不得重新詮釋同一個模糊 framing。
 - body completion 與 subsequent request boundary
 - no-body request completion
 
-TCP integration test 仍是 loopback accepted socket → HTTP header parser 的 executable slice；`ck_http_input` 尚未接入正式 connection body event loop。
+`tests/net/ck_tcp_event_integration_test.c` 已將 loopback accepted socket 接入 connection-owned reader；reader 再把 input 交給 `ck_http_input`，因此現有 integration 已涵蓋 HTTP input/body framing 的 bounded native path，但尚未是正式 multi-worker production connection consumer。
 
 仍需補齊：
 

@@ -4,6 +4,8 @@
 
 架構評定：通過，條件為以下邊界與驗證要求不得被後續開發削弱。
 
+本文件描述 target architecture（目標架構）；目前 repo 的實際 executable scope、已驗證程度與未完成項目以 `docs/WORK_STATE.md` 為準，本文件中的「推薦／規劃」不得解讀為已實作能力。
+
 核心判斷：
 
 Ckarta 不應成為「C 版 Tomcat」，也不應成為「Nginx 加 JNI」。
@@ -131,8 +133,8 @@ C event loop：
 3. 完成可以在 C 中快速完成的工作。
 4. 依 route 選擇 Servlet 或 optional application gateway module；未啟用／未命中 CGI/FastCGI 時不得建立其專用 request state。
 5. Servlet 工作透過有界 semantic handoff 提交 Java executor。
-5. 立即回到 event loop；不得等待 Servlet application code。
-6. Java completion／async lifecycle event 到達後再推進 C connection state。
+6. 立即回到 event loop；不得等待 Servlet application code。
+7. Java completion／async lifecycle event 到達後再推進 C connection state。
 
 ## 5. 為什麼不是全部使用 C
 
@@ -479,26 +481,3 @@ C event-driven network data plane
 → Java Servlet semantic plane
 
 Servlet 6.1 的 Request／Response、Filter、Listener、Session、RequestDispatcher、AsyncContext 與 non-blocking I/O 語意必須保持；其 Java object model、blocking request style 與 callback 實作方式不必成為 C 資料平面的內部表示。
-
-完整批判研究見 docs/SERVLET_6_1_CRITIQUE.md。
-
-## 24. CGI／FastCGI application gateway
-
-CGI／FastCGI 可以作為獨立的 external application gateway（外部應用程式閘道），與 Java Servlet semantic plane 分離。純 CGI 走 OS process lifecycle；PHP 優先對接 FastCGI／PHP-FPM。CGI 不得阻塞 C event loop，child process 的 stdin／stdout／stderr、timeout、cancellation、reaping 與 resource limits 必須有獨立 state machine。
-
-完整研究見 docs/CGI_FASTCGI_RESEARCH.md。
-
-## 25. CGI／FastCGI 模組邊界
-
-CGI/1.1 與 FastCGI 定位為未來可掛接的 application gateway module，不屬於 Ckarta 核心 request execution path。核心只提供足以讓模組掛接的 handler／route 邊界，不硬編碼 CGI/FastCGI 語意。
-
-依 Nginx 1.30.4 的模組／phase 架構，模組存在、模組啟用但未命中、以及真正進入 FastCGI handler 是三種不同成本；因此 Ckarta benchmark 必須分別量測。完整研究見 docs/CGI_FASTCGI_RESEARCH.md。
-
-
-## 26. Native async ownership boundary implementation
-
-Ckarta 現已具備第一個可執行的 C↔Java async ownership boundary：C process-local connection registry → generation-protected opaque handle → package-private Java native bridge → CkartaAsyncCycleBinding → CkartaAsyncContext terminal gate。這個 boundary 不將 native socket、TLS state、memory pool 或 connection pointer 暴露給 Servlet application。
-
-native registry 的 mutex 只保護 capability lookup 與 entry lifetime；connection terminal state 仍以 atomic packed lifecycle word 做 publication。C event loop 尚未建立，因此此 registry mutex 不代表 C event-loop 可執行任意 blocking operation；未來正式 network owner 必須在非阻塞 control path 使用同一 contract。
-
-此實作是 integration gate，而非完整 production Servlet container。真正 C request creation、Servlet mapping、response ownership、AsyncContext dispatch、timeout scheduler、client disconnect event source、shutdown drain 與 TCK 尚待接合。

@@ -126,6 +126,41 @@ implementation-defined 或 unspecified behavior 若被使用，必須知道其�
 
 外部長度、offset、count、capacity、allocation size、multiplication/addition/alignment rounding 與 signed/unsigned conversion，都必須在運算及轉換前後檢查可表示範圍與錯誤條件。不得以 cast 掩蓋可能的截斷、符號改變、alignment 或 range violation。
 
+### 7.1. C/Java formatting and naming policy
+
+C 沿用 Nginx 命名精神，將 `ngx_` 改為 `ck_`；這不是 Nginx API。C identifier 必須保持 Ckarta 自有 namespace，不得讓命名暗示未使用的 upstream API 相容性。
+
+C 縮排只能使用 Tab，禁止使用空格作為縮排；大括弧採 Allman style。不得在 C 程式碼中引入與此規則衝突的自動格式化設定。
+
+C 函式與控制結構保持既有 Allman 形式，例如：
+
+```c
+static void
+ck_example(void)
+{
+	...
+}
+
+if (condition)
+{
+	...
+}
+else
+{
+	...
+}
+```
+
+Java 遵循既定 Java naming convention：Class `UpperCamelCase`、method/variable `lowerCamelCase`、constant `UPPER_CASE_WITH_UNDERSCORES`。style convention 僅為一致性與可讀性規則，不得取代 JLS/JVMS/API semantics。
+
+### 7.2. 自動產生碼與產物驗證
+
+若程式碼由產生器、模板或其他自動化流程產生，必須能追溯輸入、產生器／模板版本與相關設定；產生碼與手寫碼的可修改邊界必須明確。
+
+產生器或產物的任何修改仍須依本文件的函式簽名、前置／後置條件、型態轉換、變數生命週期、編譯、測試與安全規則驗證，不得因「自動產生」而降低審查標準。
+
+能重現的產生流程應固定必要輸入與版本，避免同一來源在不同工作階段產生未解釋的差異；若產生碼預期不應手工修改，應使用可檢查的工程機制限制或偵測漂移。
+
 ## 8. C 記憶體、ownership 與生命週期
 
 新增或修改任何變數、欄位、狀態、counter、pointer/reference、handle、buffer reference 或其他可變資料前，必須檢查：
@@ -151,6 +186,8 @@ Native buffer 若由 Java 透過 DirectByteBuffer 觀察，C MUST 保證 buffer 
 request-scoped temporary data SHOULD 使用 C memory pool，但 pool lifetime 必須有明確 owner；大型資料不得因方便而無限制複製進 Java heap。
 
 zero-copy 是條件式最佳化，不是 correctness guarantee。TLS、compression、Java-generated content 或其他資料轉換可能需要額外 CPU processing／copy。
+
+在適用平台上，無內容轉換的靜態檔案路徑可以研究並使用 `sendfile` 或等價 zero-copy primitive；是否使用必須由安全性、TLS、compression、資料生命週期與可測 benchmark 決定，不得把該最佳化當成端到端零拷貝保證。
 
 ## 9. C concurrency 與 memory model
 
@@ -266,6 +303,10 @@ reverse proxy／load balancing 設計至少必須明確考慮 weighted round rob
 Session semantics 由 Java Servlet container 管理；C 不得建立與 Java Session lifecycle 競爭的第二套 Servlet Session authority。
 
 安全 baseline 至少涵蓋 TLS、HTTP security headers、request size limits、rate/connection limits、timeouts、access control、request smuggling、Slowloris、buffer/integer overflow、UAF、double free 與 least privilege。
+
+TLS termination 原則上在 C data plane 完成，除非 architecture document 明確核准例外。部署 baseline 必須研究現代安全 TLS configuration，並覆蓋 protocol downgrade、invalid handshake、certificate validation 與 session resumption 等測試；TLS private key 必須由作業系統權限與 deployment policy 保護。
+
+公開服務不得以 root 身分長期執行；需要較高權限的啟動步驟與長期 runtime privilege 必須明確分離，並以 least-privilege 原則驗證。
 
 所有 parser SHOULD 使用 pointer + length 或等價的明確 bounded representation。禁止 `gets`、`strcpy`、`strcat` 與無界 `sprintf` 類用法。
 

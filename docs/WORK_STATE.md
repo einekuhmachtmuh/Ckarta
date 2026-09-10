@@ -83,7 +83,7 @@ metadata 為 request-owned bounded storage；body 若非零長度仍受 native o
 
 native error record、request terminal publication、connection registry generation、owner/lifetime token、async cycle identity 與 exactly-once terminal arbitration 已形成基礎 contract；正式 Servlet AsyncContext ↔ production connection cancellation 尚未完成。
 
-## 4. 目前 request-body gate
+## 4. 目前 request-body 與 Servlet input 狀態
 
 目前 HTTP input 已增加 transactional pending-body acknowledgement：
 
@@ -108,7 +108,19 @@ C producer
 
 body FIFO write 現在採 all-or-nothing contract：當可用空間不足以容納整個 pending body span 時回傳 `CK_HTTP_REQUEST_BODY_WRITE_WOULD_BLOCK` 且不前移 `head`、不寫入部分資料。HTTP reader 因而可以在 sink backpressure 時保留同一 pending span，待 consumer 騰出完整空間後再成功 acknowledge，而不重播 body prefix。
 
-這仍是 native bounded consumer primitive／smoke integration，不是 Servlet 6.1 `ServletInputStream`／`ReadListener` implementation。
+這仍是 native bounded consumer primitive／smoke integration。
+
+目前已建立 Java `ServletInputStream` minimum semantic adapter：
+
+```
+container-owned BodySource
+→ CkartaServletInputStream
+→ ServletInputStream / ReadListener API
+```
+
+adapter 已涵蓋 blocking/non-blocking read、`isFinished()`、`isReady()`、`setReadListener()`、initial/subsequent `onDataAvailable()`、`onAllDataRead()`、`onError()`、EOF 與 non-blocking illegal-read checks；Servlet 6.1 `read(ByteBuffer)` 的 position/limit observable semantics 已依正式 API 定義處理。
+
+目前 adapter 尚未接入 production native request-body owner，也尚未與 `CkartaServletRequestAdapter` 的正式 `getInputStream()` request surface、AsyncContext ↔ connection cancellation 及 native readiness notification 完成整合。因此不得宣稱 Servlet non-blocking request-body implementation 已完成。
 
 ## 5. Linux io_uring 狀態
 
@@ -180,7 +192,8 @@ GitHub Actions 是最新 CI truth source。
 - canonical request ABI v2：已驗證至目前 executable smoke slice。
 - transactional request body：已實作並有 native unit/integration coverage，需最新 HEAD CI 完整通過後才升級為 verified gate。
 - io_uring probe：已實作並有 direct probe test，需最新 HEAD CI 完整通過後才升級為 verified gate。
-- ServletInputStream / ReadListener：未完成。
+- ServletInputStream / ReadListener minimum semantic adapter：已實作並加入既有 Java Servlet API test gate，需最新 HEAD CI 完整通過後才升級為 verified gate。
+- production native body source integration：未完成。
 - production multi-worker completion notification：未完成。
 - AsyncContext ↔ connection cancellation：未完成。
 - Servlet 6.1 TCK：未完成。
@@ -248,9 +261,9 @@ JNI／Java：
 
 ## 10. 下一個工程閘門
 
-1. 以最新 `main` HEAD 跑完整 GitHub Actions `make test`，確認 transactional request body 與 io_uring probe gate。
-2. 建立 Java `ServletInputStream` 的 minimum semantic adapter，包含 `isReady()`、`ReadListener`、EOF、error、cancel 與 lifecycle。
-3. 將 request body lifetime 與 AsyncContext / connection terminal arbitration 接合。
+1. 以目前最新 `main` HEAD 跑完整 GitHub Actions `make test`；transactional request body、io_uring probe 與新的 ServletInputStream semantic adapter 必須全部通過後，才升級相應 verified gate。
+2. 將 `CkartaServletInputStream.BodySource` 接到 production native request-body owner，明確定義 native readiness notification、lifetime、EOF/error、backpressure 與 close/cancellation contract。
+3. 將 request body lifetime 與 AsyncContext / connection terminal arbitration 接合，並為 cancellation race、late completion、owner teardown 建立測試。
 4. 建立 Linux io_uring completion backend prototype，第一階段使用 one-shot ACCEPT/RECV/SEND 與 direct syscalls；與 epoll 保持可切換。
 5. 建立 epoll vs io_uring identical-workload benchmark，再決定預設 backend與最低支援 kernel。
 6. 之後才進正式 Servlet container routing、TCK、sanitizer/fuzz、TLS 與 end-to-end benchmark。

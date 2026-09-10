@@ -7,6 +7,7 @@ import java.lang.reflect.Proxy;
 import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Consumer;
 
 import jakarta.servlet.AsyncListener;
 import jakarta.servlet.ReadListener;
@@ -91,7 +92,7 @@ public final class CkartaServletAsyncContextTest
 		private boolean available;
 		private boolean eof;
 		private Runnable readyListener;
-		private Runnable errorListener;
+		private Consumer<Throwable> errorListener;
 		private IOException error;
 
 		BodySource(byte[] data)
@@ -142,7 +143,7 @@ public final class CkartaServletAsyncContextTest
 		}
 
 		@Override
-		public void setErrorInterest(Runnable onError)
+		public void setErrorInterest(Consumer<Throwable> onError)
 		{
 			errorListener = onError;
 		}
@@ -166,7 +167,7 @@ public final class CkartaServletAsyncContextTest
 			error = failure;
 			if (errorListener != null)
 			{
-				errorListener.run();
+				errorListener.accept(failure);
 			}
 		}
 	}
@@ -362,6 +363,9 @@ public final class CkartaServletAsyncContextTest
 		});
 		errorSource.fail(new IOException("boom"));
 		assertTrue(errorCallback.get() != null, "error callback expected");
+		assertTrue("boom".equals(errorCallback.get().getMessage()), "source error must propagate");
+		errorSource.fail(new IOException("later"));
+		assertTrue("boom".equals(errorCallback.get().getMessage()), "terminal error must be stable");
 
 		System.out.println("CKARTA_SERVLET_ASYNC_API_OK");
 	}

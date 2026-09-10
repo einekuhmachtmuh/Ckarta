@@ -2,7 +2,8 @@
 
 #include <errno.h>
 #include <string.h>
-#include <sys/socket.h>
+
+#include "ck_socket.h"
 
 void ck_http_output_writer_init(ck_http_output_writer_t *writer)
 {
@@ -79,10 +80,10 @@ ck_http_output_write_result_t ck_http_output_writer_drive(
 		size_t attempt = pending < budget ? pending : budget;
 		ssize_t sent;
 
-		sent = send(writer->socket_fd,
+		sent = ck_socket_send_nonblocking(
+				writer->socket_fd,
 				writer->buffer + writer->begin,
-				attempt,
-				MSG_DONTWAIT | MSG_NOSIGNAL);
+				attempt);
 		if (sent > 0)
 		{
 			writer->begin += (size_t)sent;

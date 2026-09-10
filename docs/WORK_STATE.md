@@ -40,6 +40,7 @@ C event-loop thread 不得執行 Servlet application code。
 
 ```
 loopback TCP
+→ platform socket boundary
 → accept4(SOCK_NONBLOCK|SOCK_CLOEXEC)
 → generation-protected connection registry
 → epoll readiness
@@ -49,6 +50,8 @@ loopback TCP
 → keep-alive recycle
 ```
 
+`c/platform/ck_socket.c` 現在集中 Linux/POSIX listener、accept、recv、send、close platform calls；HTTP reader、output writer 與 TCP listener 不再直接包含 socket system headers 或直接呼叫 socket API。這是 platform isolation 的增量落實，不代表 Windows socket backend 已完成。
+
 已有 connection reader、registry reader/output pin、bounded read/process budget，以及 pipeline preservation。
 
 ### Output
@@ -57,6 +60,7 @@ loopback TCP
 response transaction
 → HTTP final-response header serialization
 → bounded output writer
+→ platform socket boundary
 → partial nonblocking send
 → EPOLLOUT continuation
 → output drain
@@ -196,6 +200,8 @@ kernel version 只是 deployment hint，不是 capability proof。
 
 event backend 的 ownership 是 single-owner；registry lock 不得包住 socket I/O。
 
+Linux pthread/NPTL 研究已持久化於 `docs/PTHREAD_COMPATIBILITY_RESEARCH.md`。pthread/POSIX thread API 是 platform/OS contract，不是 ISO C11 facility；`-pthread` 是 build contract，不代表所有 C source 都必須直接使用 pthread API。worker role、ownership、lifetime、join/detach、blocking boundary 與 JNI attachment 仍由 `docs/THREAD_MODEL.md` 定義。
+
 io_uring 預期採 completion-oriented worker contract；同一 TCP connection 的 receive/send ordering 仍由 connection owner 序列化。
 
 ## 7. 驗證狀態原則
@@ -205,13 +211,14 @@ GitHub Actions 是最新 CI truth source。
 本文件只記錄 gate 類別，不保存歷史 run 清單：
 
 - Linux epoll + loopback TCP：已驗證。
-- connection-owned reader/output writer：已驗證。
-- keep-alive/recycle：已驗證至目前 executable slice。
-- canonical request ABI v2：已驗證至目前 executable smoke slice。
+- connection-owned reader/output writer：已驗證至先前 executable slice；本次 platform socket boundary 變更須由最新 HEAD CI 重新驗證。
+- keep-alive/recycle：已驗證至目前 executable slice；本次 platform socket boundary 變更須由最新 HEAD CI 重新驗證。
+- canonical request ABI v2：已驗證至目前 executable smoke slice；本次 HEAD 仍需完整 CI。
 - Linux eventfd + completion notification + event-backend wait：已實作於 executable smoke path，需最新 HEAD CI 完整通過後才升級為 verified gate。
 - transactional request body：已實作並有 native unit/integration coverage，需最新 HEAD CI 完整通過後才升級為 verified gate。
 - io_uring probe：已實作並有 direct probe test，需最新 HEAD CI 完整通過後才升級為 verified gate。
 - ServletInputStream / ReadListener minimum semantic adapter：已實作並加入既有 Java Servlet API test gate，需最新 HEAD CI 完整通過後才升級為 verified gate。
+- platform socket boundary：已實作，等待最新 HEAD `make test` 驗證。
 - production native body source integration：未完成。
 - production multi-worker completion notification：未完成。
 - AsyncContext ↔ connection cancellation：未完成。
@@ -251,6 +258,7 @@ codex/win32-research-notification
 - `docs/EVENT_BACKEND.md`
 - `docs/IO_URING_BACKEND_RESEARCH.md`
 - `docs/WIN32_LINUX_PLATFORM_RESEARCH.md`
+- `docs/PTHREAD_COMPATIBILITY_RESEARCH.md`
 
 HTTP／connection：
 - `docs/HTTP_FRAMING_POLICY.md`
@@ -281,9 +289,9 @@ JNI／Java：
 
 ## 10. 下一個工程閘門
 
-1. 以目前最新 `main` HEAD 跑完整 GitHub Actions `make test`；completion notification event-backend refactor、transactional request body、io_uring probe 與新的 ServletInputStream semantic adapter 必須全部通過後，才升級相應 verified gate。
-2. 將 `CkartaServletInputStream.BodySource` 接到 production native request-body owner，明確定義 native readiness notification、lifetime、EOF/error、backpressure 與 close/cancellation contract；實作前必須遵守 `docs/SERVLET_INPUT_STREAM_MODEL.md`。
-3. 將 request body lifetime 與 AsyncContext / connection terminal arbitration 接合，並為 cancellation race、late completion、owner teardown 建立測試。
+1. 以目前最新 `main` HEAD 跑完整 GitHub Actions `make test`；本次 pthread research、platform socket boundary、completion notification event-backend refactor、transactional request body、io_uring probe 與 ServletInputStream semantic adapter 的相關變更必須全部通過後，才升級相應 verified gate。
+2. 若 CI 通過，重新檢查 native socket/platform boundary 是否仍有 HTTP、connection、output layer 直接使用 POSIX socket API；若沒有，進入 `CkartaServletInputStream.BodySource` → production native request-body owner 整合。
+3. 接合 request body lifetime 與 AsyncContext / connection terminal arbitration，並為 cancellation race、late completion、owner teardown 建立測試。
 4. 建立 Linux io_uring completion backend prototype，第一階段使用 one-shot ACCEPT/RECV/SEND 與 direct syscalls；與 epoll 保持可切換。
 5. 建立 epoll vs io_uring identical-workload benchmark，再決定預設 backend與最低支援 kernel。
 6. 之後才進正式 Servlet container routing、TCK、sanitizer/fuzz、TLS 與 end-to-end benchmark。

@@ -170,12 +170,129 @@ kernel version 只能作初步 deployment gate；正式啟用必須同時檢查 
 
 「POSIX on Win32」不是單一實作，也不是單純的名稱對映；至少要區分 Microsoft UCRT、原生 Win32／Winsock、MinGW/winpthreads、Cygwin 與 WSL。它們提供的是不同層次、不同 ABI、不同語意強度的相容性。
 
-Microsoft UCRT 明確說明它實作「large subset of the POSIX.1 C library」，但「is not fully conformant to any specific POSIX standard」。同一份 Microsoft compatibility 文件也列出 UCRT 尚未提供 `<threads.h>` threading support 及 `pthreads` 等 POSIX threading interfaces。
+Microsoft UCRT 明確說明它實作「large subset of the POSIX.1 C library」，但「is not fully conformant to any specific POSIX standard」。同一份 Microsoft compatibility 文件也列出 UCRT 尚未提供 `<threads.h>` threading support 及 `<stdatomic.h>` atomic support。故 UCRT 的 POSIX-like C API 不能視為完整 POSIX runtime，更不能由此推論 pthread、fork、signals、Unix process model 或 Unix socket ABI 存在。
 
-來源：https://learn.microsoft.com/en-us/cpp/c-runtime-library/compatibility
+https://learn.microsoft.com/en-us/cpp/c-runtime-library/compatibility?view=msvc-170
 
-## 19. Windows CRT / thread compatibility
+MSVC 的部分傳統 POSIX／Unix-style 名稱只是 CRT 相容名稱。例如 `open` 可透過 OLDNAMES.LIB 對映到 `_open`。這屬於 CRT naming/backward compatibility，不等於提供 Unix syscall semantics。
 
-目前不要建立「POSIX emulation layer」作為 Win32 實作前提。C11 `threads.h`、pthreads、Win32 native thread primitives 的相容性要依實際 toolchain 分別驗證。`_WIN32` 僅負責 platform detection，不代表 threading ABI identical。
+https://learn.microsoft.com/en-us/cpp/c-runtime-library/backward-compatibility?view=msvc-170
 
-後續 Windows slice 必須明確選擇：Windows native threads／condition variables、或 MinGW/winpthreads；不得由上層模糊混用。
+因此 Ckarta 不應以「UCRT 有 POSIX 函式」作為 platform backend 設計基礎，而應以 Windows 官方 API 的實際 handle、錯誤碼、非同步 I/O、Unicode 與 lifetime semantics 為依據。
+
+## 19. pthread／POSIX threads 在 Win32 上的實際實作
+
+MSVC／UCRT 並不提供 Linux/glibc 式 pthread API。若 Windows C 程式需要 pthread API，常見做法是額外使用 winpthreads 或 pthreads4w 之類 compatibility library。
+
+mingw-w64 的 `winpthreads` 原始碼直接包含 `<windows.h>`，並以 Windows TLS、HANDLE、SEH、Win32 thread lifecycle 等機制實作 pthread API。其 `pthread.h` 也明示部分來源承自 Pthreads for Microsoft Windows，並列出 unsupported／`ENOTSUP` 項目與 Windows-specific extensions。這證明 winpthreads 是「以 Win32 primitive 實作 POSIX thread interface」，不是 Windows kernel 原生提供的 pthread ABI。
+
+https://github.com/mingw-w64/mingw-w64/blob/master/mingw-w64-libraries/winpthreads/include/pthread.h
+https://github.com/mingw-w64/mingw-w64/blob/master/mingw-w64-libraries/winpthreads/src/thread.c
+
+pthreads4w 則明確將自己描述為 POSIX 1003.1c／相關 Unix 規格在 Microsoft Windows 上的 implementation，並要求 MSVC 或 MinGW 建置。
+
+https://github.com/fwbuilder/pthreads4w/blob/master/README
+
+所以 `pthread_*` 應被 Ckarta 視為可替換的 platform compatibility facility，而非 portable C11 primitive，也不是 Windows native performance baseline。正式 Windows backend 應先比較 native Win32 thread／synchronization 與 pthread compatibility library 的實際成本，再決定是否保留 pthread facade。
+
+## 20. Windows 原生 thread 與 synchronization 實作邊界
+
+Windows kernel 將 thread 視為基本 schedulable entity；每個 user-mode thread object 有對應的 kernel-mode thread object。Microsoft driver/kernel 文件也指出 dispatcher objects 包括 thread、event、semaphore、mutex、timer，等待操作會使 thread 進入 wait state。
+
+https://learn.microsoft.com/en-us/windows-hardware/drivers/kernel/introduction-to-thread-objects
+https://learn.microsoft.com/en-us/windows-hardware/drivers/kernel/introduction-to-kernel-dispatcher-objects
+
+Win32 synchronisation 並不是單一路徑。Microsoft 目前文件把 SRW lock、critical section、mutex、semaphore、event 等分開；其中 SRW lock 通常在 user mode 快速處理、爭用時才可能進 kernel，critical section 也具有 user-mode fast path；cross-process mutex 則較重。故「pthread mutex = 一次固定 kernel syscall」或「Win32 lock 一定比 pthread 快」都不是可直接採用的模型。
+
+https://learn.microsoft.com/en-us/windows/win32/sync/about-synchronization
+
+建立 thread 時，Microsoft 文件建議：若 thread routine 會使用 CRT，應使用 `_beginthreadex`；直接使用 `CreateThread` 的 CRT process 必須遵守相應的 CRT lifecycle contract。`_beginthreadex` 回傳的 handle 可用同步 API 等待，並由 caller 關閉。
+
+https://learn.microsoft.com/en-us/windows/win32/procthread/creating-threads
+https://learn.microsoft.com/en-us/cpp/c-runtime-library/reference/beginthread-beginthreadex?view=msvc-170
+
+這表示 Ckarta Windows worker thread 若使用 CRT、JNI 與 socket backend，不應把 `CreateThread`、`_beginthreadex`、pthread_create 三者視為只換函式名稱；thread entry、TLS、CRT state、join／handle cleanup 與 shutdown 都是 implementation contract 的一部分。
+
+## 21. POSIX socket 與 Winsock 不是 ABI 等價物
+
+POSIX/Linux socket 通常以 integer file descriptor 表示；Windows Winsock 使用 `SOCKET`，並以 `closesocket` 關閉。Windows API 由 `WSAGetLastError` 提供 Winsock-specific error，而不是把所有情況直接視作 POSIX `errno`。
+
+https://learn.microsoft.com/en-us/windows/win32/api/winsock/nf-winsock-closesocket
+https://learn.microsoft.com/en-us/windows/win32/api/winsock/nf-winsock-wsastartup
+
+Windows 的 nonblocking socket 使用 `ioctlsocket(..., FIONBIO, ...)`；它與 Linux `O_NONBLOCK`／`fcntl` 並非同一 ABI。對 Ckarta 而言，更重要的是保存「nonblocking read/write、可觀測 would-block、close、error」語意，而不是假設兩邊可共用 `int fd` 的 implementation。
+
+https://learn.microsoft.com/en-us/windows/win32/api/winsock/nf-winsock-ioctlsocket
+
+Winsock 還提供 OVERLAPPED I/O。`AcceptEx` 可同時完成 accept、地址取得及首段資料接收，而且透過 completion ports 支援大量連線以少量 threads 處理。這是 Windows 原生 completion-oriented design，而不是 epoll readiness 的函式別名。
+
+https://learn.microsoft.com/en-us/windows/win32/api/mswsock/nf-mswsock-acceptex
+https://learn.microsoft.com/en-us/windows/win32/fileio/i-o-completion-ports
+
+尤其 `closesocket` 的官方說明指出，呼叫後 socket descriptor 可能立即被重用；同時對 pending overlapped operations 有取消與 `WSA_OPERATION_ABORTED` 行為。這使 Windows connection lifetime 必須把「HANDLE/SOCKET lifetime」與「pending I/O completion lifetime」分開管理。
+
+https://learn.microsoft.com/en-us/windows/win32/api/winsock/nf-winsock-closesocket
+
+## 22. Cygwin 與 WSL 不是 Ckarta 的 Win32 native ABI
+
+Cygwin 透過 `cygwin1.dll` 提供大量 POSIX API functionality，並維持自己的 POSIX filesystem view、path translation、process／signal／socket 等語意。因此它很適合移植 Unix application，但其 native ABI 已經是 Cygwin compatibility environment，而不是單純的 Win32 API。
+
+https://cygwin.com/
+https://cygwin.com/cygwin-api/cygwin-api.html
+https://cygwin.com/cygwin-ug-net/using.html
+
+WSL1 則採 Windows kernel 中的 Linux syscall compatibility layer；Microsoft 文件描述其將 Linux syscall 導向 lxcore.sys，並在必要處翻譯為 Windows functionality。WSL2 則改採真正的 Linux kernel；它們都不能作為 Ckarta Win32 binary 的 native POSIX ABI。
+
+https://learn.microsoft.com/en-us/windows/desktop/cmdline/wsl-architectural-overview
+https://github.com/microsoft/WSL
+https://blogs.windows.com/windowsdeveloper/2025/05/19/the-windows-subsystem-for-linux-is-now-open-source/
+
+因此「在 Windows 上支援 POSIX」與「Ckarta Win32 backend 使用 POSIX ABI」是兩個不同問題。Ckarta 應選後者為否。
+
+## 23. POSIX semantics 與 Windows-native semantics 的不可直接等價項
+
+至少以下項目不可因為有一組同名或近似名函式，就假定語意相同：
+
+1. `pthread_*` 與 Windows thread／TLS／handle lifecycle。
+2. Unix integer file descriptor 與 Windows `HANDLE`／Winsock `SOCKET`。
+3. `errno` 與 `WSAGetLastError`／`GetLastError`。
+4. `fork()`／`exec*()` 與 CreateProcess；Windows 沒有原生、等價的 Unix `fork` process model。
+5. POSIX signal model 與 Win32 console／process exception model。
+6. `poll`／`epoll` readiness 與 IOCP completion。
+7. Unix path／inode／mode semantics 與 Windows UTF-16／handle／ACL／reparse-point semantics。
+8. POSIX cancellation points 與 Windows thread termination／cooperative cancellation。
+9. `mmap`／`shm_open` 等 Unix process-shared memory facilities 與 Windows mapping handles。
+10. `dlopen`／`dlsym` 與 LoadLibrary／GetProcAddress。
+
+Ckarta 不應建立覆蓋全部項目的「POSIX facade」。這會把每個差異都升格成 compatibility burden，並使 native backend 無法利用 Windows completion、handle 與 Unicode 等本身的優勢。
+
+## 24. Nginx、Windows kernel 與學術證據的綜合判斷
+
+固定 Nginx 1.30.4 的 Windows source 已直接使用 WSAStartup、WSAIoctl、AcceptEx 等 Windows-native capabilities；其 event layer 本身就是依平台事件模型組合，而不是把 Linux epoll 強行移植成 Win32 API。這與 Ckarta platform isolation 的設計方向一致。
+
+Windows kernel 官方文件把 thread 與 dispatcher/synchronization 明確當作原生 OS objects；Windows synchronization guidance 也區分快速 user-mode primitive 與 kernel-backed object。因此 Windows native thread backend 有其完整的原生語意，不必經 pthread compatibility layer 才能形成高效能並行模型。
+
+學術上，SEDA 論證 explicit stages、queues、resource control 能改善高度併行網路服務的 overload 行為；Capriccio 則顯示 scalable thread-based server 是另一條可行路徑；Zeldovich 等人的 multiprocessor event-driven work 說明 event-driven architecture 也能有效利用多 CPU。這些工作共同支持「不要把 API 樣式直接等同於效能模型」：Ckarta 應以 ownership、queueing、I/O completion、CPU locality 與 workload benchmark 決定 topology，而不是預設 POSIX thread facade 必然最佳。
+
+Nickolai Zeldovich, Alexander Yip, Frank Dabek, Robert T. Morris, David Mazières, Frans Kaashoek, “Multiprocessor Support for Event-Driven Programs”, USENIX ATC 2003.
+https://www.usenix.org/conference/2003-usenix-annual-technical-conference/multiprocessor-support-event-driven-programs
+
+Matt Welsh, David Culler, Eric Brewer, “SEDA: An Architecture for Well-Conditioned, Scalable Internet Services”, ACM SIGOPS Operating Systems Review 35(5), 2001, DOI 10.1145/502059.502057.
+https://doi.org/10.1145/502059.502057
+
+Rob von Behren, Jeremy Condit, Feng Zhou, George C. Necula, Eric A. Brewer, “Capriccio: Scalable Threads for Internet Services”, SOSP 2003, DOI 10.1145/945469.945471.
+https://doi.org/10.1145/945469.945471
+
+Philippe Joubert, Robert B. King, Rich Neves, Mark Russinovich, John M. Tracey, “High-Performance Memory-Based Web Servers: Kernel and User-Space Performance”, USENIX ATC 2001.
+https://www.usenix.org/conference/2001-usenix-annual-technical-conference/high-performance-memory-based-web-servers-kernel
+
+## 25. 最終平台決策
+
+1. Ckarta 的 portable core 維持 ISO C11；POSIX、Win32、Winsock、JNI 均屬額外 platform/API contracts。
+2. 不把 POSIX facade 視為 Win32 compatibility baseline。
+3. Windows backend 應優先使用 documented Win32、Winsock、OVERLAPPED、IOCP、Unicode API 與 Windows synchronization primitives。
+4. MinGW/winpthreads 只可視為 toolchain compatibility option；不得因 `-pthread` 能在某一 Windows toolchain 工作，就把 pthread ABI 變成 Ckarta 的 Windows architecture invariant。
+5. Ckarta 上層只依賴自己的 platform-neutral contract；不得暴露 `int fd`、`SOCKET`、`HANDLE` 或 pthread-specific object 到 HTTP／Servlet layer。
+6. `-pthread` 僅是目前 Linux/GCC CI build contract；Windows future build contract 應依實際 toolchain 分開定義，不得假設 MSVC 存在同義編譯選項。
+7. 不修改 `WORKING_RULES.md` 建立大量 POSIX-specific rules。現有守則已要求 OS API 集中於 platform layer、portable core 與 platform contract 分離、documented API／UAPI、ownership／lifecycle／error 檢查及 benchmark 驗證；新增大批 pthread 規則會過度具體化。研究結論由本文件與 `docs/PTHREAD_COMPATIBILITY_RESEARCH.md` 保存。
+8. Windows IOCP backend 仍未實作；本研究不構成 Windows CI 或 Windows runtime verified gate。

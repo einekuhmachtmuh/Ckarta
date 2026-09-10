@@ -171,10 +171,12 @@ Servlet 6.1 的 externally visible semantics 與 internal scheduling strategy �
 
 ## 12. Completion handoff
 
-Java executor completion 不得要求 C event-loop thread blocking 等待。smoke slice 以 Java 有界完成佇列 + C 非阻塞 poll 驗證此邊界；多請求 routing contract 已由 smoke slice 驗證，正式路徑仍待加入高效率通知機制並接入多 worker producer／owner routing。
+Java executor completion 不得要求 C event-loop thread blocking 等待。**目前 executable smoke path 已由 Java executor → JNI publisher → bounded native completion queue → Linux eventfd → `ck_event_loop_wait()` → notification drain → completion routing 串接；但這仍是單一 executable integration，不是正式 multi-worker/cross-platform completion backend。**
+
+notification 只負責喚醒；completion record 儲存在 native bounded queue。consumer 收到 event notification 後必須 drain notification，再反覆 dequeue 至 queue 為空。queue overflow、shutdown drain、cancellation、duplicate/late completion 與 owner teardown 的完整 production semantics 仍由後續 completion routing contract 決定。
 
 ## 13. 多請求 completion routing
 
 正式多請求模型中，Java executor completion 不能只回到單一全域 mailbox；每個 completion 必須攜帶 request_id 與 owner/lifetime identity，並由 C side routing（路由）回唯一 request owner。queue overflow、late completion、duplicate completion、cancelled request 與 owner teardown 都必須有明確且可測試的狀態轉移。
 
-通知機制先不鎖定 Linux-specific primitive（Linux 專用原語）；可候選 eventfd、pipe、socketpair 或既有 event backend，最終選擇必須以 hot-path benchmark、跨平台需求與 lifecycle correctness 決定。
+目前 completion record 已加入 cycle_id；現行 queue／notification slice 已能承載這些 value-only identity，但 multi-worker owner selection、跨平台 completion mechanism 與完整 teardown protocol 尚未定案。

@@ -83,6 +83,22 @@ metadata 為 request-owned bounded storage；body 若非零長度仍受 native o
 
 native error record、request terminal publication、connection registry generation、owner/lifetime token、async cycle identity 與 exactly-once terminal arbitration 已形成基礎 contract；正式 Servlet AsyncContext ↔ production connection cancellation 尚未完成。
 
+### Completion notification
+
+Linux executable smoke path 已完成：
+
+```
+Java bounded executor
+→ registered JNI publisher
+→ runtime-owned bounded completion queue
+→ eventfd notification
+→ platform event backend wait
+→ drain notification
+→ completion queue routing
+```
+
+notification backend 已透過 `ck_event_loop` abstraction 使用；C main 不直接操作 Linux `epoll` API。這仍是單一 executable integration，不是正式多 worker／跨平台最終 backend。
+
 ## 4. 目前 request-body 與 Servlet input 狀態
 
 目前 HTTP input 已增加 transactional pending-body acknowledgement：
@@ -192,6 +208,7 @@ GitHub Actions 是最新 CI truth source。
 - connection-owned reader/output writer：已驗證。
 - keep-alive/recycle：已驗證至目前 executable slice。
 - canonical request ABI v2：已驗證至目前 executable smoke slice。
+- Linux eventfd + completion notification + event-backend wait：已實作於 executable smoke path，需最新 HEAD CI 完整通過後才升級為 verified gate。
 - transactional request body：已實作並有 native unit/integration coverage，需最新 HEAD CI 完整通過後才升級為 verified gate。
 - io_uring probe：已實作並有 direct probe test，需最新 HEAD CI 完整通過後才升級為 verified gate。
 - ServletInputStream / ReadListener minimum semantic adapter：已實作並加入既有 Java Servlet API test gate，需最新 HEAD CI 完整通過後才升級為 verified gate。
@@ -264,7 +281,7 @@ JNI／Java：
 
 ## 10. 下一個工程閘門
 
-1. 以目前最新 `main` HEAD 跑完整 GitHub Actions `make test`；transactional request body、io_uring probe 與新的 ServletInputStream semantic adapter 必須全部通過後，才升級相應 verified gate。
+1. 以目前最新 `main` HEAD 跑完整 GitHub Actions `make test`；completion notification event-backend refactor、transactional request body、io_uring probe 與新的 ServletInputStream semantic adapter 必須全部通過後，才升級相應 verified gate。
 2. 將 `CkartaServletInputStream.BodySource` 接到 production native request-body owner，明確定義 native readiness notification、lifetime、EOF/error、backpressure 與 close/cancellation contract；實作前必須遵守 `docs/SERVLET_INPUT_STREAM_MODEL.md`。
 3. 將 request body lifetime 與 AsyncContext / connection terminal arbitration 接合，並為 cancellation race、late completion、owner teardown 建立測試。
 4. 建立 Linux io_uring completion backend prototype，第一階段使用 one-shot ACCEPT/RECV/SEND 與 direct syscalls；與 epoll 保持可切換。

@@ -118,9 +118,11 @@ container-owned BodySource
 → ServletInputStream / ReadListener API
 ```
 
-adapter 已涵蓋 blocking/non-blocking read、`isFinished()`、`isReady()`、`setReadListener()`、initial/subsequent `onDataAvailable()`、`onAllDataRead()`、`onError()`、EOF 與 non-blocking illegal-read checks；Servlet 6.1 `read(ByteBuffer)` 的 position/limit observable semantics 已依正式 API 定義處理。
+其 canonical bridge contract 已記錄於 `docs/SERVLET_INPUT_STREAM_MODEL.md`，並以 Jakarta Servlet 6.1 specification/API 為 normative authority、Tomcat 11.0.25 為 implementation reference、Nginx 1.30.4 為 native buffering/backpressure reference。
 
-目前 adapter 尚未接入 production native request-body owner，也尚未與 `CkartaServletRequestAdapter` 的正式 `getInputStream()` request surface、AsyncContext ↔ connection cancellation 及 native readiness notification 完成整合。因此不得宣稱 Servlet non-blocking request-body implementation 已完成。
+adapter 已涵蓋 blocking/non-blocking read、`isFinished()`、`isReady()`、`setReadListener()`、initial/subsequent `onDataAvailable()`、`onAllDataRead()`、`onError()`、EOF、non-blocking illegal-read checks，以及 Servlet 6.1 `read(ByteBuffer)` 的 position/limit observable semantics。
+
+目前 adapter 尚未接入 production native request-body owner，也尚未與 `CkartaServletRequestAdapter` 的正式 `getInputStream()` request surface、AsyncContext ↔ connection cancellation、native readiness notification 與 owner pin/lifetime extension 完成整合。因此不得宣稱 Servlet non-blocking request-body implementation 已完成。
 
 ## 5. Linux io_uring 狀態
 
@@ -246,6 +248,7 @@ JNI／Java：
 - `docs/REQUEST_HANDOFF.md`
 - `docs/CANCELLATION_MODEL.md`
 - `docs/THREAD_MODEL.md`
+- `docs/SERVLET_INPUT_STREAM_MODEL.md`
 
 架構／證據：
 - `docs/ARCHITECTURE.md`
@@ -262,7 +265,7 @@ JNI／Java：
 ## 10. 下一個工程閘門
 
 1. 以目前最新 `main` HEAD 跑完整 GitHub Actions `make test`；transactional request body、io_uring probe 與新的 ServletInputStream semantic adapter 必須全部通過後，才升級相應 verified gate。
-2. 將 `CkartaServletInputStream.BodySource` 接到 production native request-body owner，明確定義 native readiness notification、lifetime、EOF/error、backpressure 與 close/cancellation contract。
+2. 將 `CkartaServletInputStream.BodySource` 接到 production native request-body owner，明確定義 native readiness notification、lifetime、EOF/error、backpressure 與 close/cancellation contract；實作前必須遵守 `docs/SERVLET_INPUT_STREAM_MODEL.md`。
 3. 將 request body lifetime 與 AsyncContext / connection terminal arbitration 接合，並為 cancellation race、late completion、owner teardown 建立測試。
 4. 建立 Linux io_uring completion backend prototype，第一階段使用 one-shot ACCEPT/RECV/SEND 與 direct syscalls；與 epoll 保持可切換。
 5. 建立 epoll vs io_uring identical-workload benchmark，再決定預設 backend與最低支援 kernel。

@@ -57,11 +57,20 @@ c/
 ├── logging/
 └── jni/
 
-除 `error/` 外，多數目錄目前仍屬架構規劃，不代表該目錄內功能已實作。
+目前不是所有子模組都已進入 production；但 `error/`、`core/`、`event/`、`connection/`、`http/`、`output/`、`platform/` 與 `jni/` 已包含可執行或可測試的 C implementation slices。其餘 `tls/`、`proxy/`、`static/`、`cache/`、`limit/`、`logging/` 目前主要仍屬規劃／骨架。這裡的「已實作」只表示 repository 中已有對應 source/test，不代表 production completeness 或 Servlet 6.1 compatibility。
 
-error/ 已提供 process-local error/outcome record；不直接承擔 Java Throwable ownership。
+主要 current executable slices：
 
-jni/ 是唯一允許直接定義 C/Java ABI（應用程式二進位介面）邊界的 C 模組之一。
+- `error/`：process-local structured error/outcome record。
+- `core/`：C `main()` orchestration、JVM bootstrap 與 completion/event-loop smoke integration。
+- `event/`：Linux epoll backend、completion notification primitive，以及 io_uring probe。
+- `platform/`：目前 Linux/POSIX socket boundary wrapper。
+- `connection/`：connection lifecycle、generation-protected registry 與 reader/output lifetime pins。
+- `http/`：HTTP parser、Content-Length/chunked framing、connection reader 與 bounded request-body FIFO。
+- `output/`：HTTP response state、final-response serialization 與 bounded nonblocking output writer。
+- `jni/`：C/Java JNI runtime、request handoff、completion publisher 與 container-internal async bridge。
+
+`jni/` 是 C/Java ABI 邊界的實作模組之一；正式 ABI 的 canonical contract 仍由 `docs/JNI_ABI.md` 定義。
 
 ## 4. java/
 
@@ -75,7 +84,9 @@ java/
         ├── session/
         └── web/
 
-實際 package（套件）名稱可在開始 Java 實作前確認；目前不把 Tomcat package hierarchy（套件階層）直接複製成 Ckarta namespace（命名空間）。
+目前已有 `bootstrap/`、`connector/` 與 `servlet/` 的實作切片，包含 JVM runtime bootstrap、`NativeRequest`、AsyncContext semantic core、Servlet 6.1 API binding prototype 與 `ServletInputStream` minimum semantic adapter。`container/`、`session/`、`web/` 仍未形成完整 Servlet container implementation。
+
+目前不把 Tomcat package hierarchy（套件階層）直接複製成 Ckarta namespace（命名空間）。
 
 ## 5. tests/
 
@@ -88,6 +99,8 @@ tests/
 ├── compatibility/
 └── fuzz/
 
+目前已有 C、Java、HTTP、connection、event、output、completion、JNI/async integration 等測試；`security/`、`compatibility/`、`fuzz/` 仍主要是後續完整 coverage 的工作區。
+
 相容性測試與 Ckarta 自有單元／整合測試分開。
 
 ## 6. bench/
@@ -99,7 +112,7 @@ bench/
 ├── static/
 └── tls/
 
-所有效能結果必須與 Ckarta、Nginx、Tomcat 的精確版本及測試環境綁定。
+目前 benchmark 工作區仍主要保存 harness／placeholder；正式效能結果必須與 Ckarta、Nginx、Tomcat 的精確版本及測試環境綁定。
 
 ## 7. tools/
 

@@ -6,6 +6,7 @@ import java.util.Objects;
 import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Consumer;
 
 import jakarta.servlet.ReadListener;
 import jakarta.servlet.ServletInputStream;
@@ -40,7 +41,11 @@ public final class CkartaServletInputStream extends ServletInputStream
 		 */
 		void setReadInterest(Runnable onReady);
 
-		void setErrorInterest(Runnable onError);
+		/**
+		 * Registers a callback carrying the source's terminal error. The callback
+		 * must be invoked at most once for a given terminal source state.
+		 */
+		void setErrorInterest(Consumer<Throwable> onError);
 
 		@Override
 		void close() throws IOException;
@@ -51,6 +56,7 @@ public final class CkartaServletInputStream extends ServletInputStream
 	private final boolean asyncStarted;
 	private final AtomicBoolean callbackScheduled = new AtomicBoolean();
 	private final AtomicBoolean allDataReadNotified = new AtomicBoolean();
+	private final AtomicBoolean errorNotified = new AtomicBoolean();
 	private final AtomicReference<ReadListener> listener = new AtomicReference<>();
 	private final AtomicReference<IOException> terminalError = new AtomicReference<>();
 	private final Object listenerLock = new Object();
@@ -119,7 +125,7 @@ public final class CkartaServletInputStream extends ServletInputStream
 			waitingForData = !finished && !ready;
 
 			source.setReadInterest(() -> scheduleDataAvailable(false));
-			source.setErrorInterest(this::scheduleError);
+			source.setErrorInterest(this::notifyBodyError);
 
 			if (finished || (!ready && source.isFinished()))
 			{
@@ -171,7 +177,22 @@ public final class CkartaServletInputStream extends ServletInputStream
 		checkReadPermission();
 
 		ByteBuffer destination = buffer.duplicate();
-		int result = source.read(destination, !nonBlocking);
+		int result;
+		try
+		{
+			result = source.read(destination, !nonBlocking);
+		}
+		catch (IOException error)
+		{
+			notifyBodyError(error);
+			throw error;
+		}
+		catch (RuntimeException error)
+		{
+			notifyBodyError(error);
+			throw error;
+		}
+
 		switch (result)
 		{
 			case BodySource.DATA ->
@@ -211,8 +232,7 @@ public final class CkartaServletInputStream extends ServletInputStream
 				IOException error = terminalError.get();
 				if (error == null)
 				{
-					error = new IOException("request body read failed");
-					terminalError.compareAndSet(null, error);
+					notifyBodyError(null);
 					error = terminalError.get();
 				}
 				throw error;
@@ -375,8 +395,8 @@ public final class CkartaServletInputStream extends ServletInputStream
 
 	private void scheduleError()
 	{
-		ReadListener current = listener.get();
-		if (closed || current == null || terminalError.get() == null)
+		if (closed || listener.get() == null || terminalError.get() == null
+				|| !errorNotified.compareAndSet(false, true))
 		{
 			return;
 		}

@@ -3,7 +3,7 @@
 #include <errno.h>
 #include <string.h>
 
-#include "ck_socket.h"
+#include "../platform/ck_socket.h"
 
 void ck_http_output_writer_init(ck_http_output_writer_t *writer)
 {

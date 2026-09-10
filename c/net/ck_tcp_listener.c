@@ -1,21 +1,27 @@
+#define _GNU_SOURCE
+
 #include "ck_tcp_listener.h"
 
 #include <errno.h>
 
+#include "../platform/ck_socket.h"
+
 int ck_tcp_listener_init(ck_tcp_listener_t *listener, unsigned short port)
 {
+	int socket_fd;
+
 	if (listener == NULL)
 	{
 		return EINVAL;
 	}
 
-	listener->socket = CK_SOCKET_INVALID;
-	listener->initialized = 0;
-	if (ck_socket_create_loopback_listener(port, &listener->socket) != 0)
+	socket_fd = ck_socket_create_loopback_listener(port);
+	if (socket_fd < 0)
 	{
-		return EIO;
+		return -socket_fd;
 	}
 
+	listener->socket_fd = socket_fd;
 	listener->initialized = 1;
 	return 0;
 }
@@ -27,28 +33,27 @@ int ck_tcp_listener_port(const ck_tcp_listener_t *listener)
 		return -EINVAL;
 	}
 
-	return ck_socket_get_port(listener->socket);
+	return ck_socket_get_port(listener->socket_fd);
 }
 
-ck_socket_t ck_tcp_listener_socket(const ck_tcp_listener_t *listener)
+int ck_tcp_listener_fd(const ck_tcp_listener_t *listener)
 {
 	if (listener == NULL || !listener->initialized)
 	{
-		return CK_SOCKET_INVALID;
+		return -1;
 	}
 
-	return listener->socket;
+	return listener->socket_fd;
 }
 
-int ck_tcp_listener_accept(ck_tcp_listener_t *listener,
-	ck_socket_t *accepted_socket)
+int ck_tcp_listener_accept(ck_tcp_listener_t *listener)
 {
 	if (listener == NULL || !listener->initialized)
 	{
-		return EINVAL;
+		return -EINVAL;
 	}
 
-	return ck_socket_accept_nonblocking(listener->socket, accepted_socket);
+	return ck_socket_accept_nonblocking(listener->socket_fd);
 }
 
 int ck_tcp_listener_destroy(ck_tcp_listener_t *listener)
@@ -64,8 +69,8 @@ int ck_tcp_listener_destroy(ck_tcp_listener_t *listener)
 		return 0;
 	}
 
-	close_result = ck_socket_close(listener->socket);
-	listener->socket = CK_SOCKET_INVALID;
+	close_result = ck_socket_close(listener->socket_fd);
+	listener->socket_fd = -1;
 	listener->initialized = 0;
 	return close_result;
 }

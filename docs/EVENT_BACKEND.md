@@ -172,8 +172,8 @@ Multiprocessor Support for Event-Driven Programs：Nickolai Zeldovich、Alexande
 此 slice 不代表：
 
 - 已完成一般 TCP listener／multi-worker accept architecture。
-- 已完成 HTTP/1.1 request framing。
-- 已完成完整 nonblocking read/write state machine。
+- 已完成完整 multi-worker connection event consumer。
+- 已完成完整 nonblocking read/write production lifecycle。
 - 已完成 TLS。
 - 已完成 response output ownership。
 - 已完成 real timeout timer source。
@@ -182,7 +182,7 @@ Multiprocessor Support for Event-Driven Programs：Nickolai Zeldovich、Alexande
 - 已證明 epoll 比其他 backend 更快。
 - 已完成 Windows IOCP 或 macOS/BSD kqueue。
 
-下一個網路實作閘門是把已驗證的 listener／accepted connection／epoll registration path 提升為正式 connection event consumer，再接入 HTTP/1.1 framing 與 bounded read/write state machine；stale notification 必須在 consumer 端以 generation/correlation identity 再驗證。
+`tests/net/ck_tcp_event_integration_test.c` 已提供 listener → accepted connection → epoll registration → bounded reader 的 executable integration；下一個 event-backend code gate 不再是重做 listener/HTTP integration，而是在 current-head CI 通過後，先完成一次 socket-handle contract rescan，再以單一 cohesive slice 收斂 socket handle representation、invalid sentinel、I/O/error normalization、event-registration lifetime 與 connection/registry pin ownership。
 
 ## 12. Linux io_uring alternative backend
 

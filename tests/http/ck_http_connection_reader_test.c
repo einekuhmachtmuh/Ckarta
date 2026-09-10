@@ -361,13 +361,9 @@ static void test_body_queue_backpressure(void)
 
 	result = ck_http_connection_reader_drive(
 			&reader, sockets[1], NULL, NULL);
-	assert(result == CK_HTTP_CONNECTION_READ_INCOMPLETE);
+	assert(result == CK_HTTP_CONNECTION_READ_BODY_BACKPRESSURE);
 	assert(ck_http_request_body_available(&body_queue)
 			== CK_HTTP_REQUEST_BODY_BUFFER_BYTES);
-
-	result = ck_http_connection_reader_drive(
-			&reader, sockets[1], NULL, NULL);
-	assert(result == CK_HTTP_CONNECTION_READ_BODY_BACKPRESSURE);
 	assert(ck_http_connection_reader_buffered_bytes(&reader) > 0);
 
 	assert(ck_http_request_body_read(

@@ -243,18 +243,20 @@ Tomcat 11.0.25 `AsyncContextImpl` 顯示真正 async lifecycle 還包含 `start(
 6. native connection object 的實際 Linux/POSIX socket descriptor ownership。
 7. C-driven JVM integration test 與 `socketpair()` EOF 驗證。
 8. Linux/POSIX `ck_event_loop` 的獨立 epoll backend smoke slice。
+9. listener → accepted connection → registry → epoll registration → connection-owned reader 的 executable integration。
+10. Linux eventfd → `ck_event_loop_wait()` → notification drain → completion queue routing 的單一 executable completion notification integration。
 
 仍待完成：
 
 1. timeout/error/client-disconnect 的真正 event source 與 Servlet precedence。
-2. response/output ownership。
+2. response/output ownership 的完整 Servlet integration。
 3. cross-thread cancellation。
 4. post-recycle invalidation 的完整 API semantics。
 5. async dispatch / new-cycle reinitialization。
-6. shutdown drain。
+6. shutdown drain 的完整 production protocol。
 7. Servlet 6.1 TCK compatibility tests。
-8. listener／accepted connection 與 event registration 的正式整合。
-9. notification consumer 的 generation/cookie validation 與 stale-event rejection。
+8. production multi-worker network event consumer 與 accept ownership。
+9. production multi-worker/cross-platform completion backend。
 
 固定 Tomcat source：
 https://github.com/apache/tomcat/blob/cbe6e15ee81e2fc6232954292a80cca5d1e84009/java/org/apache/catalina/core/AsyncContextImpl.java
@@ -289,8 +291,7 @@ terminal owner 成功把 lifecycle 從 `CLOSING` 推至 `CLOSED` 後，只有該
 
 `tests/connection/ck_connection_test.c` 與 `tests/connection/ck_connection_registry_test.c` 使用 `socketpair(AF_UNIX, SOCK_STREAM, ...)` 驗證 attach ownership、wrong-token rejection、terminal close、descriptor invalidation、peer EOF 與 close/retire ordering。
 
-Linux event backend 的獨立驗證見 `docs/EVENT_BACKEND.md` 與 `tests/event/ck_event_loop_test.c`；該 test 尚未證明 connection registry 與 epoll registration 的完整 lifetime ordering。
-
+`tests/net/ck_tcp_event_integration_test.c` 已進一步驗證 listener → accepted connection → registry → epoll registration → reader 的 executable integration；但完整 production multi-worker registration/lifetime protocol 尚未完成。
 
 ## 19. Native response writer ownership
 
@@ -311,7 +312,6 @@ epoll cookie
 → 必要時更新 EPOLLOUT interest
 
 這只保護 native writer/connection lifetime，不等同 writer thread-safe；同一 connection output state 仍以單一 worker owner 推進為原則。
-
 
 ## 20. HTTP/1.1 keep-alive 與 response recycle
 

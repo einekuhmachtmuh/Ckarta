@@ -3,6 +3,7 @@
 #include "ck_socket.h"
 
 #include <errno.h>
+#include <limits.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
 #include <unistd.h>
@@ -13,17 +14,17 @@ int ck_socket_is_valid(ck_socket_t socket)
 }
 
 int ck_socket_create_loopback_listener(unsigned short port,
-	ck_socket_t *socket)
+	ck_socket_t *out_socket)
 {
 	struct sockaddr_in address = {0};
 	int socket_fd;
 	int reuse = 1;
 
-	if (socket == NULL)
+	if (out_socket == NULL)
 	{
 		return EINVAL;
 	}
-	*socket = CK_SOCKET_INVALID;
+	*out_socket = CK_SOCKET_INVALID;
 
 	socket_fd = socket(AF_INET, SOCK_STREAM | SOCK_CLOEXEC, 0);
 	if (socket_fd < 0)
@@ -43,7 +44,7 @@ int ck_socket_create_loopback_listener(unsigned short port,
 	address.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
 	address.sin_port = htons(port);
 	if (bind(socket_fd, (const struct sockaddr *)&address,
-			sizeof(address)) != 0)
+		sizeof(address)) != 0)
 	{
 		int error = errno;
 		(void)close(socket_fd);
@@ -57,7 +58,7 @@ int ck_socket_create_loopback_listener(unsigned short port,
 		return error;
 	}
 
-	socket->value = (uintptr_t)(unsigned int)socket_fd;
+	out_socket->value = (uintptr_t)(unsigned int)socket_fd;
 	return 0;
 }
 
@@ -77,7 +78,7 @@ int ck_socket_get_port(ck_socket_t socket)
 	}
 	socket_fd = (int)socket.value;
 	if (getsockname(socket_fd,
-			(struct sockaddr *)&address, &address_length) != 0)
+		(struct sockaddr *)&address, &address_length) != 0)
 	{
 		return -errno;
 	}
@@ -121,8 +122,8 @@ ptrdiff_t ck_socket_recv_nonblocking(
 	int socket_fd;
 
 	if (!ck_socket_is_valid(socket)
-			|| socket.value > (uintptr_t)INT_MAX
-			|| (buffer == NULL && length != 0))
+		|| socket.value > (uintptr_t)INT_MAX
+		|| (buffer == NULL && length != 0))
 	{
 		errno = EINVAL;
 		return -1;
@@ -140,8 +141,8 @@ ptrdiff_t ck_socket_send_nonblocking(
 	int socket_fd;
 
 	if (!ck_socket_is_valid(socket)
-			|| socket.value > (uintptr_t)INT_MAX
-			|| (buffer == NULL && length != 0))
+		|| socket.value > (uintptr_t)INT_MAX
+		|| (buffer == NULL && length != 0))
 	{
 		errno = EINVAL;
 		return -1;

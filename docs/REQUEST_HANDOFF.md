@@ -26,9 +26,11 @@ Current canonical builder copies only method/target/protocol metadata into reque
 
 ## Body view
 
-The body remains a C-owned buffer borrowed by Java for the request lifetime. A zero-length body may have a NULL native pointer and is represented on the Java side by an empty direct buffer.
+The body remains C-owned and may be exposed to Java only for an explicitly bounded borrow interval. A zero-length body may have a NULL native pointer and is represented on the Java side by an empty direct buffer.
 
-For non-zero body data, the native owner must keep the buffer alive until Java request processing and completion publication have finished. The current handoff smoke uses bodyless GET requests, so it does not yet prove streaming request-body ownership across Java execution.
+For non-zero body data, the native owner must keep the underlying storage alive until the Java-visible borrow interval and completion/lifecycle handoff have ended. The current request handoff smoke uses bodyless GET requests, so it does not by itself prove production Servlet request-body streaming.
+
+The connection-reader path now has a separate 64 KiB bounded SPSC body FIFO. It uses transactional pending-body acknowledgement and an all-or-nothing enqueue contract, so reader input is not acknowledged until the complete pending body span is accepted by the bounded consumer. This native path is lifetime-safe for staged body delivery but is not yet the production Java `ServletInputStream` owner.
 
 ## ABI
 
@@ -76,31 +78,23 @@ Fixed source versions:
 
 ## Remaining gate
 
-The next step is not a second generic wrapper. It is to create the minimal application-facing Servlet request adapter only after the following are explicit and tested:
-
-1. canonical request metadata lifetime;
-2. request body streaming/backpressure semantics;
-3. header access semantics;
-4. Servlet executor handoff ownership;
-5. cancellation and client-disconnect interaction;
-6. request recycle after Java completion.
+The minimal Java `CkartaServletInputStream` / `ReadListener` semantic adapter now exists, but this document still does not represent a complete Servlet request implementation. Remaining work is production integration of the connection-owned body source with the application-facing request surface, including `getInputStream()`, readiness notification, owner pin/lifetime extension, AsyncContext ↔ connection cancellation, and safe request recycle after Java completion.
 
 No Servlet 6.1 compatibility claim is made by this document.
 
-## Body lifetime prerequisite
+## Body lifetime and native stream boundary
 
-A request body that is still backed by the connection reader buffer MUST NOT be handed to Java as an asynchronous DirectByteBuffer. The reader buffer may be compacted or reused for pipelined data after request processing advances.
+A connection reader buffer that may be compacted or reused for pipelined input MUST NOT be handed to Java as an asynchronously retained DirectByteBuffer. Java-visible request-body streaming instead requires a native owner whose lifetime extends across the Java borrow interval.
 
-Ckarta therefore now has an independent bounded single-producer/single-consumer request-body FIFO in:
+Ckarta now provides that native staging primitive in:
 
 - `c/http/ck_http_request_body.h`
 - `c/http/ck_http_request_body.c`
 
-The FIFO provides a fixed 64 KiB byte capacity and non-blocking read/write operations. The native HTTP reader is deliberately not yet wired to return FIFO backpressure, because `ck_http_input_feed()` currently advances parser/message state before invoking the body sink. Retrying the same input after a late sink `WOULD_BLOCK` would replay bytes against already-advanced parser state.
+The queue has fixed 64 KiB capacity. The connection reader uses a transactional pending-body state: when a body consumer reports backpressure, the pending span remains unacknowledged and the reader buffer offset is not advanced. The queue write is all-or-nothing; when the available space is smaller than the complete pending span it returns `CK_HTTP_REQUEST_BODY_WRITE_WOULD_BLOCK` without moving `head` or writing a partial prefix. Once the complete span is accepted, the reader acknowledges the pending input and may continue framing.
 
-Until that transaction boundary is redesigned, the FIFO is only a lifetime-safe building block and is not claimed as the ServletInputStream implementation.
+This closes the previously identified parser-replay hazard at the native reader/body boundary. It does not by itself establish the Java owner/lifetime, Servlet readiness callback, request `getInputStream()` integration, or AsyncContext cancellation semantics required for production Servlet streaming.
 
-The next body gate must make the parser/input layer transactional around body delivery, or otherwise establish an explicit consumed-byte handoff before a bounded Java-visible stream can be connected. Only then can `ServletInputStream.isReady()`, `ReadListener.onDataAvailable()` and backpressure be implemented without risking duplicate body delivery.
 ## Concurrency research basis
 
 The bounded body FIFO is intentionally single-producer/single-consumer. The C event-loop/request-body producer and the Java-facing body consumer must each have a unique owner; the queue is not a general multi-producer/multi-consumer object and is not advertised as thread-safe beyond this contract.

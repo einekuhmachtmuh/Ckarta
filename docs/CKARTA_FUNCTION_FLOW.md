@@ -160,22 +160,21 @@ completion record 為固定 value-only layout：request id、owner token、lifet
 
 ## 12. Current implementation boundary
 
-目前已完成：request terminal publication、native completion queue、Linux notification backend、Java executor → JNI native completion publisher、C epoll wake、以及 native connection ownership state machine。
+目前已完成：request terminal publication、native completion queue、Linux eventfd notification、`ck_event_loop` wake integration、Java executor → JNI native completion publisher、native connection ownership state machine、listener → accepted connection → epoll registration → connection-owned HTTP reader 的 executable integration、HTTP/1.1 bounded framing components，以及 container-internal async JNI capability／terminal arbitration prototype。
 
 目前尚未完成：
 
-- C network/event backend
-- HTTP parser
-- formal C connection socket/TLS state machine
-- real Servlet container hierarchy / mapping
-- Servlet request/response facade
-- AsyncContext bridge
-- ServletRequest.startAsync binding（第一階段 prototype）
-- response descriptor/output pipeline
-- Windows IOCP notification backend
+- 正式 multi-worker network event consumer 與 accept ownership
+- 完整 production connection read/write lifecycle、TLS 與 response integration
+- real Servlet container hierarchy、mapping 與完整 request/response facade
+- production ServletInputStream body-source wiring、readiness notification 與 connection cancellation
+- 完整 AsyncContext ↔ native connection lifecycle integration
+- Windows IOCP backend
 - formal public module ABI
-- Servlet 6.1 TCK
+- Servlet 6.1 TCK compatibility claim
 - sanitizer/fuzz integration
+
+本節只描述目前 repo 可觀察的實作邊界；不得將「已完成」解讀為完整 production server 能力。
 
 ## 13. Upstream cross-reference
 
@@ -189,8 +188,7 @@ Apache HTTP Server 2.4.68：startup/config/MPM 研究見 `docs/STARTUP_CONFIGURA
 
 學術依據主要包括 SEDA、Capriccio、ownership types、recovery-oriented computing、exception-handling literature 與 Herlihy/Wing linearizability；各來源完整書目由對應專題文件保存。
 
-
-## 13. Java async semantic core
+## 14. Java async semantic core
 
 目前新增 java/org/ckarta/servlet/CkartaAsyncContext.java 作為正式 Jakarta API adapter 前的 semantic core。它不宣稱實作 jakarta.servlet.AsyncContext，只固定目前可獨立驗證的 application-visible lifecycle concepts：start(Runnable)、complete、timeout、error、client disconnect、shutdown、listener exactly-once notification 與 recycle invalidation。
 
@@ -198,11 +196,9 @@ ACTIVE → COMPLETING|TIMING_OUT|ERRORED 的 CAS 是 async terminal ownership �
 
 此 core 現已由 `CkartaServletRequestAdapter` 與正式 Jakarta Servlet 6.1 API 建立第一個 `ServletRequest.startAsync()` binding slice；仍缺真正 container `ServletRequest` lifecycle integration、ServletResponse/output ownership、`AsyncContext.dispatch()`、完整 `AsyncListener.onStartAsync` cycle、ServletContext/classloader 綁定與 native connection bridge。
 
+`java/org/ckarta/servlet/CkartaServletAsyncContext.java` 已建立 Jakarta Servlet 6.1 API binding prototype。它只把 complete、start、request/response access、timeout 與 listener 註冊映射到 Ckarta async core；dispatch 目前明確回傳 UnsupportedOperationException，因正式 request mapping/container dispatch 尚不存在。API adapter 不持有或暴露 native connection pointer、queue 或 lifetime token。故此階段是 API boundary validation，不是 Servlet 6.1 compatibility implementation。
 
-目前 java/org/ckarta/servlet/CkartaServletAsyncContext.java 已建立 Jakarta Servlet 6.1 API binding prototype。它只把 complete、start、request/response access、timeout 與 listener 註冊映射到 Ckarta async core；dispatch 目前明確回傳 UnsupportedOperationException，因正式 request mapping/container dispatch 尚不存在。API adapter 不持有或暴露 native connection pointer、queue 或 lifetime token。故此階段是 API boundary validation，不是 Servlet 6.1 compatibility implementation。
-
-
-## 14. Native connection registry / async JNI bridge
+## 15. Native connection registry / async JNI bridge
 
 目前新增可執行的 process-local native connection registry。registry 以固定容量表保存 C connection object，對外只產生 generation-protected 64-bit opaque handle；lookup 必須在 registry mutex 保護下完成，stale handle 在 retire 後不可重新指向新 connection。Java 不取得或操作 `ck_connection_t *`。
 

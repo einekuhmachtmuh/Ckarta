@@ -312,7 +312,6 @@ static void test_eof_incomplete_body(void)
 	assert(close(sockets[1]) == 0);
 }
 
-
 static void test_body_queue_backpressure(void)
 {
 	static const char header[] =
@@ -328,6 +327,7 @@ static void test_body_queue_backpressure(void)
 	ck_http_connection_read_result_t result;
 	size_t received_total = 0;
 	size_t read;
+	size_t first_body_bytes;
 
 	for (size_t i = 0; i < sizeof(source); i++)
 	{
@@ -347,8 +347,17 @@ static void test_body_queue_backpressure(void)
 	result = ck_http_connection_reader_drive(
 			&reader, sockets[1], NULL, NULL);
 	assert(result == CK_HTTP_CONNECTION_READ_INCOMPLETE);
-	assert(ck_http_request_body_available(&body_queue)
+	first_body_bytes = ck_http_request_body_available(&body_queue);
+	assert(first_body_bytes > 0);
+	assert(first_body_bytes < CK_HTTP_CONNECTION_PROCESS_BUDGET_BYTES);
+	assert(first_body_bytes + sizeof(header) - 1U
 			== CK_HTTP_CONNECTION_PROCESS_BUDGET_BYTES);
+
+	result = ck_http_connection_reader_drive(
+			&reader, sockets[1], NULL, NULL);
+	assert(result == CK_HTTP_CONNECTION_READ_INCOMPLETE);
+	assert(ck_http_request_body_available(&body_queue) ==
+			first_body_bytes + CK_HTTP_CONNECTION_PROCESS_BUDGET_BYTES);
 
 	result = ck_http_connection_reader_drive(
 			&reader, sockets[1], NULL, NULL);
@@ -378,8 +387,8 @@ static void test_body_queue_backpressure(void)
 		result = ck_http_connection_reader_drive(
 				&reader, sockets[1], NULL, NULL);
 		assert(result == CK_HTTP_CONNECTION_READ_INCOMPLETE
-				|| result == CK_HTTP_CONNECTION_READ_REQUEST_COMPLETE
-				|| result == CK_HTTP_CONNECTION_READ_BODY_BACKPRESSURE);
+			|| result == CK_HTTP_CONNECTION_READ_REQUEST_COMPLETE
+			|| result == CK_HTTP_CONNECTION_READ_BODY_BACKPRESSURE);
 		if (ck_http_request_body_available(&body_queue) != 0)
 		{
 			assert(ck_http_request_body_read(

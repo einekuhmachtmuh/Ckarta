@@ -1,17 +1,15 @@
 #include "../config/ck_config.h"
 #include "../jni/ck_jni_runtime.h"
 #include "../http/ck_http_parser.h"
+#include "../event/ck_event_loop.h"
 
 #include <errno.h>
-#include <sys/epoll.h>
 #include <unistd.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 #define CKARTA_DEFAULT_CONFIG_PATH "conf/ckarta.conf"
-
-static ck_runtime_t runtime;
 
 static int check_result(const char *name, int result)
 {
@@ -106,6 +104,7 @@ int main(int argc, char **argv)
 			"GET /handoff-two HTTP/1.1\r\nHost: x\r\n\r\n";
 	const char *config_path = CKARTA_DEFAULT_CONFIG_PATH;
 	ck_config_t config;
+	ck_runtime_t runtime;
 	ck_request_t requests[2];
 	char config_error[512];
 	int test_only = 0;
@@ -128,6 +127,7 @@ int main(int argc, char **argv)
 	}
 
 	memset(&config, 0, sizeof(config));
+	memset(&runtime, 0, sizeof(runtime));
 	memset(config_error, 0, sizeof(config_error));
 	result = ck_config_init(&config);
 	if (check_result("CONFIG_INIT", result) != 0)
@@ -226,26 +226,28 @@ int main(int argc, char **argv)
 	}
 
 	{
-		int epoll_fd;
-		struct epoll_event event;
+		ck_event_loop_t event_loop;
+		ck_event_notification_t notification;
 		int wait_result;
-		completion_result = -1;
+		int event_loop_ready = 0;
 
-		epoll_fd = epoll_create1(EPOLL_CLOEXEC);
-		if (epoll_fd < 0)
+		memset(&event_loop, 0, sizeof(event_loop));
+		memset(&notification, 0, sizeof(notification));
+		result = ck_event_loop_init(&event_loop);
+		if (result != 0)
 		{
 			ck_runtime_shutdown(&runtime);
 			ck_runtime_destroy(&runtime);
 			ck_config_destroy(&config);
 			return EXIT_FAILURE;
 		}
+		event_loop_ready = 1;
 
-		event.events = EPOLLIN;
-		event.data.fd = ck_runtime_completion_fd(&runtime);
-		if (event.data.fd < 0
-				|| epoll_ctl(epoll_fd, EPOLL_CTL_ADD, event.data.fd, &event) != 0)
+		result = ck_event_loop_add(&event_loop,
+				ck_runtime_completion_fd(&runtime), 1, CK_EVENT_READ);
+		if (result != 0)
 		{
-			close(epoll_fd);
+			(void)ck_event_loop_destroy(&event_loop);
 			ck_runtime_shutdown(&runtime);
 			ck_runtime_destroy(&runtime);
 			ck_config_destroy(&config);
@@ -254,14 +256,19 @@ int main(int argc, char **argv)
 
 		while (completed_count < 2)
 		{
-			wait_result = epoll_wait(epoll_fd, &event, 1, -1);
+			wait_result = ck_event_loop_wait(&event_loop,
+					&notification, 1, -1);
+			if (wait_result == -EINTR)
+			{
+				continue;
+			}
 			if (wait_result < 0)
 			{
-				if (errno == EINTR)
-				{
-					continue;
-				}
 				break;
+			}
+			if (wait_result == 0)
+			{
+				continue;
 			}
 
 			if (ck_runtime_drain_completion_notification(&runtime) != 0)
@@ -283,7 +290,10 @@ int main(int argc, char **argv)
 			}
 		}
 
-		close(epoll_fd);
+		if (event_loop_ready)
+		{
+			(void)ck_event_loop_destroy(&event_loop);
+		}
 	}
 
 	result = completed_count == 2 ? 0 : -1;

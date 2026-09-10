@@ -20,7 +20,7 @@ int ck_socket_create_loopback_listener(unsigned short port)
 	}
 
 	if (setsockopt(socket_fd, SOL_SOCKET, SO_REUSEADDR,
-		&reuse, sizeof(reuse)) != 0)
+			&reuse, sizeof(reuse)) != 0)
 	{
 		int error = errno;
 		(void)close(socket_fd);
@@ -58,7 +58,7 @@ int ck_socket_get_port(int socket_fd)
 		return -EINVAL;
 	}
 	if (getsockname(socket_fd,
-		(struct sockaddr *)&address, &address_length) != 0)
+			(struct sockaddr *)&address, &address_length) != 0)
 	{
 		return -errno;
 	}

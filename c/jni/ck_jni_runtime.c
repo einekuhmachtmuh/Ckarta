@@ -25,8 +25,6 @@ static int ck_check_java_exception(JNIEnv *env, const char *operation)
 	}
 
 	fprintf(stderr, "CKARTA_JAVA_EXCEPTION=%s\n", operation);
-	(*env)->ExceptionDescribe(env);
-	(*env)->ExceptionClear(env);
 	return -1;
 }
 
@@ -607,6 +605,7 @@ int ck_runtime_init(ck_runtime_t *runtime, const char *class_path)
 		pthread_mutex_destroy(&runtime->lock);
 		ck_completion_queue_destroy(&runtime->completion_queue);
 		runtime->completion_queue_initialized = 0;
+		runtime->sync_initialized = 0;
 		memset(runtime, 0, sizeof(*runtime));
 		return -1;
 	}

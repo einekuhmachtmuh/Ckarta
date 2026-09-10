@@ -45,6 +45,8 @@ Source MUST NOT partially consume a native body span when downstream backpressur
 
 Source close/cancellation 必須是 idempotent，且必須阻止任何新的 native-to-Java data publication。既有 Java operation 如果已取得 owner pin，pin lifetime 必須覆蓋該 operation 完成；terminal teardown 後不得再 dereference owner-owned memory。
 
+Source error notification MUST carry the terminal `Throwable` (或等價的可取得 terminal error contract) 給 bridge，使 bridge 可以保留第一個 terminal error 作為 error authority，而不必從後續 read 重新推測錯誤原因。
+
 ## 4. ServletInputStream blocking semantics
 
 在 blocking mode：
@@ -78,7 +80,7 @@ Source close/cancellation 必須是 idempotent，且必須阻止任何新的 nat
 
 `onAllDataRead()`：只在 request body 已達 EOF，且沒有 terminal error 取代該完成狀態時通知；同一 stream 最多通知一次。
 
-`onError()`：terminal error 確立後通知；第一個 terminal error 是 error authority，其後的 duplicate/late error 不得覆蓋它。
+`onError()`：terminal error 確立後通知；第一個 terminal error 是 error authority，其後的 duplicate/late error 不得覆蓋它；同一 stream 的 `onError()` 最多通知一次。
 
 所有 listener method invocation 必須在 container-defined synchronization/serialization boundary 下執行，使同一 listener 不會因不同 event source 而產生未定義的 concurrent callback。
 
@@ -146,6 +148,8 @@ NOT_READY
 ## 10. Current implementation boundary
 
 目前 `CkartaServletInputStream` 是 minimum Java semantic adapter，`BodySource` 仍為 container-internal abstraction。
+
+目前已明確驗證的 Java-side contract 包括 source error payload、first-error authority 與 once-only `onError()` scheduling；這些仍未等於 production native integration。
 
 目前尚未完成：
 

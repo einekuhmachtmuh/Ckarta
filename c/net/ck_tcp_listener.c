@@ -4,7 +4,7 @@
 
 #include <errno.h>
 
-#include "ck_socket.h"
+#include "../platform/ck_socket.h"
 
 int ck_tcp_listener_init(ck_tcp_listener_t *listener, unsigned short port)
 {

@@ -11,7 +11,7 @@ on:
 
 jobs:
   linux-openjdk-21:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - name: Install OpenJDK 21
@@ -24,5 +24,8 @@ jobs:
           java -version
           javac -version
           gcc --version | head -n 1
+          uname -a
+          uname -r
+          ldd --version | head -n 1
       - name: Build and test
         run: make test

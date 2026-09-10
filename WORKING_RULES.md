@@ -1,224 +1,405 @@
 # Ckarta 工作準則
 
-本文件是 Ckarta 自動化與人工開發的最高優先工程基線。每次工作開始前，必須閱讀本文件，以及 docs/ARCHITECTURE.md、docs/HOT_PATH_REVIEW.md、docs/FUNCTION_TRACE.md、docs/CONNECTION_OWNERSHIP.md。
+本文件是 Ckarta 自動化與人工開發的最高優先工程基線。它定義「如何工作、如何決策、如何驗證」；不取代各專題的 canonical design/research 文件，也不保存會快速過時的目前實作狀態。
 
-## 1. 文件修訂與整合規則
+每次工作開始前，必須閱讀本文件，以及受本次工作影響的 canonical 文件；至少包括 `docs/ARCHITECTURE.md`、`docs/HOT_PATH_REVIEW.md`、`docs/FUNCTION_TRACE.md`、`docs/CONNECTION_OWNERSHIP.md`。若涉及對應領域，還必須閱讀 `docs/THREAD_MODEL.md`、`docs/CONCURRENCY_MODEL.md`、`docs/JNI_ABI.md`、`docs/CANCELLATION_MODEL.md`、`docs/ERROR_STATE_MATRIX.md`、`docs/SECURITY_BASELINE.md` 與相關 research 文件。
+
+## 1. 規範性用語與規則層級
+
+本文件使用以下規範強度：
+
+- **MUST／必須**：除非本文件明確定義的例外成立，否則不得偏離。
+- **MUST NOT／不得**：禁止。
+- **SHOULD／應**：一般應遵循；偏離時必須具有可說明的工程理由，且不得破壞 MUST/MUST NOT。
+- **SHOULD NOT／不應**：一般不採用；偏離時必須有工程理由。
+- **MAY／可以**：允許，但不構成要求。
+
+每條規則應屬於下列至少一種性質：**normative requirement（規範要求）**、**architecture invariant（架構不變條件）**、**engineering policy（工程政策）**、**preference（偏好）**或**procedure（工作程序）**。偏好不得偽裝成規範要求；目前狀態不得偽裝成永久 invariant。
+
+新增規則前必須先檢查能否由既有規則整併；不得因單一偶發錯誤建立只描述該事件的過度具體規則。
+
+## 2. Authority、適用範圍與 Single Source of Truth
+
+發生衝突時，先依「問題所屬領域」選擇適用的 normative authority，而不是把所有來源視為單一全球 total ordering。
+
+目前 repository-local canonical authority 如下：
+
+| 領域 | Canonical authority |
+| --- | --- |
+| 工作程序與規則 | `WORKING_RULES.md` |
+| 目前工程狀態 | `docs/WORK_STATE.md` |
+| overall architecture | `docs/ARCHITECTURE.md` |
+| connection／memory ownership | `docs/CONNECTION_OWNERSHIP.md` |
+| concurrency／thread roles | `docs/CONCURRENCY_MODEL.md`、`docs/THREAD_MODEL.md` |
+| JNI ABI | `docs/JNI_ABI.md` |
+| cancellation | `docs/CANCELLATION_MODEL.md` |
+| error/state transition | `docs/ERROR_STATE_MATRIX.md`、`docs/EXCEPTION_HANDLING_RESEARCH.md` |
+| security | `docs/SECURITY_BASELINE.md` |
+| HTTP semantics | 適用 RFC 與 `docs/HTTP_FRAMING_POLICY.md` |
+| Servlet semantics | Jakarta Servlet 6.1 specification/API |
+| Java language semantics | 對應 JLS |
+| JVM semantics | 對應 JVMS |
+| JNI semantics | 對應版本的 JNI Specification |
+| C language semantics | 本文件指定的 ISO C baseline |
+| platform API | 對應 OS／platform 官方文件與正式標頭/UAPI |
+| Nginx reference | `docs/REFERENCE_SOURCES.md` 固定 revision |
+| Tomcat reference | `docs/REFERENCE_SOURCES.md` 固定 revision |
+| academic evidence | 各專題唯一的 canonical research document |
+
+同一工程問題不得在多份 repository 文件建立互相獨立、可能分叉的第二套完整規則。其他文件只保留必要結論、限制、適用範圍與 canonical reference。
+
+「規格」「官方 API」「reference implementation」「學術證據」「目前實作」的性質不得混淆。reference implementation 不得取代 normative specification；研究結果不得自動變成架構 invariant；目前實作狀態不得當成規格要求。
+
+## 3. 文件修改、精簡、衝突與追溯
 
 文件修改必須採「保留後整合」原則：先保留所有仍有效的規範、證據、限制、來源與決策，再做增補或受控整併。
 
-每次修訂工作準則、程式碼或文件時，都必須先進行「精簡與整合檢查」：辨識重複、冗餘、過時、被更高優先規格取代或可由同一權威來源統一表述的內容，能安全合併就合併、能安全刪除就刪除；不得為了縮短文字犧牲有效規範、證據鏈、限制、可追溯性或實作語意。刪除或合併重要內容時，必須在 commit message（提交訊息）或受影響文件中保留可追溯理由。
+每次修訂工作準則、程式碼或文件時，必須進行精簡與整合檢查：辨識重複、冗餘、過時、被更高優先規格取代或可由同一權威來源統一表述的內容；能安全合併就合併、能安全移出就移出、能安全刪除才刪除。不得為縮短文字犧牲有效規範、證據鏈、限制、可追溯性或實作語意。
 
-任何新增或整併的工作規則若產生邏輯衝突，必須先依既有規則的優先順序、適用範圍與目的，嘗試合併為一條不矛盾且最合理的工作規則；若無法在不造成歧義、互斥或破壞既有高優先要求的情況下解決，則不得強行修改、取代或選擇任一衝突版本，並應向使用者詳細說明衝突雙方、已嘗試的整併方式、未能解決的原因與受影響範圍。
+把目前狀態、版本、branch registry、gate status 或研究細節移出本文件時，必須先確認其 canonical destination 存在且內容可供後續工作取得；不得以「精簡」為由造成資訊遺失。
 
-長篇研究只保留一個權威版本；其他文件保留必要結論、限制與連結，不得形成互相衝突的第二套規則。
+任何新增或整併規則若產生邏輯衝突，必須先依優先順序、適用範圍與目的嘗試合併。若無法在不造成歧義、互斥或破壞既有高優先要求的情況下解決，不得強行選擇任一版本，必須停止該規則變更並說明衝突雙方、嘗試方式、原因與影響範圍。
 
-新增或修改任何變數、欄位、狀態、指標、counter、pointer／reference、handle、buffer reference 或其他可變資料，都必須在修改前檢查其作用域、所有權、初始化條件、有效生命週期、可觀察／可變範圍、跨執行緒傳遞、失效條件與最終清理責任；並沿所有可能的成功、錯誤、取消、超時與 shutdown 路徑確認不會使用未初始化資料、超出 owner 生命週期、懸空引用、重複釋放、遺漏清理或狀態殘留。若生命週期或作用不清楚，不得先新增變數再靠後續補救，必須先重新設計其 ownership／scope。
+刪除或合併重要內容時，必須在 commit message 或受影響文件中留下可追溯理由；完整歷史由 Git commit／PR／branch provenance 保存，不得在 WORK_STATE 重複建立 Git changelog。
 
-任何原始碼檔案新增或引用 C／Java 函式時，必須核對函式的宣告、定義、完整引數型別與順序、回傳／輸出語意，以及所有引用位置與適用作用域；若函式來自第三方或標準 API，還必須以對應版本的正式宣告／原始碼確認實際簽名，不得只依名稱、舊版本或記憶推定。除了型別與簽名，還必須核對前置條件、後置條件、錯誤契約、輸出參數所有權，以及呼叫者與被呼叫者之間的 ownership／lifetime／reentrancy（重入）／blocking（阻塞）假設；任何間接呼叫，包括 function pointer（函式指標）、JNI method ID、Java method reference（方法參考）或 callback（回呼），均適用相同檢查。修改、移除或重新命名函式時，必須搜尋並檢查整個 repository 的引用與上下游契約，而不得只依第一個編譯錯誤修正。
+## 4. 工作前後同步與持久化
 
-若修改或新增程式碼涉及型態轉換，必須檢查來源值與目標型別的可表示範圍、符號性、位元寬度、對齊、截斷、指標有效性與安全邊界；並檢查轉換後的值是否仍能滿足直接使用它的函式以及其上下游函式的前置條件、錯誤契約與生命週期要求。未能證明安全的轉換不得以 cast（型別轉換）掩蓋。
+預設後續 Codex 工作可能不了解上一工作階段的未持久化狀態，因此新的工作階段 MUST 以 repository 中現有的規則、canonical 文件、程式碼、測試、Git provenance 與研究紀錄重新建立現況，不得假設對話記憶是權威來源。
 
-自動產生碼與產物驗證：若程式碼由產生器、模板或其他自動化流程產生，必須能追溯其輸入、產生器／模板版本與相關設定；產生碼與手寫碼的可修改邊界必須明確。產生器或產物的任何修改仍須依本文件的函式簽名、前置／後置條件、型態轉換、變數生命週期、編譯、測試與安全規則驗證，不得因「自動產生」而降低審查標準。能重現的產生流程應固定必要輸入與版本，避免同一來源在不同工作階段產生未解釋的差異；產生碼若預期不應手工修改，應以可檢查的工程機制限制或偵測漂移。
+每次寫入任何 repository 檔案前，必須重新取得目標檔案最新內容及版本識別；檢查同一路徑、相關文件、branch／PR、CI 與 upstream reference 是否已有更新。若版本不一致、發現未知變更、無法確認寫入基礎或存在競合，不得直接覆蓋，必須重新同步後整合。
 
-工作錯誤與規則回饋：若工作過程出現編譯、測試、靜態分析、整合、研究核對、來源引用，或在實際程式碼檢查／研究中發現可能的錯誤、缺陷、不安全行為、未定義行為、生命週期漏洞或設計矛盾，必須先分析實際原因與受影響範圍，判斷現有工作準則是否已有適用規則；若沒有，必須先檢查是否可由既有規則整併出足以預防該類問題的規則。只有確認現有規則不足，且新增規則不與既有規則衝突、重複或可安全整併時，才向使用者提出新增規則建議。若問題可直接由現有規則處理，應修正實作／研究而不為單一事件新增規則。規則本身不得因單一偶發錯誤而過度具體化，除非該問題揭示可普遍預防的工程風險。
+每次寫入後必須檢查實際 diff、commit 結果與受影響文件一致性；多檔案變更必須檢查彼此的引用、規則、索引、ABI、lifecycle 與 implementation description。
 
-只要工作結果或研究有可能改變任何 Markdown（MD）文件的規範、證據、限制、決策、流程、索引或與實作一致性的描述，就必須先檢查受影響的 MD 文件，並在本文件規範下進行必要的修改／合併；不得因目前看似只是程式碼或研究工作而跳過文件一致性檢查。
+若工作結果或研究可能改變任何 MD 的規範、證據、限制、決策、流程、索引或實作一致性描述，必須檢查所有受影響的 canonical MD，必要時同步更新；不得因工作表面上只是程式碼修改而跳過文件一致性檢查。
 
-若本機執行環境（Codex 測試環境）無法網路連線，必須先嘗試其他可行方法完成工作目標，例如使用已存在的本機來源、已下載的原始碼／依賴、Git metadata、既有測試資產、可用的快取或其他不依賴即時網路的方法；若在合理範圍內仍無法達成，必須直接向使用者說明無法完成的部分與實際限制，不得以推測結果冒充已驗證結果。
+尚未落實成程式碼、測試或正式 MD 的重要研究結果、決策、待辦、限制、驗證狀態或中間成果，應及時以適當且可追溯的形式持久化到 repository。不能證明已持久化的資訊不得被當成跨對話現況。
 
-工作成果持久化：必須隨時考慮工作可能因流量限制、新對話或目前對話狀態遺失而中斷；凡是尚未落實成程式碼、測試或正式 MD 的重要研究結果、決策、待辦、限制、驗證狀態或中間成果，應以適當且可追溯的形式留存在 repository（例如權威 MD、研究紀錄、測試資產、程式碼、commit history（提交歷史）或其他具版本控制的工程產物），避免只存在當前對話記憶中。
+若本機環境無法網路連線，必須先嘗試本機來源、已下載 source/dependency、Git metadata、既有測試資產、快取或其他不依賴即時網路的方法；若仍無法完成，必須說明實際限制，不得以推測冒充已驗證結果。
 
-預設後續 Codex 工作可能在不了解工作現況的情況下開始，因此任何新的工作階段都必須以 repository 中已持久化的規則、文件、程式碼、測試、commit 與研究紀錄為主要現況來源；不得假設新工作階段會自動知道上一個對話的未持久化內容。`docs/WORK_STATE.md` 用於保存跨對話的重要工程現況，但不得取代各專題的權威文件。
+## 5. C/Java 邊界與專案目標
 
-`docs/WORK_STATE.md` 不是 Git changelog。Git commit history、closed PR 與 branch provenance 是歷史變更的主要來源；WORK_STATE 只保存目前有效的工程狀態、已驗證 gate、仍有效的決策與限制、branch status registry、當前 CI 狀態、下一個工程閘門，以及通往權威文件的索引。不得把已由 Git history 明確保存的逐 commit 日期、commit message、PR 編號、CI failure chronology 或已 supersede 的歷史狀態再次逐條複製到 WORK_STATE；若某歷史資訊直接構成目前仍有效的 invariant，僅保留必要摘要與對應 commit/document reference。
+Ckarta 是以 Jakarta Servlet 6.1 為相容性目標的 Servlet container 與 Web server。是否宣稱相容以 Servlet 6.1 TCK／適用規格要求為準；未通過 TCK 前不得宣稱正式相容。
 
-每次整併、修改 MD 或修改程式碼都可能造成衝突（conflict／競合）或基於過期內容覆蓋較新成果；因此在每次寫入前，必須重新取得目標檔案的最新內容與版本識別，檢查同一路徑及其相關文件是否已被其他變更更新，並在寫入後檢查 diff／commit 結果與相關文件一致性。若發現版本不一致、競合、未知變更或無法確認寫入基礎，不得直接覆蓋，必須重新同步後再整併。對多檔案相關變更亦必須檢查其彼此引用、規則、索引、ABI 與實作描述是否衝突。
+C 負責 native data plane：socket、event loop、I/O multiplexing、HTTP parsing/framing、connection management、native buffering、output I/O、platform integration，以及經 architecture 文件明確批准的其他低階資料平面功能。
 
-修訂後必須重新檢查 README、架構、hot path（熱路徑）、JNI、lifecycle（生命週期）、測試與安全文件的一致性，並再次確認本次精簡沒有刪掉仍有效的規範、證據或限制。
+Java 負責 Servlet API、ServletContext、Request/Response 語意、Filter、Listener、RequestDispatcher、AsyncContext、Session、web application lifecycle、class loading、deployment 與 application execution。
 
-## 2. 專案與規格
+C event-loop／native I/O worker thread MUST NOT 執行 Servlet application code；Servlet application code MUST NOT 依賴 C event-loop thread 執行。
 
-Ckarta 是以 Jakarta Servlet 6.1 為相容性目標的 Servlet container（伺服端小程式容器）與 Web server（網頁伺服器）。Servlet 6.1 的平台要求以正式規格為準；目前 JVM/JNI 研究暫以 OpenJDK 21 為基線。
+Java/Native 邊界不得把 C HTTP／connection implementation details 直接變成 Servlet-visible semantics；需要對 Servlet 應用程式可見的行為必須依 Servlet specification 定義。
 
-規格優先順序：RFC／正式標準 → Jakarta Servlet 6.1 → 官方 API specification（應用程式介面規格）→ Ckarta 安全與生命週期不變條件 → Nginx/Tomcat 官方文件與原始碼 → 可驗證同儕審查學術來源 → 其他可靠資料。
+## 6. Normative source policy
 
-## 3. C/Java 邊界
+### 6.1 HTTP
 
-C 負責 socket（通訊端）、event loop（事件迴圈）、I/O multiplexing（輸入輸出多路複用）、HTTP parsing（HTTP 解析）、TLS termination（TLS 終止）、connection management（連線管理）、static file serving（靜態檔案傳送）、reverse proxy（反向代理）、load balancing（負載平衡）、buffering（緩衝）、compression（壓縮）、rate／connection limiting（速率／連線限制）、network access control（網路存取控制）、logging（日誌）與 metrics transport（指標傳輸）。
+HTTP framing、Content-Length、Transfer-Encoding、chunked encoding、重複或衝突標頭、message length、request smuggling 等，必須依適用 RFC 與 `docs/HTTP_FRAMING_POLICY.md`。
 
-Java 負責 Servlet API、ServletContext、Request／Response 語意、Filter（過濾器）、Listener（監聽器）、RequestDispatcher（請求分派器）、AsyncContext（非同步內容）、Session（會話）、Web application lifecycle（網頁應用程式生命週期）、class loading（類別載入）、deployment（部署）與 application execution（應用程式執行）。
+若不同 implementation reference 做法不一致，不能因「Nginx/Tomcat 如此實作」就繞過適用 RFC。
 
-C 不得直接執行 Servlet application code（Servlet 應用程式程式碼）；Servlet application code 不得在 C event-loop thread 上執行。
+### 6.2 Servlet
 
-## 4. 程序入口
+Servlet externally observable semantics 以 Jakarta Servlet 6.1 specification/API 為準。Tomcat 只作 implementation reference；Nginx 只作 native networking/buffering/event architecture reference。
 
-正式產品程序唯一外部入口為 C main()。Java main() 僅可用於測試或工具。
+涉及 `ServletInputStream`、`ReadListener`、async dispatch、EOF、non-blocking read readiness、callback sequencing、request lifecycle 或 cancellation 時，修改前必須直接核對對應版本 Servlet specification/API，不得只依 Tomcat source 或記憶推定。
 
-C main() 擁有程序級啟動／停止、原生設定、原生資源、listener／socket、C worker 與 JVM bootstrap coordination（JVM 啟動協調）。JVM 由 C 透過 JNI Invocation API（JNI 虛擬機器啟動介面）建立。
+### 6.3 Java
+
+Java 語言語意以指定 JLS 為準；JVM execution/linking/class file/runtime semantics 以指定 JVMS 為準；Java API 行為以對應版本正式 API specification 為準。
+
+Java style convention 僅規範可讀性與一致性，不得用 style convention 解釋 language semantics。
+
+### 6.4 JNI
+
+JNI 語意以對應 JDK/JNI Specification 為準。任何 `JNIEnv*`、reference、exception、thread attachment、direct buffer、native method registration、callback 或 invocation 行為，都必須依該版本規格確認。
+
+## 7. C 語言與編譯器基線
+
+目前 Ckarta portable C language baseline 為 **ISO C11**。目前 CI build contract 以 `-std=c11 -Wall -Wextra -Wpedantic -Werror -O2 -pthread` 為基線；compiler version 是驗證環境的一部分，不得讓 compiler default dialect 決定專案 language standard。
+
+GCC 版本升級時不得因此自動升級 C language baseline。C23（ISO/IEC 9899:2024）可以另行研究與評估，但在有明確 architecture／portability decision、相應 compiler/CI coverage 與 migration evidence 前，不得把 C23 作為現行 baseline。
+
+任何 GCC extension、POSIX、Linux UAPI、Windows API、JNI 或其他非 ISO C facility，必須視為額外 platform/API contract；portable core 不得假裝它們屬於 ISO C11。
+
+C code MUST NOT rely on undefined behavior。特別必須檢查 signed overflow、invalid shift、out-of-bounds access/pointer arithmetic、invalid dereference、misalignment、uninitialized value、invalid function pointer call、object lifetime violation 與 data race。
+
+implementation-defined 或 unspecified behavior 若被使用，必須知道其實際語意並證明 deployment/compiler contract 可接受；不可因在目前 GCC 上「看起來正常」就視為 portable behavior。
+
+外部長度、offset、count、capacity、allocation size、multiplication/addition/alignment rounding 與 signed/unsigned conversion，都必須在運算及轉換前後檢查可表示範圍與錯誤條件。不得以 cast 掩蓋可能的截斷、符號改變、alignment 或 range violation。
+
+## 8. C 記憶體、ownership 與生命週期
+
+新增或修改任何變數、欄位、狀態、counter、pointer/reference、handle、buffer reference 或其他可變資料前，必須檢查：
+
+- scope
+- owner
+- initialization
+- lifetime
+- valid range
+- mutability
+- cross-thread publication
+- invalidation
+- cleanup responsibility
+
+並沿所有成功、錯誤、取消、timeout、disconnect、shutdown 路徑確認不存在未初始化使用、use-after-free、double free、leak、dangling reference、stale state 或 owner lifetime 超界。
+
+若生命週期或作用不清楚，不得先新增資料再靠後續補救；必須先重新設計 ownership/scope。
+
+每個 native allocation 必須能指出 owner、length、capacity、valid lifetime、release rule。pool 不得擁有 Java heap object。
+
+Native buffer 若由 Java 透過 DirectByteBuffer 觀察，C MUST 保證 buffer 在所有 Java 觀察期間仍有效；Java 不得保存已銷毀 native storage 的 reference。
+
+request-scoped temporary data SHOULD 使用 C memory pool，但 pool lifetime 必須有明確 owner；大型資料不得因方便而無限制複製進 Java heap。
+
+zero-copy 是條件式最佳化，不是 correctness guarantee。TLS、compression、Java-generated content 或其他資料轉換可能需要額外 CPU processing／copy。
+
+## 9. C concurrency 與 memory model
+
+預設 concurrency model 為 worker ownership + event loop；Java Servlet execution 使用 executor／thread pool。優先資料 ownership、sharding、immutable state 與單向 handoff，不因「無鎖」名稱就預設採用複雜 lock-free data structure。
+
+每一個 shared mutable object 必須能明確指出：
+
+- writer/reader
+- owner
+- synchronization mechanism
+- publication rule
+- lifetime
+- teardown synchronization
+
+C11 `volatile` 不得被當成 thread synchronization primitive。需要跨 thread synchronization 時，必須使用適當的 mutex/condition/atomic/other synchronization primitive。
+
+C11 atomic 的 memory ordering 必須有語義上的理由；`relaxed`、`acquire`、`release`、`acq_rel`、`seq_cst` 不得只因「看起來快」而選擇。atomic object lifetime 必須覆蓋所有可能 access。
+
+不得在 shared mutable state 上依賴 data race。任何 synchronization change 都必須重新檢查 publication、reclamation、shutdown 與 error paths。
+
+若採用 lock-free/non-blocking algorithm，除語意正確外，還必須證明 memory reclamation、linearizability（或該演算法適用的 correctness property）、contention profile 與可重現 benchmark benefit。
+
+## 10. 函式、型態、callback 與 ABI 契約
+
+任何新增或引用 C/Java 函式時，必須核對宣告、定義、完整參數型別與順序、回傳/輸出語意、可見範圍與所有 repository 引用位置。
+
+第三方/standard API 必須核對對應版本正式宣告/原始碼，並確認 precondition、postcondition、error contract、ownership、lifetime、reentrancy 與 blocking 假設。
+
+function pointer、callback、JNI method ID、Java method reference、listener、completion callback 與其他間接呼叫，同樣受本規則約束。
+
+修改、移除或重新命名函式時，必須搜尋並檢查完整上下游契約，不得只修第一個 compiler error。
+
+型態轉換必須檢查 range、signedness、width、alignment、truncation、pointer validity、ownership 與 downstream preconditions。不能證明安全時，不得以 cast 掩蓋。
+
+ABI、wire format、request descriptor、completion record 等穩定資料結構，修改時必須更新其 canonical ABI 文件與所有 producer/consumer/test。
+
+## 11. JNI 工程規則
+
+JNI crossing SHOULD 粗粒度化；不得為單一 byte、單一 header 或極小片段反覆進入 Java。
+
+`JNIEnv*` 是 thread-local；不得跨執行緒共享。native thread 必須依 JNI contract 管理 attach/detach。
+
+禁止把 C request struct 逐欄物件化成大量 Java fields/Strings/header objects。預設優先使用 bounded descriptor、opaque handle、薄 Java facade 與 DirectByteBuffer data view；只有需要應用程式可見 semantics 時才建立對應 Java objects。
+
+`Call*MethodA/V`、`NewObjectA/V` 等 JNI crossing 應維持在明確、可審查的 lifecycle boundary；String/Array objectification SHOULD 延遲。
+
+`GetPrimitiveArrayCritical` 不得當作一般 zero-copy 策略。
+
+JNI exception state、Throwable reference、GlobalRef/LocalRef、direct buffer、native allocation、callback reentrancy、shutdown 與 cancellation 必須沿成功及失敗路徑檢查；不得以無條件 `ExceptionClear()` 掩蓋錯誤，也不得以 `ExceptionDescribe()` 取代正式錯誤傳輸。
+
+## 12. C/Java 非阻塞與 thread boundary
+
+C event loop MUST NOT 執行未知時間或不可接受的 blocking operation。需要阻塞的作業必須移入合適的 worker/executor、使用明確 asynchronous primitive，或在 architecture document 證明其不會阻塞。
+
+C event worker 只推進 native state machine、platform I/O 與 connection ownership；JNI bridge 只負責受控 dispatch/completion handoff；Java executor 負責 application-visible Servlet semantics。
+
+任何 native event backend optimization MUST NOT 改變 request/response、ownership、JNI、Servlet 或 cancellation semantics。
+
+## 13. HTTP、connection、buffer 與 lifecycle
+
+HTTP/1.1 framing 必須只有一套 canonical parsing semantics。不同 parser、proxy parser、upstream parser 不得採互相衝突的 message-length rules。
+
+每個 connection 必須有顯式 state machine，以及 bounded timeout 與 resource limit。`FINISHED`、`DRAINED`、keep-alive recycle、terminal close 等不同 lifecycle boundary 不得混為一談。
+
+request body producer/consumer 若使用 bounded queue，必須定義 queue capacity、full behavior、partial-write behavior、ownership、backpressure、EOF、error、cancel 與 shutdown semantics。需要 transactional acknowledgement 時，必須避免 rejected input 被重新 feed 而重播 parser state。
+
+pipeline preservation 必須是明確 invariant：處理當前 request 後，屬於下一 request 的 leftover bytes 不得遺失、重複消費或被錯誤歸屬。
+
+HTTP request smuggling 是 blocking security requirement，不是 optional optimization。
+
+## 14. Servlet 6.1 語意與相容性
+
+Servlet 6.1 compatibility work MUST 以 specification/API behavior 為第一依據，Tomcat implementation 只作 cross-check。
+
+涉及 `ServletInputStream`/`ReadListener` 等 non-blocking API 時，必須明確定義並測試 `isFinished()`、`isReady()`、`setReadListener()`、`read()`、`read(byte[],...)`、Servlet 6.1 `read(ByteBuffer)`、`onDataAvailable()`、`onAllDataRead()`、`onError()` 及其 illegal-call、EOF、callback sequencing、reentrancy、backpressure、error、cancel 與 shutdown semantics。
+
+不得因 native queue 的「有資料」就直接假設 Servlet `isReady()` 必須為 true；Servlet-visible readiness 必須由 canonical Servlet state machine 決定。
+
+未通過 TCK 前不得把測試通過 smoke slice、Tomcat comparison 或部分 API coverage 稱為「Servlet 6.1 相容」。
+
+## 15. Error、completion、cancellation 與 retry
+
+exception、error status、HTTP status、cancellation、timeout、client disconnect 與 process-fatal condition 不得混成單一 error channel；各層必須有唯一主要 error authority，並定義 propagation、precedence、terminal transition 與 recovery。
+
+所有 asynchronous error/completion/cancellation path 必須定義 exactly-once terminal outcome，以及 late completion、duplicate completion、owner teardown、shutdown、timeout、cancel race 的優先序。不得依 callback arrival order 或未定義 race 推測結果。
+
+清理責任必須與 request/connection/buffer owner 綁定；error path 不得產生 UAF、double free、leak 或已失效 owner 上的 completion。
+
+client-visible error 與 internal diagnostic 必須分離。外部回應不得預設暴露 stack trace、server/build version、filesystem path、native pointer、credentials、TLS secret 或其他內部實作資訊。log 不得直接拼接未驗證外部輸入而造成 injection。
+
+retry 不得由 exception 單獨觸發。任何 retry 必須先證明 operation semantics、idempotency、request replayability、bytes-sent state、timeout budget、upstream state 與 cancellation state 允許；非冪等 request 不得因一般 exception/error 自動 retry。
+
+新增 error category/status/exception translation/fatal path/recovery transition 時，必須同步檢查 `docs/EXCEPTION_HANDLING_RESEARCH.md`、`docs/ERROR_STATE_MATRIX.md` 及受影響 architecture/JNI/lifecycle/security/test 文件。
+
+## 16. Thread、shutdown 與程序入口
+
+正式產品程序唯一外部入口為 C `main()`；Java `main()` 僅可用於測試或工具。
+
+C main/control plane 擁有 process lifecycle、native configuration、native resources、listener/socket、worker 與 JVM bootstrap coordination。JVM 啟動由 C 透過 JNI Invocation API 依明確 startup state machine 管理。
 
 第一階段禁止啟動 JVM 後 fork 並讓子程序繼承已建立 JVM。
 
-完整狀態模型見 docs/ENTRYPOINT_DESIGN.md 與 docs/STARTUP_STATE_MACHINE.md。
+shutdown 必須是有序 state transition，而非「各 thread 自行退出」。必須明確定義停止新工作、停止 dispatch、排空／取消 queue、完成或取消 Java task、connection close、worker stop、JNI detach、JVM termination 與 native cleanup 的順序及 ownership。
 
-## 5. JNI
+## 17. Memory、zero-copy、static/proxy/session/security baseline
 
-JNI（Java Native Interface，Java 原生介面）是主要進程內整合方式。JNI crossing（JNI 邊界穿越）必須粗粒度化。
+request-scoped memory 優先短生命週期與 bounded allocation。任何 external length/offset/count 必須做 overflow/range validation。
 
-Native buffer（原生緩衝區）若由 Java 透過 DirectByteBuffer（直接位元組緩衝區）觀察，C 必須保證完整生命週期。
+static file serving 預設可繞過 JVM，但必須防 path traversal、symlink escape、canonicalization mismatch、range abuse 與資源耗盡；不得無條件整個檔案載入 heap。
 
-JNIEnv pointer（JNI 環境指標）不得跨執行緒共享；native thread 必須依 JNI 規則管理 attachment（附加）與 detach（脫離）。
+reverse proxy／load balancing 設計至少必須明確考慮 weighted round robin、failure counting、timeout、connection limit、backup server 與 upstream connection reuse。不得未分析 method semantics、replayability 與 sent-byte state 就 retry non-idempotent request。
 
-## 6. JNI 物件化限制
+Session semantics 由 Java Servlet container 管理；C 不得建立與 Java Session lifecycle 競爭的第二套 Servlet Session authority。
 
-禁止將 C request struct（請求結構）逐欄映射成大量 Java fields、Strings 或 header objects。
+安全 baseline 至少涵蓋 TLS、HTTP security headers、request size limits、rate/connection limits、timeouts、access control、request smuggling、Slowloris、buffer/integer overflow、UAF、double free 與 least privilege。
 
-目前核准的初步模型：
+所有 parser SHOULD 使用 pointer + length 或等價的明確 bounded representation。禁止 `gets`、`strcpy`、`strcat` 與無界 `sprintf` 類用法。
 
-C canonical request（權威原生請求） → opaque request handle（不透明請求控制代碼） → 一個 Java request facade（請求外觀） → 批次初始化 → DirectByteBuffer data view。
+## 18. Platform API、Linux 與 io_uring
 
-Call*MethodA/V 僅作粗粒度 dispatch（分派）；NewObjectA/V 僅用於必要薄 facade；String／Array 物件化優先延遲；GetPrimitiveArrayCritical 不得作一般零拷貝策略。
+平台特定 documented API 必須集中在明確 platform backend；portable core 不得散落 platform-specific conditionals。
 
-詳細成本研究見 docs/JNI_COST_MODEL.md。不得把舊 JNI benchmark（效能基準測試）數字直接套用 OpenJDK 21。
+新增/修改 platform API 呼叫時，必須核對對應版本官方文件、標頭/UAPI、完整參數與回傳契約、錯誤語意、descriptor/handle/OVERLAPPED ownership、lifetime、cancel、timeout 與 shutdown。
 
-## 7. C 格式與命名
+Linux 優先使用 libc 或正式 system-call wrapper；Windows 優先使用 documented Win32/Winsock API。不得以 hard-coded raw syscall number、未文件化 NT Native API 或不穩定 internal kernel interface 作一般 runtime ABI。
 
-C 沿用 Nginx 命名精神，將 ngx_ 改為 ck_；這不是 Nginx API。縮排只能使用 Tab；大括弧採 Allman style（Allman 風格）。
+io_uring 是受控 Linux backend exception：可以在 platform backend 中使用 `<linux/io_uring.h>` UAPI、libc `syscall()` wrapper 與 kernel documented `io_uring_setup`、`io_uring_enter`、`io_uring_register`；不得硬編碼 syscall number，不得把 liburing 變成核心 runtime dependency，也不得複製 library-private implementation 作 Ckarta ABI。
 
-Java 遵循 Oracle Java Code Conventions：Class UpperCamelCase、method／variable lowerCamelCase、constant UPPER_CASE_WITH_UNDERSCORES。
+io_uring activation MUST 由 runtime probe 決定，不得只以 kernel version 判定。至少核對 ring setup、required opcode support 與必要 feature flags；被 kernel/container/seccomp/security policy 拒絕時必須可回退到既有 backend。initial backend 不得把 SQPOLL、IOPOLL、ZCRX 等尚未驗證的 advanced facility 當成必要條件。
 
-程式碼包裝與抽象層：除非相容性、安全、生命週期、可測試性、可觀測性、隔離或其他既定工作守則／專案特殊工程要求需要，程式碼的 wrapper／adapter／facade／abstraction（包裝／轉接器／外觀／抽象層）應盡可能少，並貼近實際實作輪廓；不得為追求抽象形式而增加純轉發層。此規則只約束不必要的包裝數量與距離，不取代其他關於實作清晰度、正確性、安全性、可維護性與精簡度的規則。
+kernel version 是 deployment/research hint，不是 capability proof。
 
-## 8. 並行與非阻塞
+## 19. Nginx、Tomcat、第三方程式碼與 license
 
-C 採 worker + event loop；Java Servlet 採 executor／thread pool（執行器／執行緒池）。優先 worker ownership（工作者所有權）、sharding（分片）與 immutable state（不可變狀態），不預設 lock-free data structure（無鎖資料結構）。
+Nginx/Tomcat 是 reference implementations，不是 Servlet/HTTP/C language authority。固定 revision、用途與來源由 `docs/REFERENCE_SOURCES.md` 管理。
 
-C event loop 不得執行未知時間的 blocking operation（阻塞操作）。
+禁止未經架構決策直接複製 upstream code。任何移植、複製或衍生程式碼前，必須檢查 license、copyright、dependency、platform assumptions、安全與 semantics 差異。
 
-## 9. HTTP 與連線
+`third_party` submodule 預設唯讀。若 upstream source 確實需要 patch，必須保存原因、upstream revision、可重現 patch、license/copyright impact 與驗證測試。
 
-HTTP/1.1 framing（訊息框架）必須只有一套規範化解析語意。Content-Length、Transfer-Encoding、chunked encoding、重複標頭與異常訊息框架依適用 RFC 處理。
+研究不得以「某行看起來相似」直接推導 semantic equivalence；必須檢查上下游資料流、state transition、ownership、error semantics 與 observable behavior。
 
-HTTP request smuggling（HTTP 請求走私）是阻斷式安全需求。
+## 20. Research、evidence 與學術來源
 
-每個 connection 必須有顯式 state machine（狀態機），並具備有界 timeout（逾時）與資源限制。
+任何研究結論必須區分：
 
-## 10. 記憶體與零拷貝
+- normative requirement
+- verified implementation fact
+- measured result
+- design inference
+- hypothesis/open question
 
-request-scoped temporary data（請求範圍暫態資料）優先使用 C memory pool（記憶體池）；pool 不管理 Java heap object（Java 堆積物件）。
+不得把 inference 寫成 verified fact，也不得把 benchmark result 外推成未測 workload。
 
-zero-copy（零拷貝）是條件式最佳化；TLS、compression 或 Java 內容產生可能需要 CPU processing（CPU 處理）。
+任何 academic source 必須確認作者、標題、出版資訊、venue、DOI 或 stable URL，以及可閱讀位置。優先 peer-reviewed publication；preprint 必須明確標記為 preprint，不得與 peer-reviewed evidence 混同。
 
-## 11. 靜態、代理、Session
+引用原文時必須逐字核對；paraphrase 必須能指出所依據的 source passage。非中文原文若引用，必須同時提供核實過的翻譯。
 
-靜態檔案預設不進 JVM，必須防 path traversal（路徑穿越）、symlink escape（符號連結逃逸）與 canonicalization mismatch（正規化不一致）。
+重大 architecture/performance/safety decision SHOULD 交叉比對適用規格、官方 source、固定 Nginx/Tomcat/OpenJDK references 與相關 academic evidence；不能由單一 secondary source 推導結論。
 
-代理至少規劃 weighted round robin（加權輪詢）、failure counting（失敗計數）、timeout、connection limit、backup server（備援伺服器）與 upstream connection reuse（上游連線重用）。不得未分析方法語意就重試非冪等請求。
+## 21. Testing、verification gates 與 compatibility claims
 
-Session 語意由 Java Servlet container 管理；C 不建立第二套 Session authority（權威來源）。
+測試必須依修改風險選擇合適 gate，而不是只追求測試數量。
 
-## 12. 安全
+最低驗證層級：
 
-至少涵蓋 TLS、HTTP security headers（HTTP 安全標頭）、request size limits（請求大小限制）、rate／connection limits、timeouts、access control（存取控制）、request smuggling、Slowloris（慢速攻擊）、buffer overflow（緩衝區溢位）、integer overflow（整數溢位）、use-after-free（釋放後使用）、double free（二次釋放）與 least privilege（最小權限）。
+1. compile/build
+2. unit
+3. integration
+4. concurrency/race/lifecycle
+5. sanitizer
+6. fuzz/negative/resource-exhaustion
+7. TCK/compatibility
+8. reproducible benchmark
 
-所有外部長度必須檢查；parser 優先 pointer + length（指標加實際長度）。禁止 gets、strcpy、strcat 與無界 sprintf 類用法。
+不同變更至少應達到與其風險相符的 gate，例如 parser 變更需包含 negative/fuzz；ownership/JNI/lifecycle 變更需包含 lifetime/concurrency/cleanup coverage；backend 變更需有等價 workload integration；performance claim 必須有 benchmark。
 
-## 13. 測試、相容性與效能
+GitHub Actions 是最新 CI truth source。CI 未完成、被取消或存在不確定結果時，不得標示該 gate 已通過。
 
-核心模組至少規劃 unit、integration、negative、stress、fuzz、shutdown、resource exhaustion tests（測試）。JNI 必須測 lifetime、重入、例外、取消與 buffer ownership。
+compatibility claim 必須以正式 compatibility test/TCK 或明確規範允許的驗證方式為準；smoke test 不等於 compatibility certification。
 
-必須執行 Jakarta Servlet 6.1 TCK（Technology Compatibility Kit，技術相容性套件）；未通過前不得標示相容。
+若 verification environment 未固定，結果只能稱為該環境的 measurement；重要 benchmark/compatibility evidence 必須記錄 Ckarta commit、OS、kernel、CPU、compiler exact version、JDK exact version、TLS、concurrency、workload、request/response size、keep-alive、cache state、build flags 與相關 backend configuration。
 
-faster、lower latency、less memory、higher throughput 等宣稱必須有可重現 benchmark，並記錄硬體、OS、kernel、compiler、JDK、TLS、concurrency、request／response size、keep-alive、cache state、版本與 commit。
+epoll 與 io_uring 比較還必須記錄 kernel exact release、runtime probe result、required features/opcodes、ring entries、SQ/CQ configuration、SQPOLL/其他 special flags、registered/provided buffers、CPU affinity 與 fallback status；不同 capability/fallback 狀態不得直接比較。
 
-epoll 與 io_uring 的 benchmark 額外必須記錄 Linux kernel exact release、io_uring runtime probe result（features/opcodes）、ring entries、CQ/SQ configuration、SQPOLL/other special flags、registered/provided buffer configuration、CPU affinity 與 fallback status。不得以不同 kernel capability 或不同 backend fallback 狀態的結果直接比較。
+## 22. CI 與 reproducibility policy
 
-## 14. 第三方來源
+CI environment 是工程 contract 的一部分。不得依賴 moving compiler default、moving Java default、moving OS image 或未固定 dependency 產生無法解釋的 semantics 差異。
 
-Nginx 與 Apache Tomcat 以 Git submodule（Git 子模組）固定於 third_party/nginx 與 third_party/tomcat；目前版本：Nginx 1.30.4 commit 017cf98dcce217946572a896f0992370475e189f；Tomcat 11.0.25 commit cbe6e15ee81e2fc6232954292a80cca5d1e84009。
-Apache HTTP Server 2.4.68 可作固定研究來源，但目前不要求加入 third_party submodule；其 tag/commit 必須在研究文件與 `docs/REFERENCE_SOURCES.md` 固定。
+workflow SHOULD 固定主要 OS image label，並在 verification log 中輸出 `java -version`、`javac -version`、compiler version、kernel release 與重要 dependency/version information。
 
-禁止未經架構決策直接複製 upstream code（上游程式碼）。移植前必須檢查 license、dependency、平台假設、安全與語意差異。
+build flags 必須明確指定 language level；不得因 compiler upgrade 而依賴 implicit default dialect。
 
-## 15. 學術與證據規則
+可重現建置需要的 dependency artifact 應使用版本固定與 checksum/hash verification；不得以未驗證下載內容替代已宣稱的版本。
 
-任何學術來源必須確認作者、標題、出版資訊、DOI 或穩定網址與可閱讀位置；無法確認就標記「無法確認」且不得引用。
+## 23. Branch、main、PR 與工作守則來源
 
-重大決策必須交叉比對固定版本的 Nginx、Tomcat、OpenJDK 與相關學術來源，不得依單一來源作結論。
+若工作可以直接安全完成在 `main`，優先直接使用 `main`；不得為形式上的隔離建立不必要 branch。
 
-## 16. 例外與錯誤處理規則
+若必須建立 branch，建立前必須盤點 active branch/PR，檢查其 WORK_STATE、程式碼、研究、測試、CI、設定與其他相關 repository 內容，並以此作為 diff、精簡與整併 baseline。
 
-例外、error status、HTTP status、cancellation、timeout、client disconnect 與 process-fatal condition 不得混成單一錯誤通道；每一層必須有唯一主要 error authority，並明確定義 propagation、precedence、terminal transition 與 recovery 行為。跨層傳遞只能攜帶該層需要的 stable category/code/status 與有限診斷資訊，不得把另一層的私有 exception object、內部資料結構或錯誤字串格式變成 ABI。
+`main/WORKING_RULES.md` 是唯一有效的工作守則來源。非 main branch 若存在 WORKING_RULES.md，不得視為該 branch 的執行準則；應移除，若需歷史比對只能讀取並抽取有效規則。
 
-JNI 任何可能建立 pending Java exception 的操作，在進入下一個需要 JNI 狀態正確性的操作前，必須依 JDK 對應版本規格檢查 exception state；只有已明確決定由 native layer 接管時才可清除 pending exception。不得以無條件 ExceptionClear() 掩蓋錯誤，也不得把 ExceptionDescribe() 當成正式錯誤傳輸機制。Java Throwable 的 reference 若跨越 JNI、thread 或 queue 保存，必須遵守對應 JNI reference 類型的 ownership、scope、thread-affinity 與 lifetime 契約。
+非 main branch 的 WORK_STATE 只代表該 branch 自身狀態，不得覆蓋 main canonical state。branch 整併時只能抽取仍有效且尚未存在於 main canonical docs 的事實、決策與限制。
 
-任何 asynchronous error、completion 或 cancellation path 都必須定義 exactly-once terminal outcome，以及 late completion、duplicate completion、owner teardown、shutdown、timeout 與 cancellation race 的優先序；不得依 callback arrival order 或未定義 race 推測最終狀態。清理責任必須與 request／connection／buffer owner 綁定，且 error path 不得產生 use-after-free、double free、leak 或已失效 owner 上的 completion。
+每次建立、重新啟用、修改或準備關閉 branch 時，必須更新 main `docs/WORK_STATE.md` 的 branch status registry；branch 自身的 WORK_STATE 也必須保持與實際 GitHub branch/PR 狀態一致。文件與 Git 實際狀態不一致時，先查 Git，再修文件。
 
-client-visible error 與 internal diagnostic 必須分離。外部回應不得預設暴露 stack trace、server/build version、filesystem path、native pointer、credentials、TLS secret 或其他內部實作資訊；內部診斷則應使用 request／connection correlation identity 與 stable error code。錯誤回應不得直接把未驗證外部輸入拼入 log 或 dynamic error document。
+branch 結束、merged、superseded 或不再需要時，應刪除／關閉；若權限不允許刪除，至少關閉待合併狀態並記錄 superseded/merged reason。
 
-retry 不得由「發生 exception」單獨觸發；任何 retry 都必須先證明 operation semantics、idempotency、request replayability、bytes-sent state、timeout budget、upstream state 與 cancellation state 允許重試。非冪等請求不得因一般 exception/error path 自動 retry。
+若 `main` 因本次變更而變紅，不得繼續無關堆疊功能；應優先恢復最新 verification gate，除非有明確安全事件或其他更高優先工作。
 
-所有新增 error category、status、exception translation、fatal path 或 recovery transition，都必須同步檢查 docs/EXCEPTION_HANDLING_RESEARCH.md 及受影響的 architecture、JNI、lifecycle、security、test 文件；長篇研究只在該權威文件保存一套完整定義。
+## 24. Rule-change control、例外與 emergency path
 
-## 17. Branch 建立、同步與工作守則來源
+工作過程若發現 bug、缺陷、未定義行為、不安全行為、lifecycle 漏洞或設計矛盾，先分析實際原因與影響，確認現有規則是否已適用；能由現有規則處理就修正實作，不因單一事件新增規則。
 
-若工作可以直接在 main 安全完成，優先直接使用 main，不得為了形式上的隔離而建立不必要的 branch。若因平行實驗、破壞性原型、需要保留未完成狀態或其他明確工程理由不得不建立 branch，建立 branch 的第一步必須盤點當時仍 active 的所有 branch／PR，檢查其 WORK_STATE.md、程式碼、研究文件、測試、CI、設定與其他相關 repository 內容，並以此作為 diff、精簡與整併的基線；不得只以 branch 名稱或 PR 描述判斷重複或獨有成果。
+若現有規則不足，新增規則前必須回答：
 
-main/WORKING_RULES.md 是唯一有效的工作守則來源。若非 main branch 存在 WORKING_RULES.md，它不得被視為該 branch 的規則來源，也不得在 branch 之間維持第二套工作守則。工作守則的修改一律直接修改 main/WORKING_RULES.md，並依本文件的保留後整合與衝突處理規則完成。
+1. 防止哪一類可泛化風險？
+2. 現有規則為何不足？
+3. 為何不能合併到既有規則？
+4. 能否透過 code/test/CI 機械驗證？
+5. 是否應下放至專題 canonical document？
 
-每個非 main branch 的 docs/WORK_STATE.md 只代表該 branch 自身的工作狀態、未合併成果、實驗結果、限制與下一步；不得將其整份當成全 repository 的 canonical state。整併 branch 時，只能把其中仍有效、尚未存在於 main 權威文件的事實／決策／限制抽取後整合，並更新 main 自己的 docs/WORK_STATE.md；不得以另一 branch 的 WORK_STATE 覆蓋 main，也不得把 branch-specific historical state 誤寫成 main 現況。
+規則不得因一次偶發 failure 而過度具體化，除非該事件揭示可普遍預防的工程風險。
 
-branch 結束、被 superseded 或成果已正式整合後，應刪除或關閉不再需要的 branch／PR；若 Git 平台或權限不允許刪除，至少必須關閉其待合併狀態並記錄 superseded／merged 理由。非 main branch 的 WORKING_RULES.md 應在 branch 建立後立即移除；若該檔案是整併前仍需比對的歷史資料，只能讀取與抽取有效規則，不得繼續作為執行準則。
+任何規則例外必須是 explicit、bounded、traceable 的 temporary deviation；至少記錄理由、範圍、owner、有效條件、補償性驗證、移除條件與追蹤位置。例外不得偷偷變成新的永久 authority。
 
-每次建立、重新啟用、修改或準備關閉任何 branch 時，必須同步在 main branch 的 `docs/WORK_STATE.md` 更新該 branch 的 branch status registry，至少記錄 branch 用途、目前生命週期狀態（例如 active、closed、merged、superseded）與其相對 main 的關係。branch 自身的 `docs/WORK_STATE.md` 同時必須保留同一 branch-specific 狀態的詳細版本；若兩者不一致，必須先重新核對 GitHub branch／PR 實際狀態，再修正文件，不能以文件內容反推 Git 狀態。
+若工作本身正是修訂 `WORKING_RULES.md`，仍必須先遵守修訂前版本的保留後整合、衝突處理、最新內容同步、來源核對與寫後一致性檢查；新版本只有在正式 commit 後才成為後續工作準則。
 
-## 18. 平台 API 與 system call review
+## 25. 文件索引與 canonical routing
 
-平台特定的 documented OS API 可以直接由 Ckarta 使用，但必須集中在明確的 platform backend，portable core 不得散落平台條件分支。新增或修改平台 API 呼叫時，必須核對對應版本的官方文件／標頭宣告、完整引數與回傳契約、錯誤語意、handle／descriptor／OVERLAPPED ownership 與 lifetime，並沿成功、錯誤、取消、超時與 shutdown 路徑檢查。
+長篇研究只保留一個 canonical version。工作守則只保存跨專題且長期有效的工作政策與 invariants；研究細節、版本清單、目前 gate、state machine、benchmark protocol 與 implementation status 應路由到對應 canonical docs。
 
-Linux 優先使用 libc 或正式 system-call wrapper；Windows 優先使用 documented Win32／Winsock API。不得以 hard-coded raw syscall number、未文件化 NT Native API 或其他不穩定內核介面作一般 runtime ABI。
+核心 canonical 文件至少包括：
 
-Linux io_uring 為本條的受控例外：若建立 Linux event backend，允許在明確 platform backend 中直接使用 <linux/io_uring.h> UAPI、libc syscall() wrapper，以及 kernel documented io_uring_setup、io_uring_enter、io_uring_register system calls；不得硬編碼 syscall number，不得把 liburing 變成核心 runtime dependency，也不得複製其 library-private implementation 作為 Ckarta ABI。
+- `docs/ARCHITECTURE.md`
+- `docs/HOT_PATH_REVIEW.md`
+- `docs/FUNCTION_TRACE.md`
+- `docs/CONNECTION_OWNERSHIP.md`
+- `docs/CONCURRENCY_MODEL.md`
+- `docs/THREAD_MODEL.md`
+- `docs/JNI_ABI.md`
+- `docs/JNI_COST_MODEL.md`
+- `docs/CANCELLATION_MODEL.md`
+- `docs/ERROR_STATE_MATRIX.md`
+- `docs/EXCEPTION_HANDLING_RESEARCH.md`
+- `docs/HTTP_FRAMING_POLICY.md`
+- `docs/SECURITY_BASELINE.md`
+- `docs/REFERENCE_SOURCES.md`
+- `docs/WORK_STATE.md`
 
-io_uring backend 必須以實際 runtime feature/opcode probe 決定是否啟用，不得只以 kernel version string 判定。至少應核對 ring setup、required opcode support 與必要 feature flags；若 io_uring 被 kernel、container、seccomp 或其他安全政策拒絕，必須能回退至既有 epoll backend。初始 backend 不得依賴尚未驗證的 advanced facility（例如 SQPOLL、IOPOLL、ZCRX）作為必要條件。
-
-平台最佳化不得改變 portable protocol、request／response、ownership、JNI 或 cancellation semantics；不同平台的 primitive programming model 應在 backend 內映射為共同的 Ckarta event／completion contract。
-
-## 19. 文件索引
-
-docs/EXCEPTION_HANDLING_RESEARCH.md
-docs/ERROR_STATE_MATRIX.md
-docs/CKARTA_FUNCTION_FLOW.md
-docs/WIN32_LINUX_PLATFORM_RESEARCH.md
-docs/COMPLETION_NOTIFICATION_RESEARCH.md
-docs/ARCHITECTURE.md
-docs/HOT_PATH_REVIEW.md
-docs/FUNCTION_TRACE.md
-docs/CONNECTION_OWNERSHIP.md
-docs/DESIGN_DECISIONS.md
-docs/ENTRYPOINT_DESIGN.md
-docs/STARTUP_STATE_MACHINE.md
-docs/STARTUP_CONFIGURATION_RESEARCH.md
-docs/CORE_CONFIGURATION_CANDIDATES.md
-docs/MODULE_ARCHITECTURE_RESEARCH.md
-docs/HTTP_FRAMING_POLICY.md
-docs/CONCURRENCY_MODEL.md
-docs/CANCELLATION_MODEL.md
-docs/JNI_ABI.md
-docs/JNI_COST_MODEL.md
-docs/SERVLET_6_1_CRITIQUE.md
-docs/WEB_SERVER_THEORY_SERVLET_NGINX.md
-docs/OPENJDK_21U_SOURCE_AUDIT.md
-docs/GATEWAY_SERVLET_NATIVE_BRIDGE_RESEARCH.md
-docs/CGI_FASTCGI_RESEARCH.md
-docs/TOMCAT_SERVLET_USER_COMPATIBILITY.md
-docs/THREAD_MODEL.md
-docs/THREAD_BENCHMARK_PLAN.md
-docs/TCK_INTEGRATION_PLAN.md
-docs/SECURITY_BASELINE.md
-docs/REFERENCE_SOURCES.md
-docs/WORKING_TREE.md
-
-
-本工作守則要求 WORK_STATE 保持為現況摘要，而不是 chronology；需要追溯何時與哪一個 commit/PR 修改時，直接回到 Git provenance。docs/WORK_STATE.md
-
-本文件是工程入口；長篇研究以 docs 對應文件為權威內容。
+修改本文件後，必須再次檢查 README、architecture、hot path、JNI、lifecycle、HTTP、concurrency、security、test、reference source 與 WORK_STATE 文件的一致性，並確認沒有因精簡而刪掉仍有效的規範、證據或限制。

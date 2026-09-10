@@ -5,6 +5,7 @@ import java.nio.ByteBuffer;
 import java.util.Objects;
 import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 
 import jakarta.servlet.ReadListener;
 import jakarta.servlet.ServletInputStream;
@@ -49,15 +50,15 @@ public final class CkartaServletInputStream extends ServletInputStream
 	private final Executor callbackExecutor;
 	private final boolean asyncStarted;
 	private final AtomicBoolean callbackScheduled = new AtomicBoolean();
+	private final AtomicBoolean allDataReadNotified = new AtomicBoolean();
+	private final AtomicReference<ReadListener> listener = new AtomicReference<>();
+	private final AtomicReference<IOException> terminalError = new AtomicReference<>();
 	private final Object listenerLock = new Object();
-	private volatile ReadListener listener;
 	private volatile boolean nonBlocking;
 	private volatile boolean readyPermit;
 	private volatile boolean waitingForData;
 	private volatile boolean closed;
 	private volatile boolean callbackActive;
-	private volatile boolean allDataReadNotified;
-	private volatile IOException terminalError;
 
 	public CkartaServletInputStream(
 			BodySource source,
@@ -78,7 +79,7 @@ public final class CkartaServletInputStream extends ServletInputStream
 	@Override
 	public boolean isReady()
 	{
-		if (closed || terminalError != null)
+		if (closed || terminalError.get() != null)
 		{
 			return false;
 		}
@@ -101,31 +102,33 @@ public final class CkartaServletInputStream extends ServletInputStream
 		{
 			throw new IllegalStateException("ReadListener requires async processing");
 		}
-		if (listener != null)
-		{
-			throw new IllegalStateException("ReadListener is already set");
-		}
-		if (closed || terminalError != null)
+		if (closed || terminalError.get() != null)
 		{
 			throw new IllegalStateException("input stream is not active");
 		}
 
-		listener = readListener;
-		nonBlocking = true;
-		boolean finished = source.isFinished();
-		boolean ready = !finished && source.isReady();
-		waitingForData = !finished && !ready;
-
-		source.setReadInterest(() -> scheduleDataAvailable(false));
-		source.setErrorInterest(this::scheduleError);
-
-		if (finished || (!ready && source.isFinished()))
+		synchronized (listenerLock)
 		{
-			scheduleAllDataRead();
-		}
-		else if (ready || source.isReady())
-		{
-			scheduleDataAvailable(true);
+			if (!this.listener.compareAndSet(null, readListener))
+			{
+				throw new IllegalStateException("ReadListener is already set");
+			}
+			nonBlocking = true;
+			boolean finished = source.isFinished();
+			boolean ready = !finished && source.isReady();
+			waitingForData = !finished && !ready;
+
+			source.setReadInterest(() -> scheduleDataAvailable(false));
+			source.setErrorInterest(this::scheduleError);
+
+			if (finished || (!ready && source.isFinished()))
+			{
+				scheduleAllDataRead();
+			}
+			else if (ready || source.isReady())
+			{
+				scheduleDataAvailable(true);
+			}
 		}
 	}
 
@@ -205,11 +208,12 @@ public final class CkartaServletInputStream extends ServletInputStream
 			}
 			case BodySource.ERROR ->
 			{
-				IOException error = terminalError;
+				IOException error = terminalError.get();
 				if (error == null)
 				{
 					error = new IOException("request body read failed");
-					terminalError = error;
+					terminalError.compareAndSet(null, error);
+					error = terminalError.get();
 				}
 				throw error;
 			}
@@ -247,18 +251,20 @@ public final class CkartaServletInputStream extends ServletInputStream
 
 	void notifyBodyError(Throwable error)
 	{
+		IOException converted;
 		if (error == null)
 		{
-			terminalError = new IOException("request body error");
+			converted = new IOException("request body error");
 		}
 		else if (error instanceof IOException ioException)
 		{
-			terminalError = ioException;
+			converted = ioException;
 		}
 		else
 		{
-			terminalError = new IOException("request body error", error);
+			converted = new IOException("request body error", error);
 		}
+		terminalError.compareAndSet(null, converted);
 		scheduleError();
 	}
 
@@ -282,7 +288,7 @@ public final class CkartaServletInputStream extends ServletInputStream
 
 	private void scheduleDataAvailable(boolean initial)
 	{
-		if (closed || listener == null)
+		if (closed || listener.get() == null)
 		{
 			return;
 		}
@@ -301,7 +307,8 @@ public final class CkartaServletInputStream extends ServletInputStream
 	{
 		try
 		{
-			if (closed || listener == null || terminalError != null)
+			ReadListener current = listener.get();
+			if (closed || current == null || terminalError.get() != null)
 			{
 				return;
 			}
@@ -310,9 +317,10 @@ public final class CkartaServletInputStream extends ServletInputStream
 			readyPermit = true;
 			synchronized (listenerLock)
 			{
-				if (!closed && listener != null && terminalError == null)
+				current = listener.get();
+				if (!closed && current != null && terminalError.get() == null)
 				{
-					listener.onDataAvailable();
+					current.onDataAvailable();
 				}
 			}
 		}
@@ -325,11 +333,11 @@ public final class CkartaServletInputStream extends ServletInputStream
 			callbackActive = false;
 			readyPermit = false;
 			callbackScheduled.set(false);
-			if (terminalError == null && source.isFinished())
+			if (terminalError.get() == null && source.isFinished())
 			{
 				scheduleAllDataRead();
 			}
-			else if (terminalError == null && waitingForData && source.isReady())
+			else if (terminalError.get() == null && waitingForData && source.isReady())
 			{
 				scheduleDataAvailable(false);
 			}
@@ -338,22 +346,24 @@ public final class CkartaServletInputStream extends ServletInputStream
 
 	private void scheduleAllDataRead()
 	{
-		if (closed || listener == null || allDataReadNotified)
+		ReadListener current = listener.get();
+		if (closed || current == null || terminalError.get() != null
+				|| !allDataReadNotified.compareAndSet(false, true))
 		{
 			return;
 		}
-		allDataReadNotified = true;
 		callbackExecutor.execute(() ->
 			{
 				synchronized (listenerLock)
 				{
-					if (closed || listener == null || terminalError != null)
+					current = listener.get();
+					if (closed || current == null || terminalError.get() != null)
 					{
 						return;
 					}
 					try
 					{
-						listener.onAllDataRead();
+						current.onAllDataRead();
 					}
 					catch (Throwable error)
 					{
@@ -365,7 +375,8 @@ public final class CkartaServletInputStream extends ServletInputStream
 
 	private void scheduleError()
 	{
-		if (closed || listener == null)
+		ReadListener current = listener.get();
+		if (closed || current == null || terminalError.get() == null)
 		{
 			return;
 		}
@@ -373,14 +384,15 @@ public final class CkartaServletInputStream extends ServletInputStream
 			{
 				synchronized (listenerLock)
 				{
-					Throwable error = terminalError;
-					if (closed || listener == null || error == null)
+					ReadListener currentListener = listener.get();
+					IOException error = terminalError.get();
+					if (closed || currentListener == null || error == null)
 					{
 						return;
 					}
 					try
 					{
-						listener.onError(error);
+						currentListener.onError(error);
 					}
 					catch (Throwable ignored)
 					{

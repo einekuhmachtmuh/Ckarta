@@ -2,7 +2,8 @@
 
 #include <errno.h>
 #include <string.h>
-#include <sys/socket.h>
+
+#include "ck_socket.h"
 
 static int write_body_queue(void *context,
 	const unsigned char *data, size_t length)
@@ -13,7 +14,7 @@ static int write_body_queue(void *context,
 
 	result = ck_http_request_body_write(queue, data, length, &written);
 	if (result == CK_HTTP_REQUEST_BODY_WRITE_WOULD_BLOCK
-			|| (result == CK_HTTP_REQUEST_BODY_WRITE_OK && written != length))
+		|| (result == CK_HTTP_REQUEST_BODY_WRITE_OK && written != length))
 	{
 		return CK_HTTP_BODY_SINK_WOULD_BLOCK;
 	}
@@ -156,8 +157,8 @@ ck_http_connection_read_result_t ck_http_connection_reader_drive(
 
 			read_result = map_input_result(input_result);
 			if (read_result == CK_HTTP_CONNECTION_READ_REQUEST_COMPLETE
-					|| read_result == CK_HTTP_CONNECTION_READ_BAD_REQUEST
-					|| read_result == CK_HTTP_CONNECTION_READ_TOO_LARGE)
+				|| read_result == CK_HTTP_CONNECTION_READ_BAD_REQUEST
+				|| read_result == CK_HTTP_CONNECTION_READ_TOO_LARGE)
 			{
 				return read_result;
 			}
@@ -203,10 +204,10 @@ ck_http_connection_read_result_t ck_http_connection_reader_drive(
 		{
 			size_t available = sizeof(reader->buffer) - reader->end;
 			size_t receive_length = available < read_budget ? available : read_budget;
-			ssize_t received = recv(socket_fd,
+			ssize_t received = ck_socket_recv_nonblocking(
+					socket_fd,
 					reader->buffer + reader->end,
-					receive_length,
-					MSG_DONTWAIT);
+					receive_length);
 			if (received > 0)
 			{
 				reader->end += (size_t)received;

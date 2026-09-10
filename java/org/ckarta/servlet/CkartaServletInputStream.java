@@ -32,6 +32,11 @@ public final class CkartaServletInputStream extends ServletInputStream
 
 		boolean isFinished();
 
+		/**
+		 * Registers a level-triggered readiness callback. If the source is already
+		 * ready when this method is called, the callback must be invoked or a
+		 * subsequent isReady() observation must make the condition visible.
+		 */
 		void setReadInterest(Runnable onReady);
 
 		void setErrorInterest(Runnable onError);
@@ -44,6 +49,7 @@ public final class CkartaServletInputStream extends ServletInputStream
 	private final Executor callbackExecutor;
 	private final boolean asyncStarted;
 	private final AtomicBoolean callbackScheduled = new AtomicBoolean();
+	private final Object listenerLock = new Object();
 	private volatile ReadListener listener;
 	private volatile boolean nonBlocking;
 	private volatile boolean readyPermit;
@@ -106,20 +112,20 @@ public final class CkartaServletInputStream extends ServletInputStream
 
 		listener = readListener;
 		nonBlocking = true;
+		boolean finished = source.isFinished();
+		boolean ready = !finished && source.isReady();
+		waitingForData = !finished && !ready;
+
 		source.setReadInterest(() -> scheduleDataAvailable(false));
 		source.setErrorInterest(this::scheduleError);
 
-		if (source.isFinished())
+		if (finished || (!ready && source.isFinished()))
 		{
 			scheduleAllDataRead();
 		}
-		else if (source.isReady())
+		else if (ready || source.isReady())
 		{
 			scheduleDataAvailable(true);
-		}
-		else
-		{
-			waitingForData = true;
 		}
 	}
 
@@ -211,6 +217,34 @@ public final class CkartaServletInputStream extends ServletInputStream
 		}
 	}
 
+	@Override
+	public int readLine(byte[] b, int off, int len) throws IOException
+	{
+		checkBlockingOnly();
+		return super.readLine(b, off, len);
+	}
+
+	@Override
+	public byte[] readAllBytes() throws IOException
+	{
+		checkBlockingOnly();
+		return super.readAllBytes();
+	}
+
+	@Override
+	public int readNBytes(byte[] b, int off, int len) throws IOException
+	{
+		checkBlockingOnly();
+		return super.readNBytes(b, off, len);
+	}
+
+	@Override
+	public byte[] readNBytes(int len) throws IOException
+	{
+		checkBlockingOnly();
+		return super.readNBytes(len);
+	}
+
 	void notifyBodyError(Throwable error)
 	{
 		if (error == null)
@@ -226,6 +260,14 @@ public final class CkartaServletInputStream extends ServletInputStream
 			terminalError = new IOException("request body error", error);
 		}
 		scheduleError();
+	}
+
+	private void checkBlockingOnly()
+	{
+		if (nonBlocking)
+		{
+			throw new IllegalStateException("operation is illegal in non-blocking mode");
+		}
 	}
 
 	private void checkReadPermission()
@@ -266,7 +308,13 @@ public final class CkartaServletInputStream extends ServletInputStream
 			waitingForData = false;
 			callbackActive = true;
 			readyPermit = true;
-			listener.onDataAvailable();
+			synchronized (listenerLock)
+			{
+				if (!closed && listener != null && terminalError == null)
+				{
+					listener.onDataAvailable();
+				}
+			}
 		}
 		catch (Throwable error)
 		{
@@ -297,13 +345,20 @@ public final class CkartaServletInputStream extends ServletInputStream
 		allDataReadNotified = true;
 		callbackExecutor.execute(() ->
 			{
-				try
+				synchronized (listenerLock)
 				{
-					listener.onAllDataRead();
-				}
-				catch (Throwable error)
-				{
-					notifyBodyError(error);
+					if (closed || listener == null || terminalError != null)
+					{
+						return;
+					}
+					try
+					{
+						listener.onAllDataRead();
+					}
+					catch (Throwable error)
+					{
+						notifyBodyError(error);
+					}
 				}
 			});
 	}
@@ -316,18 +371,21 @@ public final class CkartaServletInputStream extends ServletInputStream
 		}
 		callbackExecutor.execute(() ->
 			{
-				Throwable error = terminalError;
-				if (error == null)
+				synchronized (listenerLock)
 				{
-					error = new IOException("request body error");
-				}
-				try
-				{
-					listener.onError(error);
-				}
-				catch (Throwable ignored)
-				{
-					/* Terminal error remains authoritative. */
+					Throwable error = terminalError;
+					if (closed || listener == null || error == null)
+					{
+						return;
+					}
+					try
+					{
+						listener.onError(error);
+					}
+					catch (Throwable ignored)
+					{
+						/* Terminal error remains authoritative. */
+					}
 				}
 			});
 	}

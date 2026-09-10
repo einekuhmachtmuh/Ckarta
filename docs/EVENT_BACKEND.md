@@ -167,8 +167,6 @@ Multiprocessor Support for Event-Driven Programs：Nickolai Zeldovich、Alexande
 9. registration 先 remove，再進行 terminal、close、retire。
 10. retire 後舊 generation handle 無法重新 lookup，新 connection 得到不同 generation handle。
 
-GitHub Actions build-smoke 已在 Ubuntu 24.04、Temurin OpenJDK 21.0.12、GCC 13.3.0 執行 `make test`，其中 `ckarta-event-loop-test` 與 `ckarta-tcp-event-integration-test` 均實際建置及執行成功。
-
 ## 11. 尚未宣稱的能力
 
 此 slice 不代表：
@@ -185,7 +183,6 @@ GitHub Actions build-smoke 已在 Ubuntu 24.04、Temurin OpenJDK 21.0.12、GCC 1
 - 已完成 Windows IOCP 或 macOS/BSD kqueue。
 
 下一個網路實作閘門是把已驗證的 listener／accepted connection／epoll registration path 提升為正式 connection event consumer，再接入 HTTP/1.1 framing 與 bounded read/write state machine；stale notification 必須在 consumer 端以 generation/correlation identity 再驗證。
-
 
 ## 12. Linux io_uring alternative backend
 
@@ -224,3 +221,24 @@ before touching mutable connection state.
 At most one in-flight send operation for a given connection should be used by the initial implementation; the connection owner remains responsible for response byte ordering.
 
 Receive buffers must remain owned until the corresponding HTTP parsing/body-delivery contract releases them. io_uring does not change HTTP framing or Servlet semantics.
+
+## 14. Platform socket boundary
+
+Linux/POSIX socket calls used by the native HTTP/listener path are now concentrated in `c/platform/ck_socket.c` behind the small `ck_socket.h` contract. The listener, HTTP input reader and output writer no longer include or directly invoke `socket()`, `bind()`, `listen()`, `accept4()`, `recv()`, `send()` or `close()`.
+
+The platform boundary preserves the existing observable contract:
+
+- accepted sockets are `SOCK_NONBLOCK | SOCK_CLOEXEC`;
+- receive is per-call nonblocking and reports `EAGAIN/EWOULDBLOCK` without changing HTTP parser state;
+- send is per-call nonblocking and suppresses `SIGPIPE` while retaining `EPIPE` as an error;
+- close reports `EINTR`/other close errors without changing connection ownership semantics;
+- HTTP and connection layers continue to use the existing integer Linux descriptor representation in this baseline.
+
+This is intentionally an incremental platform-isolation step, not a claim that Windows IOCP or a portable socket-handle ABI is already implemented. A future Windows backend must implement the same Ckarta-defined socket contract without leaking `SOCKET`/WinSock details into HTTP or connection state machines.
+
+Linux evidence for the chosen flags and semantics:
+
+https://www.man7.org/linux/man-pages/man2/accept4.2.html
+https://www.man7.org/linux/man-pages/man2/recvfrom.2.html
+https://www.man7.org/linux/man-pages/man2/sendto.2.html
+https://www.kernel.org/pub/linux/docs/man-pages/book/man-pages-6.11.pdf

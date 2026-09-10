@@ -356,14 +356,14 @@ public final class CkartaServletInputStream extends ServletInputStream
 			{
 				synchronized (listenerLock)
 				{
-					current = listener.get();
-					if (closed || current == null || terminalError.get() != null)
+					ReadListener currentListener = listener.get();
+					if (closed || currentListener == null || terminalError.get() != null)
 					{
 						return;
 					}
 					try
 					{
-						current.onAllDataRead();
+						currentListener.onAllDataRead();
 					}
 					catch (Throwable error)
 					{

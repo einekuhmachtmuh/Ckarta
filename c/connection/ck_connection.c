@@ -2,7 +2,8 @@
 
 #include <errno.h>
 #include <stdlib.h>
-#include <unistd.h>
+
+#include "../platform/ck_socket.h"
 
 #define CK_CONNECTION_STATE_MASK UINT64_C(0xff)
 #define CK_CONNECTION_EVENT_SHIFT 8u
@@ -297,7 +298,7 @@ int ck_connection_close(ck_connection_t *connection)
 	uint64_t expected;
 	uint64_t desired;
 	int socket_fd;
-	int close_result;
+	int close_result = 0;
 
 	if (connection == NULL)
 	{
@@ -332,20 +333,18 @@ int ck_connection_close(ck_connection_t *connection)
 			connection->socket_fd = -1;
 			if (socket_fd >= 0)
 			{
-				close_result = close(socket_fd);
-				if (close_result != 0)
+				close_result = ck_socket_close(socket_fd);
+				if (close_result != 0 && close_result != EINTR)
 				{
-					/* The lifecycle is already CLOSED; the descriptor will not be retried after EINTR. */
-					if (errno != EINTR)
-					{
-						free(connection->http_reader);
-						connection->http_reader = NULL;
-						free(connection->http_writer);
-						connection->http_writer = NULL;
-						free(connection->http_response);
-						connection->http_response = NULL;
-						return -1;
-					}
+					free(connection->http_reader);
+					connection->http_reader = NULL;
+					free(connection->http_writer);
+					connection->http_writer = NULL;
+					free(connection->http_request_body);
+					connection->http_request_body = NULL;
+					free(connection->http_response);
+					connection->http_response = NULL;
+					return -1;
 				}
 			}
 

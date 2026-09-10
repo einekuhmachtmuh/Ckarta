@@ -106,7 +106,7 @@ ngx_http_process_request_line()
 
 固定版本約第 1109 行。
 
-實作依序包括：
+其實作依序包括：
 
 - read request header
 - ngx_http_parse_request_line
@@ -125,7 +125,7 @@ ngx_http_process_request_headers()
 
 固定版本約第 1395 行。
 
-實作會：
+其實作會：
 
 - 檢查 timeout。
 - 在 header buffer 不足時配置大型 header buffer。

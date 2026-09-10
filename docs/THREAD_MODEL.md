@@ -243,7 +243,6 @@ https://github.com/openjdk/jdk21u/blob/jdk-21.0.8-ga/src/hotspot/share/runtime/j
 
 任何「bridge 比 direct attach 快／慢」的結論，都必須以 Ckarta + OpenJDK 21 可重現 benchmark 證明。
 
-
 ## 13. Servlet compatibility constraint
 
 Java executor thread 必須承擔 Servlet application execution；C event-loop thread 不得因 direct attach 而繞過 executor 直接執行 Servlet application。
@@ -253,3 +252,13 @@ Java executor thread 必須承擔 Servlet application execution；C event-loop t
 ## 14. Completion routing
 
 Java executor thread 的完成事件不直接取得 connection ownership。completion publication 必須只攜帶 process-local token／識別，C router 再依 request ownership 將事件交給唯一 owner worker。任何通知 callback 或 polling path 都不得延長已結束 request 的生命週期。
+
+## 15. pthread compatibility and implementation boundary
+
+Linux/glibc 的 pthread 實作、futex、stack/TLS、scheduler 與 cache-locality 研究已獨立記錄於 `docs/PTHREAD_COMPATIBILITY_RESEARCH.md`。
+
+Ckarta 不把 pthread 當成 ISO C11 facility。pthread/POSIX thread API 是 platform/OS contract；`-pthread` 是目前 build contract，但不代表所有 source module 都必須直接使用 pthread API。
+
+worker role、ownership、lifetime、join/detach、blocking boundary、JNI attachment 與 shutdown semantics 必須由本文件定義；Linux pthread/NPTL 只是目前 reference implementation。未來若改用其他 platform thread primitive，不得改變上述 worker/ownership/JNI/Servlet invariants。
+
+pthread mutex/condition variable 可以使用，但不得因「pthread 是傳統作法」就成為 hot path 預設。shared mutable state 應優先以 worker ownership、sharding、immutable state 或 bounded handoff 降低 contention；若使用 pthread synchronization primitive，必須說明其 synchronization semantics，並在提出效能主張時提供 Ckarta benchmark evidence。

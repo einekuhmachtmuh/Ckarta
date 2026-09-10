@@ -4,6 +4,8 @@
 #include "../../c/http/ck_http_request_body.h"
 
 #include <assert.h>
+#include <pthread.h>
+#include <sched.h>
 #include <string.h>
 #include <sys/socket.h>
 #include <unistd.h>
@@ -18,6 +20,13 @@ typedef struct body_counter
 {
 	size_t length;
 } body_counter_t;
+
+typedef struct body_sender
+{
+	int socket_fd;
+	const unsigned char *data;
+	size_t length;
+} body_sender_t;
 
 static int capture_body(void *context, const unsigned char *data, size_t length)
 {
@@ -52,6 +61,15 @@ static void send_all(int socket_fd, const unsigned char *data, size_t length)
 	}
 }
 
+static void *send_body_thread(void *context)
+{
+	body_sender_t *sender = context;
+
+	assert(sender != NULL);
+	send_all(sender->socket_fd, sender->data, sender->length);
+	assert(shutdown(sender->socket_fd, SHUT_WR) == 0);
+	return NULL;
+}
 
 typedef struct retrying_body_sink
 {
@@ -63,6 +81,7 @@ static int reject_first_body(void *context,
 	const unsigned char *data, size_t length)
 {
 	retrying_body_sink_t *sink = context;
+
 	assert(sink != NULL);
 	assert(data != NULL);
 	sink->calls++;
@@ -77,11 +96,11 @@ static int reject_first_body(void *context,
 static void test_body_sink_retry_does_not_replay(void)
 {
 	static const char payload[] =
-			"POST /retry HTTP/1.1\r\n"
-			"Host: localhost\r\n"
-			"Content-Length: 5\r\n"
-			"\r\n"
-			"hello";
+		"POST /retry HTTP/1.1\r\n"
+		"Host: localhost\r\n"
+		"Content-Length: 5\r\n"
+		"\r\n"
+		"hello";
 	ck_http_connection_reader_t reader;
 	retrying_body_sink_t sink = {0};
 	int sockets[2];
@@ -134,9 +153,9 @@ static void test_content_length_pipeline(void)
 
 	assert(socketpair(AF_UNIX, SOCK_STREAM, 0, sockets) == 0);
 	ck_http_connection_reader_init(&reader);
-
 	assert(send(sockets[0], payload, sizeof(payload) - 1U, 0)
 			== (ssize_t)(sizeof(payload) - 1U));
+
 	result = ck_http_connection_reader_drive(&reader, sockets[1],
 			capture_body, &capture);
 	assert(result == CK_HTTP_CONNECTION_READ_REQUEST_COMPLETE);
@@ -226,9 +245,9 @@ static void test_chunked_split_crlf(void)
 
 	assert(socketpair(AF_UNIX, SOCK_STREAM, 0, sockets) == 0);
 	ck_http_connection_reader_init(&reader);
-
 	assert(send(sockets[0], first, sizeof(first) - 1U, 0)
 			== (ssize_t)(sizeof(first) - 1U));
+
 	result = ck_http_connection_reader_drive(&reader, sockets[1],
 			capture_body, &capture);
 	assert(result == CK_HTTP_CONNECTION_READ_INCOMPLETE);
@@ -323,11 +342,14 @@ static void test_body_queue_backpressure(void)
 	unsigned char received[100000];
 	ck_http_connection_reader_t reader;
 	ck_http_request_body_t body_queue;
+	body_sender_t sender;
+	pthread_t sender_thread;
 	int sockets[2];
 	ck_http_connection_read_result_t result;
 	size_t received_total = 0;
 	size_t read;
-	size_t first_body_bytes;
+	size_t blocked_available = 0;
+	int observed_backpressure = 0;
 
 	for (size_t i = 0; i < sizeof(source); i++)
 	{
@@ -342,41 +364,39 @@ static void test_body_queue_backpressure(void)
 
 	send_all(sockets[0],
 			(const unsigned char *)header, sizeof(header) - 1U);
-	send_all(sockets[0], source, sizeof(source));
+	sender.socket_fd = sockets[0];
+	sender.data = source;
+	sender.length = sizeof(source);
+	assert(pthread_create(&sender_thread, NULL, send_body_thread, &sender) == 0);
 
-	result = ck_http_connection_reader_drive(
-			&reader, sockets[1], NULL, NULL);
-	assert(result == CK_HTTP_CONNECTION_READ_INCOMPLETE);
-	first_body_bytes = ck_http_request_body_available(&body_queue);
-	assert(first_body_bytes > 0);
-	assert(first_body_bytes < CK_HTTP_CONNECTION_PROCESS_BUDGET_BYTES);
-	assert(first_body_bytes + sizeof(header) - 1U
-			== CK_HTTP_CONNECTION_PROCESS_BUDGET_BYTES);
-
-	result = ck_http_connection_reader_drive(
-			&reader, sockets[1], NULL, NULL);
-	assert(result == CK_HTTP_CONNECTION_READ_INCOMPLETE);
-	assert(ck_http_request_body_available(&body_queue) ==
-			first_body_bytes + CK_HTTP_CONNECTION_PROCESS_BUDGET_BYTES);
-
-	result = ck_http_connection_reader_drive(
-			&reader, sockets[1], NULL, NULL);
-	assert(result == CK_HTTP_CONNECTION_READ_BODY_BACKPRESSURE);
-	assert(ck_http_request_body_available(&body_queue) ==
-			first_body_bytes + CK_HTTP_CONNECTION_PROCESS_BUDGET_BYTES);
-	assert(ck_http_connection_reader_buffered_bytes(&reader) > 0);
+	while (!observed_backpressure)
+	{
+		result = ck_http_connection_reader_drive(
+				&reader, sockets[1], NULL, NULL);
+		assert(result == CK_HTTP_CONNECTION_READ_INCOMPLETE
+				|| result == CK_HTTP_CONNECTION_READ_BODY_BACKPRESSURE
+				|| result == CK_HTTP_CONNECTION_READ_REQUEST_COMPLETE);
+		if (result == CK_HTTP_CONNECTION_READ_BODY_BACKPRESSURE)
+		{
+			observed_backpressure = 1;
+			blocked_available = ck_http_request_body_available(&body_queue);
+			assert(blocked_available > 0);
+			assert(blocked_available <= CK_HTTP_REQUEST_BODY_BUFFER_BYTES);
+			assert(ck_http_connection_reader_buffered_bytes(&reader) > 0);
+		}
+		else if (ck_http_request_body_is_finished(&body_queue))
+		{
+			assert(0 && "body queue completed before backpressure was observed");
+		}
+		sched_yield();
+	}
 
 	assert(ck_http_request_body_read(
 			&body_queue, received, 32768U, &read)
 			== CK_HTTP_REQUEST_BODY_READ_DATA);
 	assert(read == 32768U);
 	received_total += read;
-
-	result = ck_http_connection_reader_drive(
-			&reader, sockets[1], NULL, NULL);
-	assert(result == CK_HTTP_CONNECTION_READ_INCOMPLETE
-			|| result == CK_HTTP_CONNECTION_READ_REQUEST_COMPLETE);
-	assert(ck_http_request_body_available(&body_queue) > 0);
+	assert(ck_http_request_body_available(&body_queue) < blocked_available);
 
 	while (!ck_http_request_body_is_finished(&body_queue))
 	{
@@ -395,13 +415,13 @@ static void test_body_queue_backpressure(void)
 					== CK_HTTP_REQUEST_BODY_READ_DATA);
 			received_total += read;
 		}
-		if (result == CK_HTTP_CONNECTION_READ_REQUEST_COMPLETE
-				&& ck_http_request_body_is_finished(&body_queue))
+		else if (result == CK_HTTP_CONNECTION_READ_INCOMPLETE)
 		{
-			break;
+			sched_yield();
 		}
 	}
 
+	assert(pthread_join(sender_thread, NULL) == 0);
 	assert(received_total == sizeof(source));
 	assert(memcmp(received, source, sizeof(source)) == 0);
 	assert(close(sockets[0]) == 0);

@@ -94,7 +94,7 @@ static void test_body_sink_retry_does_not_replay(void)
 			== (ssize_t)(sizeof(payload) - 1U));
 
 	result = ck_http_connection_reader_drive(&reader, sockets[1],
-			reject_first_body, &sink);
+		reject_first_body, &sink);
 	assert(result == CK_HTTP_CONNECTION_READ_SINK_ERROR);
 	assert(sink.calls == 1);
 	assert(sink.bytes == 0);
@@ -102,7 +102,7 @@ static void test_body_sink_retry_does_not_replay(void)
 			>= sizeof("hello") - 1U);
 
 	result = ck_http_connection_reader_drive(&reader, sockets[1],
-			reject_first_body, &sink);
+		reject_first_body, &sink);
 	assert(result == CK_HTTP_CONNECTION_READ_REQUEST_COMPLETE);
 	assert(sink.calls == 2);
 	assert(sink.bytes == 5);
@@ -362,8 +362,8 @@ static void test_body_queue_backpressure(void)
 	result = ck_http_connection_reader_drive(
 			&reader, sockets[1], NULL, NULL);
 	assert(result == CK_HTTP_CONNECTION_READ_BODY_BACKPRESSURE);
-	assert(ck_http_request_body_available(&body_queue)
-			== CK_HTTP_REQUEST_BODY_BUFFER_BYTES);
+	assert(ck_http_request_body_available(&body_queue) ==
+			first_body_bytes + CK_HTTP_CONNECTION_PROCESS_BUDGET_BYTES);
 	assert(ck_http_connection_reader_buffered_bytes(&reader) > 0);
 
 	assert(ck_http_request_body_read(

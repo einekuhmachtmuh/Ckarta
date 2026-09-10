@@ -43,7 +43,7 @@ public final class CkartaServletInputStream extends ServletInputStream
 	private final BodySource source;
 	private final Executor callbackExecutor;
 	private final boolean asyncStarted;
-	private final AtomicBoolean listenerCallbackScheduled = new AtomicBoolean();
+	private final AtomicBoolean callbackScheduled = new AtomicBoolean();
 	private volatile ReadListener listener;
 	private volatile boolean nonBlocking;
 	private volatile boolean readyPermit;
@@ -66,11 +66,7 @@ public final class CkartaServletInputStream extends ServletInputStream
 	@Override
 	public boolean isFinished()
 	{
-		if (closed)
-		{
-			return true;
-		}
-		return source.isFinished();
+		return closed || source.isFinished();
 	}
 
 	@Override
@@ -82,12 +78,6 @@ public final class CkartaServletInputStream extends ServletInputStream
 		}
 		if (!nonBlocking)
 		{
-			return true;
-		}
-		if (source.isFinished())
-		{
-			readyPermit = false;
-			waitingForData = false;
 			return true;
 		}
 
@@ -103,13 +93,11 @@ public final class CkartaServletInputStream extends ServletInputStream
 		Objects.requireNonNull(readListener, "readListener");
 		if (!asyncStarted)
 		{
-			throw new IllegalStateException(
-					"ReadListener requires async processing");
+			throw new IllegalStateException("ReadListener requires async processing");
 		}
 		if (listener != null)
 		{
-			throw new IllegalStateException(
-					"ReadListener is already set");
+			throw new IllegalStateException("ReadListener is already set");
 		}
 		if (closed || terminalError != null)
 		{
@@ -118,16 +106,20 @@ public final class CkartaServletInputStream extends ServletInputStream
 
 		listener = readListener;
 		nonBlocking = true;
-		source.setReadInterest(this::scheduleDataAvailable);
+		source.setReadInterest(() -> scheduleDataAvailable(false));
 		source.setErrorInterest(this::scheduleError);
-	
+
 		if (source.isFinished())
 		{
 			scheduleAllDataRead();
 		}
 		else if (source.isReady())
 		{
-			scheduleDataAvailable();
+			scheduleDataAvailable(true);
+		}
+		else
+		{
+			waitingForData = true;
 		}
 	}
 
@@ -162,28 +154,30 @@ public final class CkartaServletInputStream extends ServletInputStream
 		{
 			throw new IOException("input stream is closed");
 		}
+		int initialPosition = buffer.position();
 		if (!buffer.hasRemaining())
 		{
 			return 0;
 		}
 		checkReadPermission();
 
-		int result = source.read(buffer, !nonBlocking);
+		ByteBuffer destination = buffer.duplicate();
+		int result = source.read(destination, !nonBlocking);
 		switch (result)
 		{
 			case BodySource.DATA ->
 			{
-				readyPermit = callbackActive;
-				if (source.isFinished())
+				int bytesRead = destination.position() - initialPosition;
+				if (bytesRead <= 0 || bytesRead > buffer.remaining())
+				{
+					throw new IOException("body source returned invalid read length");
+				}
+				buffer.limit(initialPosition + bytesRead);
+				if (!callbackActive)
 				{
 					readyPermit = false;
-					waitingForData = false;
 				}
-				else if (!callbackActive)
-				{
-					readyPermit = false;
-				}
-				return buffer.position();
+				return bytesRead;
 			}
 			case BodySource.EOF ->
 			{
@@ -236,39 +230,28 @@ public final class CkartaServletInputStream extends ServletInputStream
 
 	private void checkReadPermission()
 	{
-		if (!nonBlocking)
+		if (!nonBlocking || callbackActive || readyPermit)
 		{
 			return;
 		}
-		if (callbackActive)
-		{
-			return;
-		}
-		if (!readyPermit)
-		{
-			throw new IllegalStateException(
-					"non-blocking read requires isReady() to return true");
-		}
+		throw new IllegalStateException(
+				"non-blocking read requires isReady() to return true");
 	}
 
-	private void scheduleDataAvailable()
+	private void scheduleDataAvailable(boolean initial)
 	{
-		if (closed || listener == null || !waitingForData && !listenerCallbackScheduled.compareAndSet(false, true))
+		if (closed || listener == null)
 		{
-			if (closed || listener == null)
-			{
-				return;
-			}
-			if (!waitingForData)
-			{
-				return;
-			}
-			if (!listenerCallbackScheduled.compareAndSet(false, true))
-			{
-				return;
-			}
+			return;
 		}
-		listenerCallbackScheduled.set(true);
+		if (!initial && !waitingForData)
+		{
+			return;
+		}
+		if (!callbackScheduled.compareAndSet(false, true))
+		{
+			return;
+		}
 		callbackExecutor.execute(this::invokeDataAvailable);
 	}
 
@@ -293,10 +276,14 @@ public final class CkartaServletInputStream extends ServletInputStream
 		{
 			callbackActive = false;
 			readyPermit = false;
-			listenerCallbackScheduled.set(false);
-			if (source.isFinished() && terminalError == null)
+			callbackScheduled.set(false);
+			if (terminalError == null && source.isFinished())
 			{
 				scheduleAllDataRead();
+			}
+			else if (terminalError == null && waitingForData && source.isReady())
+			{
+				scheduleDataAvailable(false);
 			}
 		}
 	}

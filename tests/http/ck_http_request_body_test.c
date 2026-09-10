@@ -44,13 +44,15 @@ int main(void)
 
 	assert(ck_http_request_body_read(
 			&body, received + 12345u,
-			CK_HTTP_REQUEST_BODY_BUFFER_BYTES - 12345u,
+			CK_HTTP_REQUEST_BODY_BUFFER_BYTES,
 			&read)
 			== CK_HTTP_REQUEST_BODY_READ_DATA);
-	assert(read == first);
+	assert(read == CK_HTTP_REQUEST_BODY_BUFFER_BYTES);
 	assert(memcmp(received, source, 12345u) == 0);
 	assert(memcmp(received + 12345u,
-			source + 12345u, first) == 0);
+		source + 12345u, first) == 0);
+	assert(memcmp(received + 12345u + first,
+		source, 12345u) == 0);
 
 	assert(ck_http_request_body_available(&body) == 0);
 	assert(ck_http_request_body_write(
@@ -62,6 +64,15 @@ int main(void)
 			== CK_HTTP_REQUEST_BODY_READ_DATA);
 	assert(read == 32u);
 	assert(memcmp(received, source + first, 32u) == 0);
+
+	ck_http_request_body_mark_eof(&body);
+	assert(ck_http_request_body_is_finished(&body));
+	assert(ck_http_request_body_read(
+			&body, received, sizeof(received), &read)
+			== CK_HTTP_REQUEST_BODY_READ_EOF);
+	assert(ck_http_request_body_write(
+			&body, source, 1, &written)
+			== CK_HTTP_REQUEST_BODY_WRITE_CLOSED);
 
 	ck_http_request_body_init(&body);
 	assert(ck_http_request_body_write(

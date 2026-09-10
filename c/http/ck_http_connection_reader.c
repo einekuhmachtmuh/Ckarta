@@ -3,7 +3,7 @@
 #include <errno.h>
 #include <string.h>
 
-#include "ck_socket.h"
+#include "../platform/ck_socket.h"
 
 static int write_body_queue(void *context,
 	const unsigned char *data, size_t length)

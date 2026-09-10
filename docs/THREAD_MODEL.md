@@ -191,12 +191,12 @@ Nickolai Zeldovich、Alexander Yip、Frank Dabek、Robert T. Morris、David Mazi
 來源：
 https://www.usenix.org/conference/2003-usenix-annual-technical-conference/multiprocessor-support-event-driven-programs
 
-Rob von Behren、Jeremy Condit、Feng Zhou、George C. Necula、Eric A. Brewer，"Capriccio: scalable threads for internet services"，SOSP 2003，pp. 268–281，DOI 10.1145/945469.945471。
+Rob von Behren、Jeremy Condit、Feng Zhou、George C. Necula、Eric A. Brewer，"Capriccio: scalable threads for internet services"，SOSP 2003，pp. 268–281，DOI 10.1145/945445.945471。
 
 用途：支持 thread-based server（執行緒型伺服器）是可擴展的另一條路徑，因此 direct attach 必須是正式候選而不是被 event model 預先排除。
 
 來源：
-https://doi.org/10.1145/945469.945471
+https://doi.org/10.1145/945445.945471
 
 Matt Welsh、David Culler、Eric Brewer，"SEDA: An Architecture for Well-Conditioned, Scalable Internet Services"，SOSP 2001，pp. 230–243，DOI 10.1145/502034.502057；ACM SIGOPS 對應文章 DOI 10.1145/502059.502057。
 

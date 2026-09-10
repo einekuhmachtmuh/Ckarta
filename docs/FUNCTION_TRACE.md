@@ -125,7 +125,7 @@ ngx_http_process_request_headers()
 
 固定版本約第 1395 行。
 
-實作會：
+其實作會：
 
 - 檢查 timeout。
 - 在 header buffer 不足時配置大型 header buffer。

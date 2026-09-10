@@ -106,7 +106,7 @@ ngx_http_process_request_line()
 
 固定版本約第 1109 行。
 
-其實作依序包括：
+實作依序包括：
 
 - read request header
 - ngx_http_parse_request_line
@@ -125,7 +125,7 @@ ngx_http_process_request_headers()
 
 固定版本約第 1395 行。
 
-其實作會：
+實作會：
 
 - 檢查 timeout。
 - 在 header buffer 不足時配置大型 header buffer。
@@ -335,7 +335,7 @@ Servlet invocation
 
 Matt Welsh、David Culler、Eric Brewer：
 
-"SEDA: an architecture for well-conditioned, scalable Internet services"
+"SEDA: an architecture for well-conditioned, scalable internet services"
 
 ACM SIGOPS Operating Systems Review 35(5), 2001, 230–243。
 
@@ -392,19 +392,3 @@ https://doi.org/10.1145/564870.564881
 相反地，它強調 lock-free 結構與 memory management（記憶體管理）彼此相關。
 
 因此 Ckarta 優先使用 worker ownership 與 sharding，再針對證明存在的瓶頸考慮 lock-free。
-
-## 11. 下一個實作前置步驟
-
-在建立第一個 C network module 前，必須完成：
-
-1. C connection state model。
-2. C request／response ownership model。
-3. JNI request descriptor。
-4. JNI response descriptor。
-5. Java AsyncContext ↔ C connection cancellation model。
-6. HTTP request framing test corpus。
-7. Nginx/Tomcat benchmark baseline。
-8. AddressSanitizer／UndefinedBehaviorSanitizer CI strategy。
-9. Servlet 6.1 TCK integration plan。
-
-未完成這些項目以前，不應為了「先有程式碼」而創造可能導致返工的 JNI API。
